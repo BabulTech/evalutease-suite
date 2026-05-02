@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      host_settings: {
+        Row: {
+          created_at: string
+          marks_per_correct: number
+          owner_id: string
+          registration_fields: Json
+          show_explanation: boolean
+          speed_bonus_enabled: boolean
+          speed_bonus_max: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          marks_per_correct?: number
+          owner_id: string
+          registration_fields?: Json
+          show_explanation?: boolean
+          speed_bonus_enabled?: boolean
+          speed_bonus_max?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          marks_per_correct?: number
+          owner_id?: string
+          registration_fields?: Json
+          show_explanation?: boolean
+          speed_bonus_enabled?: boolean
+          speed_bonus_max?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       participant_group_members: {
         Row: {
           group_id: string
@@ -403,6 +436,7 @@ export type Database = {
       quiz_sessions: {
         Row: {
           access_code: string | null
+          category_id: string | null
           created_at: string
           default_time_per_question: number | null
           description: string | null
@@ -412,6 +446,8 @@ export type Database = {
           language: string | null
           mode: Database["public"]["Enums"]["session_mode"]
           owner_id: string
+          scheduled_at: string | null
+          started_at: string | null
           status: Database["public"]["Enums"]["session_status"]
           subject: string | null
           title: string
@@ -420,6 +456,7 @@ export type Database = {
         }
         Insert: {
           access_code?: string | null
+          category_id?: string | null
           created_at?: string
           default_time_per_question?: number | null
           description?: string | null
@@ -429,6 +466,8 @@ export type Database = {
           language?: string | null
           mode?: Database["public"]["Enums"]["session_mode"]
           owner_id: string
+          scheduled_at?: string | null
+          started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
           subject?: string | null
           title: string
@@ -437,6 +476,7 @@ export type Database = {
         }
         Update: {
           access_code?: string | null
+          category_id?: string | null
           created_at?: string
           default_time_per_question?: number | null
           description?: string | null
@@ -446,13 +486,23 @@ export type Database = {
           language?: string | null
           mode?: Database["public"]["Enums"]["session_mode"]
           owner_id?: string
+          scheduled_at?: string | null
+          started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
           subject?: string | null
           title?: string
           topic?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quiz_sessions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "question_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -486,6 +536,33 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      get_session_for_join: {
+        Args: { p_access_code: string }
+        Returns: Json
+      }
+      join_quiz_session: {
+        Args: {
+          p_access_code: string
+          p_name: string
+          p_email?: string | null
+          p_mobile?: string | null
+          p_roll_number?: string | null
+        }
+        Returns: Json
+      }
+      submit_quiz_answer: {
+        Args: {
+          p_attempt_id: string
+          p_question_id: string
+          p_answer: string | null
+          p_time_taken_seconds: number
+        }
+        Returns: Json
+      }
+      complete_quiz_attempt: {
+        Args: { p_attempt_id: string }
+        Returns: Json
       }
     }
     Enums: {

@@ -1,70 +1,420 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Settings as SettingsIcon, Trophy, ListChecks, User } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  defaultHostSettings,
+  normalizeRegistrationFields,
+  REGISTRATION_FIELD_KEYS,
+  REGISTRATION_FIELD_LABELS,
+  type HostSettings,
+  type RegistrationFieldKey,
+} from "@/components/settings/host-settings";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
 
 function SettingsPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="font-display text-3xl font-bold flex items-center gap-2">
+          <SettingsIcon className="h-7 w-7 text-primary" /> {t("nav.settings")}
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Profile, the registration form participants see when they join, and your scoring rules.
+        </p>
+      </div>
+
+      <Tabs defaultValue="profile">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="profile" className="gap-1.5">
+            <User className="h-4 w-4" /> Profile
+          </TabsTrigger>
+          <TabsTrigger value="registration" className="gap-1.5">
+            <ListChecks className="h-4 w-4" /> Registration form
+          </TabsTrigger>
+          <TabsTrigger value="scoring" className="gap-1.5">
+            <Trophy className="h-4 w-4" /> Scoring
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profile" className="mt-4">
+          {user && <ProfileForm userId={user.id} />}
+        </TabsContent>
+        <TabsContent value="registration" className="mt-4">
+          {user && <HostSettingsForm userId={user.id} section="registration" />}
+        </TabsContent>
+        <TabsContent value="scoring" className="mt-4">
+          {user && <HostSettingsForm userId={user.id} section="scoring" />}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function ProfileForm({ userId }: { userId: string }) {
+  const { t } = useI18n();
   const [profile, setProfile] = useState({
-    first_name: "", last_name: "", organization: "", mobile: "", country: "",
+    first_name: "",
+    last_name: "",
+    organization: "",
+    mobile: "",
+    country: "",
   });
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then(({ data }) => {
-      if (data) setProfile({
-        first_name: data.first_name ?? "",
-        last_name: data.last_name ?? "",
-        organization: data.organization ?? "",
-        mobile: data.mobile ?? "",
-        country: data.country ?? "",
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data)
+          setProfile({
+            first_name: data.first_name ?? "",
+            last_name: data.last_name ?? "",
+            organization: data.organization ?? "",
+            mobile: data.mobile ?? "",
+            country: data.country ?? "",
+          });
       });
-    });
-  }, [user]);
+  }, [userId]);
 
   const save = async () => {
-    if (!user) return;
-    setLoading(true);
+    setSaving(true);
     const full_name = `${profile.first_name} ${profile.last_name}`.trim();
-    const { error } = await supabase.from("profiles").update({ ...profile, full_name }).eq("id", user.id);
-    setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ ...profile, full_name })
+      .eq("id", userId);
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Profile saved");
   };
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-bold">{t("nav.settings")}</h1>
-        <p className="text-muted-foreground mt-1">Update your profile and preferences.</p>
+    <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="mb-1.5">{t("auth.firstName")}</Label>
+          <Input
+            value={profile.first_name}
+            onChange={(e) => setProfile({ ...profile, first_name: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="mb-1.5">{t("auth.lastName")}</Label>
+          <Input
+            value={profile.last_name}
+            onChange={(e) => setProfile({ ...profile, last_name: e.target.value })}
+          />
+        </div>
       </div>
-      <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div><Label className="mb-1.5">{t("auth.firstName")}</Label>
-            <Input value={profile.first_name} onChange={(e) => setProfile({ ...profile, first_name: e.target.value })} /></div>
-          <div><Label className="mb-1.5">{t("auth.lastName")}</Label>
-            <Input value={profile.last_name} onChange={(e) => setProfile({ ...profile, last_name: e.target.value })} /></div>
+      <div>
+        <Label className="mb-1.5">{t("auth.organization")}</Label>
+        <Input
+          value={profile.organization}
+          onChange={(e) => setProfile({ ...profile, organization: e.target.value })}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="mb-1.5">{t("auth.mobile")}</Label>
+          <Input
+            value={profile.mobile}
+            onChange={(e) => setProfile({ ...profile, mobile: e.target.value })}
+          />
         </div>
-        <div><Label className="mb-1.5">{t("auth.organization")}</Label>
-          <Input value={profile.organization} onChange={(e) => setProfile({ ...profile, organization: e.target.value })} /></div>
-        <div className="grid grid-cols-2 gap-3">
-          <div><Label className="mb-1.5">{t("auth.mobile")}</Label>
-            <Input value={profile.mobile} onChange={(e) => setProfile({ ...profile, mobile: e.target.value })} /></div>
-          <div><Label className="mb-1.5">Country</Label>
-            <Input value={profile.country} onChange={(e) => setProfile({ ...profile, country: e.target.value })} /></div>
+        <div>
+          <Label className="mb-1.5">Country</Label>
+          <Input
+            value={profile.country}
+            onChange={(e) => setProfile({ ...profile, country: e.target.value })}
+          />
         </div>
-        <Button onClick={save} disabled={loading} className="bg-gradient-primary text-primary-foreground shadow-glow">
-          {loading ? t("common.loading") : "Save changes"}
-        </Button>
+      </div>
+      <Button
+        onClick={save}
+        disabled={saving}
+        className="bg-gradient-primary text-primary-foreground shadow-glow"
+      >
+        {saving ? "Saving…" : "Save changes"}
+      </Button>
+    </div>
+  );
+}
+
+function HostSettingsForm({
+  userId,
+  section,
+}: {
+  userId: string;
+  section: "registration" | "scoring";
+}) {
+  const [settings, setSettings] = useState<HostSettings>(() => defaultHostSettings());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("host_settings")
+      .select("*")
+      .eq("owner_id", userId)
+      .maybeSingle();
+    if (data) {
+      setSettings({
+        registration_fields: normalizeRegistrationFields(data.registration_fields),
+        marks_per_correct: data.marks_per_correct ?? 1,
+        speed_bonus_enabled: data.speed_bonus_enabled ?? false,
+        speed_bonus_max: data.speed_bonus_max ?? 1,
+        show_explanation: data.show_explanation ?? true,
+      });
+    } else {
+      setSettings(defaultHostSettings());
+    }
+    setLoading(false);
+  }, [userId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    const payload = {
+      owner_id: userId,
+      registration_fields: settings.registration_fields,
+      marks_per_correct: settings.marks_per_correct,
+      speed_bonus_enabled: settings.speed_bonus_enabled,
+      speed_bonus_max: settings.speed_bonus_max,
+      show_explanation: settings.show_explanation,
+    };
+    const { error } = await supabase
+      .from("host_settings")
+      .upsert(payload, { onConflict: "owner_id" });
+    setSaving(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(section === "registration" ? "Registration form saved" : "Scoring saved");
+  };
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-5">
+      {section === "registration" ? (
+        <RegistrationFieldsEditor
+          value={settings.registration_fields}
+          onChange={(rf) => setSettings({ ...settings, registration_fields: rf })}
+        />
+      ) : (
+        <ScoringEditor value={settings} onChange={(s) => setSettings({ ...settings, ...s })} />
+      )}
+
+      <Button
+        onClick={save}
+        disabled={saving}
+        className="bg-gradient-primary text-primary-foreground shadow-glow"
+      >
+        {saving ? "Saving…" : "Save changes"}
+      </Button>
+    </div>
+  );
+}
+
+function RegistrationFieldsEditor({
+  value,
+  onChange,
+}: {
+  value: HostSettings["registration_fields"];
+  onChange: (next: HostSettings["registration_fields"]) => void;
+}) {
+  const update = (
+    key: RegistrationFieldKey,
+    patch: Partial<{ visible: boolean; required: boolean }>,
+  ) => {
+    const next = { ...value, [key]: { ...value[key], ...patch } };
+    if (key === "name") {
+      next.name = { visible: true, required: true };
+    } else if (!next[key].visible) {
+      next[key].required = false;
+    }
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="font-semibold">What participants see when they join</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          These fields show up on the registration screen at{" "}
+          <span className="font-mono">/q/&lt;PIN&gt;</span> before participants enter the lobby.
+          Name is always shown and required.
+        </p>
+      </div>
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="grid grid-cols-[1fr_auto_auto] items-center px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/30">
+          <span>Field</span>
+          <span className="px-3">Visible</span>
+          <span className="px-3">Required</span>
+        </div>
+        <ul className="divide-y divide-border/60">
+          {REGISTRATION_FIELD_KEYS.map((key) => {
+            const cfg = value[key];
+            const isName = key === "name";
+            return (
+              <li
+                key={key}
+                className="grid grid-cols-[1fr_auto_auto] items-center px-4 py-2.5 hover:bg-muted/20"
+              >
+                <span className="text-sm font-medium">
+                  {REGISTRATION_FIELD_LABELS[key]}
+                  {isName && (
+                    <span className="ml-2 text-[10px] uppercase text-muted-foreground">
+                      always on
+                    </span>
+                  )}
+                </span>
+                <div className="px-3">
+                  <Switch
+                    checked={cfg.visible}
+                    disabled={isName}
+                    onCheckedChange={(v) => update(key, { visible: v })}
+                  />
+                </div>
+                <div className="px-3">
+                  <Switch
+                    checked={cfg.required}
+                    disabled={isName || !cfg.visible}
+                    onCheckedChange={(v) => update(key, { required: v })}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        For closed-roster sessions, whichever fields you require also act as identity checks — a
+        participant whose entered values don't match any invited person on your roster won't be able
+        to join.
+      </p>
+    </div>
+  );
+}
+
+function ScoringEditor({
+  value,
+  onChange,
+}: {
+  value: HostSettings;
+  onChange: (
+    next: Partial<
+      Pick<
+        HostSettings,
+        "marks_per_correct" | "speed_bonus_enabled" | "speed_bonus_max" | "show_explanation"
+      >
+    >,
+  ) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <h3 className="font-semibold">How answers turn into a score</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Applied to every quiz session you create. Speed bonus is optional and rewards quicker
+          correct answers with extra points.
+        </p>
+      </div>
+
+      <div>
+        <Label className="mb-1.5">Marks per correct answer</Label>
+        <Input
+          type="number"
+          min={1}
+          max={100}
+          value={value.marks_per_correct}
+          onChange={(e) =>
+            onChange({
+              marks_per_correct: Math.max(1, Math.min(100, Number(e.target.value) || 1)),
+            })
+          }
+          className="w-32"
+        />
+      </div>
+
+      <div className="rounded-xl border border-border bg-card/40 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Speed bonus</div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Extra points for correct answers given quickly. Disabled = everyone with the same
+              correct count gets the same score.
+            </p>
+          </div>
+          <Switch
+            checked={value.speed_bonus_enabled}
+            onCheckedChange={(v) => onChange({ speed_bonus_enabled: v })}
+          />
+        </div>
+        {value.speed_bonus_enabled && (
+          <div>
+            <Label className="mb-1.5">Max bonus per session</Label>
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={value.speed_bonus_max}
+              onChange={(e) =>
+                onChange({
+                  speed_bonus_max: Math.max(1, Math.min(100, Number(e.target.value) || 1)),
+                })
+              }
+              className="w-32"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              The fastest answerer gets close to this; slower answerers get proportionally less,
+              floored at zero. Bonus is added once when the participant finishes.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card/40 p-4">
+        <div>
+          <div className="text-sm font-semibold">Show explanation after each question</div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            If on, participants see your stored explanation right after the timer expires.
+          </p>
+        </div>
+        <Switch
+          checked={value.show_explanation}
+          onCheckedChange={(v) => onChange({ show_explanation: v })}
+        />
       </div>
     </div>
   );
