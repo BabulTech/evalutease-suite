@@ -6,6 +6,8 @@ export type SessionPublic = {
   status: "draft" | "scheduled" | "active" | "completed" | "expired";
   started_at: string | null;
   scheduled_at: string | null;
+  paused_at: string | null;
+  pause_offset_seconds: number;
   default_time_per_question: number;
   access_code: string;
   is_open: boolean;
@@ -54,13 +56,22 @@ export function computeClock(
   questions: QuizQuestion[],
   defaultTime: number,
   now: number,
+  pausedAtIso: string | null = null,
+  pauseOffsetSec = 0,
 ): QuizClock {
   if (!startedAtIso) return { index: -1, secondsLeft: 0, done: false };
   const started = new Date(startedAtIso).getTime();
   if (Number.isNaN(started)) return { index: -1, secondsLeft: 0, done: false };
   if (questions.length === 0) return { index: 0, secondsLeft: 0, done: true };
 
-  let elapsed = Math.max(0, Math.floor((now - started) / 1000));
+  // While paused, freeze the clock at paused_at — otherwise use now().
+  // The cumulative pause_offset_seconds from previous pause/resume cycles is
+  // always subtracted from elapsed.
+  const reference = pausedAtIso ? new Date(pausedAtIso).getTime() : now;
+  let elapsed = Math.max(
+    0,
+    Math.floor((reference - started) / 1000) - Math.max(0, pauseOffsetSec),
+  );
   for (let i = 0; i < questions.length; i++) {
     const dur = questions[i].time_seconds || defaultTime;
     if (elapsed < dur) {

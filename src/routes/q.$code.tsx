@@ -183,6 +183,8 @@ function PublicQuizPage() {
       data.questions,
       data.session.default_time_per_question,
       now,
+      data.session.paused_at,
+      data.session.pause_offset_seconds,
     );
 
     if (clock.done) {

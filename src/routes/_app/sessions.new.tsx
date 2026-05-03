@@ -1,22 +1,32 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Calendar, ChevronLeft, Globe, Lock, Zap } from "lucide-react";
+import {
+  Calendar,
+  Check,
+  ChevronLeft,
+  ChevronsUpDown,
+  Globe,
+  Lock,
+  Search,
+  X,
+  Zap,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { generateAccessCode } from "@/components/sessions/types";
 
 export const Route = createFileRoute("/_app/sessions/new")({ component: NewSessionPage });
@@ -37,9 +47,9 @@ function NewSessionPage() {
 
   const [title, setTitle] = useState("");
   const [subcategoryId, setSubcategoryId] = useState<string>("");
+  const [isPublic, setIsPublic] = useState(true);
   const [selectedSubtypeIds, setSelectedSubtypeIds] = useState<Set<string>>(new Set());
   const [timeText, setTimeText] = useState("10");
-  const [saveMode, setSaveMode] = useState<"now" | "schedule">("now");
   const [scheduledAtLocal, setScheduledAtLocal] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -83,25 +93,23 @@ function NewSessionPage() {
     void load();
   }, [load]);
 
-  const subcategoriesByCategory = useMemo(() => {
-    const map = new Map<string, SubcategoryRow[]>();
-    for (const s of subcategories) {
-      const arr = map.get(s.category_id) ?? [];
-      arr.push(s);
-      map.set(s.category_id, arr);
-    }
-    return map;
-  }, [subcategories]);
+  // Map: category_id → category name (for display in combobox).
+  const categoryNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of categories) m.set(c.id, c.name);
+    return m;
+  }, [categories]);
 
-  const subtypesByType = useMemo(() => {
-    const map = new Map<string, SubtypeRow[]>();
-    for (const s of subtypes) {
-      const arr = map.get(s.type_id) ?? [];
-      arr.push(s);
-      map.set(s.type_id, arr);
-    }
-    return map;
-  }, [subtypes]);
+  const typeNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of types) m.set(t.id, t.name);
+    return m;
+  }, [types]);
+
+  const selectedSubcategory = subcategories.find((s) => s.id === subcategoryId);
+  const selectedSubcategoryLabel = selectedSubcategory
+    ? `${categoryNameById.get(selectedSubcategory.category_id) ?? "?"} → ${selectedSubcategory.name}`
+    : "";
 
   const toggleSubtype = (id: string) => {
     setSelectedSubtypeIds((prev) => {
@@ -112,7 +120,7 @@ function NewSessionPage() {
     });
   };
 
-  const submit = async () => {
+  const submit = async (mode: "open" | "schedule") => {
     if (!user) return;
     const t = title.trim();
     if (!t) {
@@ -124,7 +132,7 @@ function NewSessionPage() {
       return;
     }
     if (!subcategoryId) {
-      toast.error("Pick a sub-category — questions for the quiz come from there");
+      toast.error("Pick a category — quiz questions come from the chosen sub-category");
       return;
     }
     const timeNum = Number(timeText);
@@ -132,7 +140,7 @@ function NewSessionPage() {
       toast.error("Time per question must be a number between 5 and 3600");
       return;
     }
-    if (saveMode === "schedule") {
+    if (mode === "schedule") {
       if (!scheduledAtLocal) {
         toast.error("Pick a date and time to schedule the session");
         return;
@@ -147,15 +155,18 @@ function NewSessionPage() {
         return;
       }
     }
+    if (!isPublic && selectedSubtypeIds.size === 0) {
+      toast.error("Pick at least one participant sub-type, or switch to Public");
+      return;
+    }
 
-    // Pull questions and participants the host has implicitly chosen.
     const [{ data: qs, error: qErr }, partsResult] = await Promise.all([
       supabase
         .from("questions")
         .select("id")
         .eq("owner_id", user.id)
         .eq("subcategory_id", subcategoryId),
-      selectedSubtypeIds.size > 0
+      !isPublic && selectedSubtypeIds.size > 0
         ? supabase
             .from("participants")
             .select("id, subtype_id")
@@ -179,8 +190,11 @@ function NewSessionPage() {
     const participantIds = (partsResult.data ?? []).map((p) => p.id);
 
     setBusy(true);
-    const isScheduled = saveMode === "schedule";
+    const isScheduled = mode === "schedule";
     const subcat = subcategories.find((s) => s.id === subcategoryId);
+    // Both modes start as 'scheduled' — that's what tells the lobby to show "Start Quiz".
+    // Immediate (Save & Open) just leaves scheduled_at NULL, so the cron won't auto-start
+    // it. The host transitions to 'active' by clicking Start Quiz in the lobby.
     const { data: inserted, error: insErr } = await supabase
       .from("quiz_sessions")
       .insert({
@@ -189,12 +203,12 @@ function NewSessionPage() {
         category_id: subcat?.category_id ?? null,
         subcategory_id: subcategoryId,
         mode: "qr_link",
-        status: isScheduled ? "scheduled" : "active",
+        status: "scheduled",
         is_open: true,
         default_time_per_question: timeNum,
         access_code: generateAccessCode(),
         scheduled_at: isScheduled ? new Date(scheduledAtLocal).toISOString() : null,
-        started_at: isScheduled ? null : new Date().toISOString(),
+        started_at: null,
       })
       .select("id")
       .single();
@@ -209,7 +223,7 @@ function NewSessionPage() {
       session_id: sessionId,
       question_id: qid,
       position: i,
-      time_seconds: timeNum, // session-level override wins
+      time_seconds: timeNum,
     }));
     const { error: qsErr } = await supabase
       .from("quiz_session_questions")
@@ -220,7 +234,7 @@ function NewSessionPage() {
       return;
     }
 
-    if (selectedSubtypeIds.size > 0) {
+    if (!isPublic && selectedSubtypeIds.size > 0) {
       const subtypeRows = Array.from(selectedSubtypeIds).map((id) => ({
         session_id: sessionId,
         subtype_id: id,
@@ -250,16 +264,9 @@ function NewSessionPage() {
     if (isScheduled) {
       void navigate({ to: "/sessions" });
     } else {
-      void navigate({ to: "/sessions", search: { lobby: sessionId } });
+      void navigate({ to: "/sessions/$sessionId", params: { sessionId } });
     }
   };
-
-  const isPublic = selectedSubtypeIds.size === 0;
-  const totalParticipantsForSelection = useMemo(() => {
-    if (selectedSubtypeIds.size === 0) return 0;
-    // We don't have the participant counts here without an extra query; show subtype count instead.
-    return Array.from(selectedSubtypeIds).length;
-  }, [selectedSubtypeIds]);
 
   const noSubcategories = subcategories.length === 0;
 
@@ -275,8 +282,8 @@ function NewSessionPage() {
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight">New Quiz Session</h1>
         <p className="text-muted-foreground mt-1">
-          Pick a sub-category (questions come from there) and the participant sub-types you want to
-          invite, then save and open the lobby — or schedule it for later.
+          Pick a category and decide who can join, then save and open the lobby — or schedule it for
+          later.
         </p>
       </div>
 
@@ -302,41 +309,18 @@ function NewSessionPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <Label className="mb-1.5">
-                Sub-Category <span className="text-destructive">*</span>
+                Select Category <span className="text-destructive">*</span>
               </Label>
-              <Select
+              <CategoryCombobox
                 value={subcategoryId}
-                onValueChange={(v) => setSubcategoryId(v)}
+                label={selectedSubcategoryLabel}
+                categories={categories}
+                subcategories={subcategories}
+                onChange={(id) => setSubcategoryId(id)}
                 disabled={noSubcategories}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      noSubcategories
-                        ? "Create a sub-category first on Manage Categories"
-                        : "Pick a sub-category"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => {
-                    const subs = subcategoriesByCategory.get(cat.id) ?? [];
-                    if (subs.length === 0) return null;
-                    return (
-                      <SelectGroup key={cat.id}>
-                        <SelectLabel>{cat.name}</SelectLabel>
-                        {subs.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              />
               <p className="mt-1 text-xs text-muted-foreground">
-                Questions tagged in this sub-category fill the quiz.
+                Type to search across categories — questions come from the sub-category you pick.
               </p>
             </div>
 
@@ -355,127 +339,109 @@ function NewSessionPage() {
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <Label>
-                Participant sub-types{" "}
-                <span className="text-muted-foreground font-normal">
-                  ({totalParticipantsForSelection} selected — leave empty for public)
-                </span>
-              </Label>
-            </div>
-            <div className="rounded-xl border border-border bg-card/20 px-3 py-2 mb-2 flex items-center gap-2 text-xs">
-              {isPublic ? (
-                <>
-                  <Globe className="h-3.5 w-3.5 text-primary shrink-0" />
-                  <span>
-                    <span className="font-semibold text-foreground">Public:</span> anyone with the
-                    QR or PIN can join.
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Lock className="h-3.5 w-3.5 text-warning shrink-0" />
-                  <span>
-                    <span className="font-semibold text-foreground">Closed roster:</span>{" "}
-                    participants in the selected sub-types can join.
-                  </span>
-                </>
-              )}
-            </div>
-            {types.length === 0 ? (
-              <div className="rounded-xl border border-border bg-card/30 p-4 text-xs text-muted-foreground">
-                No participant types yet — leave empty for public, or add some on Manage
-                Participants.
+          <div className="rounded-2xl border border-border bg-card/40 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                {isPublic ? (
+                  <Globe className="h-4 w-4 text-primary" />
+                ) : (
+                  <Lock className="h-4 w-4 text-warning" />
+                )}
+                <div>
+                  <Label htmlFor="public-switch" className="text-sm font-semibold">
+                    Public
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Anyone with the QR or PIN can join.
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="rounded-xl border border-border bg-card/30 max-h-[260px] overflow-y-auto divide-y divide-border/50">
-                {types.map((t) => {
-                  const subs = subtypesByType.get(t.id) ?? [];
-                  if (subs.length === 0) return null;
-                  return (
-                    <div key={t.id} className="p-3">
-                      <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                        {t.name}
-                      </div>
-                      <div className="grid gap-1.5 sm:grid-cols-2">
-                        {subs.map((s) => {
-                          const checked = selectedSubtypeIds.has(s.id);
-                          return (
-                            <label
-                              key={s.id}
-                              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${
-                                checked
-                                  ? "border-primary/50 bg-primary/10"
-                                  : "border-border bg-background/30 hover:border-primary/30"
-                              }`}
-                            >
-                              <Checkbox
-                                checked={checked}
-                                onCheckedChange={() => toggleSubtype(s.id)}
-                              />
-                              <span className="truncate">{s.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+              <Switch
+                id="public-switch"
+                checked={isPublic}
+                onCheckedChange={(v) => {
+                  setIsPublic(v);
+                  if (v) setSelectedSubtypeIds(new Set());
+                }}
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label>When should the lobby open?</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <SaveModeCard
-                active={saveMode === "now"}
-                onClick={() => setSaveMode("now")}
-                icon={<Zap className="h-4 w-4" />}
-                title="Save and Open"
-                detail="Lobby opens immediately. Hit Start when everyone has joined."
-              />
-              <SaveModeCard
-                active={saveMode === "schedule"}
-                onClick={() => setSaveMode("schedule")}
-                icon={<Calendar className="h-4 w-4" />}
-                title="Schedule"
-                detail="Lobby opens automatically at the time you pick."
-              />
-            </div>
-            {saveMode === "schedule" && (
-              <div>
-                <Label className="mb-1.5">Start time</Label>
-                <Input
-                  type="datetime-local"
-                  value={scheduledAtLocal}
-                  onChange={(e) => setScheduledAtLocal(e.target.value)}
-                  min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+            {!isPublic && (
+              <div className="pt-3 border-t border-border space-y-2">
+                <Label>Select participant sub-types</Label>
+                <SubtypeCombobox
+                  types={types}
+                  subtypes={subtypes}
+                  selectedIds={selectedSubtypeIds}
+                  onToggle={toggleSubtype}
+                  typeNameById={typeNameById}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Auto-start runs every minute via a Postgres cron job. Enable the{" "}
-                  <span className="font-mono">pg_cron</span> extension in Supabase if you haven't
-                  already.
+                {selectedSubtypeIds.size > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {Array.from(selectedSubtypeIds).map((id) => {
+                      const s = subtypes.find((x) => x.id === id);
+                      if (!s) return null;
+                      return (
+                        <span
+                          key={id}
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-xs"
+                        >
+                          {typeNameById.get(s.type_id) ?? "?"} → {s.name}
+                          <button
+                            type="button"
+                            onClick={() => toggleSubtype(id)}
+                            className="hover:bg-primary/20 rounded-full p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Type to search — only participants in the selected sub-types can join.
                 </p>
               </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
-            <Button variant="ghost" disabled={busy} onClick={() => void navigate({ to: "/sessions" })}>
+          <div>
+            <Label className="mb-1.5">Schedule for later (optional)</Label>
+            <Input
+              type="datetime-local"
+              value={scheduledAtLocal}
+              onChange={(e) => setScheduledAtLocal(e.target.value)}
+              min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Only used by the <span className="font-semibold">Schedule</span> button. Leave empty
+              to use Save & Open Lobby.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => void navigate({ to: "/sessions" })}
+            >
               Cancel
             </Button>
             <Button
-              onClick={submit}
+              variant="outline"
+              onClick={() => void submit("schedule")}
               disabled={busy || noSubcategories}
-              className="bg-gradient-primary text-primary-foreground shadow-glow"
+              className="gap-1.5"
             >
-              {busy
-                ? "Saving…"
-                : saveMode === "now"
-                  ? "Save and Open"
-                  : "Schedule"}
+              <Calendar className="h-4 w-4" /> Schedule
+            </Button>
+            <Button
+              onClick={() => void submit("open")}
+              disabled={busy || noSubcategories}
+              className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
+            >
+              <Zap className="h-4 w-4" /> {busy ? "Saving…" : "Save & Open Lobby"}
             </Button>
           </div>
         </div>
@@ -484,34 +450,137 @@ function NewSessionPage() {
   );
 }
 
-function SaveModeCard({
-  active,
-  onClick,
-  icon,
-  title,
-  detail,
+function CategoryCombobox({
+  value,
+  label,
+  categories,
+  subcategories,
+  onChange,
+  disabled,
 }: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
+  value: string;
+  label: string;
+  categories: CategoryRow[];
+  subcategories: SubcategoryRow[];
+  onChange: (id: string) => void;
+  disabled?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`text-left rounded-xl border px-3 py-3 transition-colors ${
-        active
-          ? "border-primary/50 bg-primary/10 shadow-glow"
-          : "border-border bg-card/40 hover:border-primary/30"
-      }`}
-    >
-      <div className={`flex items-center gap-2 font-semibold text-sm ${active ? "text-primary" : ""}`}>
-        {icon}
-        {title}
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-    </button>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          className="w-full justify-between font-normal"
+        >
+          <span className={value ? "" : "text-muted-foreground"}>
+            {label || (disabled ? "Create a sub-category first" : "Search categories…")}
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+        <Command>
+          <CommandInput placeholder="Type to search…" />
+          <CommandList>
+            <CommandEmpty>No matches.</CommandEmpty>
+            {categories.map((cat) => {
+              const subs = subcategories.filter((s) => s.category_id === cat.id);
+              if (subs.length === 0) return null;
+              return (
+                <CommandGroup key={cat.id} heading={cat.name}>
+                  {subs.map((s) => (
+                    <CommandItem
+                      key={s.id}
+                      // Build a searchable string so cmdk filters across both names
+                      value={`${cat.name} ${s.name}`}
+                      onSelect={() => {
+                        onChange(s.id);
+                        setOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={`mr-2 h-4 w-4 ${
+                          value === s.id ? "opacity-100" : "opacity-0"
+                        }`}
+                      />
+                      {s.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SubtypeCombobox({
+  types,
+  subtypes,
+  selectedIds,
+  onToggle,
+  typeNameById,
+}: {
+  types: TypeRow[];
+  subtypes: SubtypeRow[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  typeNameById: Map<string, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const placeholder = selectedIds.size === 0
+    ? "Search sub-types…"
+    : `${selectedIds.size} sub-type${selectedIds.size === 1 ? "" : "s"} selected`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="w-full justify-between font-normal">
+          <span className="flex items-center gap-2">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className={selectedIds.size === 0 ? "text-muted-foreground" : ""}>
+              {placeholder}
+            </span>
+          </span>
+          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+        <Command>
+          <CommandInput placeholder="Type to search e.g. Class 9, Engineering…" />
+          <CommandList>
+            <CommandEmpty>No matches.</CommandEmpty>
+            {types.map((t) => {
+              const subs = subtypes.filter((s) => s.type_id === t.id);
+              if (subs.length === 0) return null;
+              return (
+                <CommandGroup key={t.id} heading={t.name}>
+                  {subs.map((s) => (
+                    <CommandItem
+                      key={s.id}
+                      value={`${typeNameById.get(s.type_id) ?? ""} ${s.name}`}
+                      onSelect={() => onToggle(s.id)}
+                    >
+                      <Check
+                        className={`mr-2 h-4 w-4 ${
+                          selectedIds.has(s.id) ? "opacity-100" : "opacity-0"
+                        }`}
+                      />
+                      {s.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

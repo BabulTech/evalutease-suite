@@ -249,7 +249,6 @@ DECLARE
   v_session quiz_sessions;
   v_settings host_settings;
   v_speed_bonus INT := 0;
-  v_avg NUMERIC;
   v_final INT;
 BEGIN
   SELECT * INTO v_attempt FROM quiz_attempts WHERE id = p_attempt_id;
@@ -263,14 +262,11 @@ BEGIN
   SELECT * INTO v_session FROM quiz_sessions WHERE id = v_attempt.session_id;
   SELECT * INTO v_settings FROM host_settings WHERE owner_id = v_session.owner_id;
 
-  IF COALESCE(v_settings.speed_bonus_enabled, FALSE)
-     AND COALESCE(v_settings.speed_bonus_max, 0) > 0
-     AND COALESCE(v_session.default_time_per_question, 0) > 0 THEN
-    SELECT AVG(time_taken_seconds)::NUMERIC INTO v_avg
-    FROM quiz_answers WHERE attempt_id = p_attempt_id AND is_correct = TRUE;
-    IF v_avg IS NOT NULL THEN
-      v_speed_bonus := GREATEST(0, FLOOR(v_settings.speed_bonus_max * (1 - v_avg / v_session.default_time_per_question)))::INT;
-    END IF;
+  -- Speed bonus is half of earned base score, floored. Only applied when the
+  -- host has speed_bonus_enabled toggled on. Example: 2 questions × 5 marks
+  -- each, both correct → score=10, bonus=floor(10/2)=5, final=15.
+  IF COALESCE(v_settings.speed_bonus_enabled, FALSE) AND v_attempt.score > 0 THEN
+    v_speed_bonus := FLOOR(v_attempt.score / 2)::INT;
   END IF;
 
   UPDATE quiz_attempts
@@ -566,6 +562,137 @@ SET subcategory_id = (
   LIMIT 1
 )
 WHERE ss.subcategory_id IS NULL AND ss.category_id IS NOT NULL;
+
+-- ===== Pause / resume support =====
+-- paused_at: when set, the live quiz clock is frozen.
+-- pause_offset_seconds: total seconds the quiz was paused for (subtracted from elapsed clock time).
+ALTER TABLE public.quiz_sessions
+  ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS pause_offset_seconds INTEGER NOT NULL DEFAULT 0;
+
+-- Pause RPC — only valid for an active, currently-running quiz.
+CREATE OR REPLACE FUNCTION public.pause_quiz_session(p_session_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_session quiz_sessions;
+BEGIN
+  SELECT * INTO v_session FROM quiz_sessions WHERE id = p_session_id;
+  IF v_session.id IS NULL THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF v_session.owner_id <> auth.uid() THEN RETURN jsonb_build_object('error', 'forbidden'); END IF;
+  IF v_session.status <> 'active' THEN RETURN jsonb_build_object('error', 'not_active'); END IF;
+  IF v_session.paused_at IS NOT NULL THEN RETURN jsonb_build_object('error', 'already_paused'); END IF;
+
+  UPDATE quiz_sessions SET paused_at = now() WHERE id = p_session_id;
+  RETURN jsonb_build_object('paused_at', now());
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.pause_quiz_session(UUID) TO authenticated;
+
+-- Resume RPC — folds the pause duration into pause_offset_seconds so the live clock
+-- continues exactly where it left off.
+CREATE OR REPLACE FUNCTION public.resume_quiz_session(p_session_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_session quiz_sessions;
+  v_added INT;
+BEGIN
+  SELECT * INTO v_session FROM quiz_sessions WHERE id = p_session_id;
+  IF v_session.id IS NULL THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF v_session.owner_id <> auth.uid() THEN RETURN jsonb_build_object('error', 'forbidden'); END IF;
+  IF v_session.paused_at IS NULL THEN RETURN jsonb_build_object('error', 'not_paused'); END IF;
+
+  v_added := GREATEST(0, EXTRACT(EPOCH FROM (now() - v_session.paused_at))::INT);
+  UPDATE quiz_sessions
+    SET paused_at = NULL,
+        pause_offset_seconds = COALESCE(pause_offset_seconds, 0) + v_added
+  WHERE id = p_session_id;
+  RETURN jsonb_build_object('added_seconds', v_added);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.resume_quiz_session(UUID) TO authenticated;
+
+-- Close RPC — host marks the session completed and locks it. Moves it from /sessions
+-- into the Quiz History page.
+CREATE OR REPLACE FUNCTION public.close_quiz_session(p_session_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_session quiz_sessions;
+BEGIN
+  SELECT * INTO v_session FROM quiz_sessions WHERE id = p_session_id;
+  IF v_session.id IS NULL THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  IF v_session.owner_id <> auth.uid() THEN RETURN jsonb_build_object('error', 'forbidden'); END IF;
+  IF v_session.status = 'completed' THEN RETURN jsonb_build_object('error', 'already_closed'); END IF;
+
+  UPDATE quiz_sessions
+    SET status = 'completed',
+        is_open = FALSE,
+        paused_at = NULL
+  WHERE id = p_session_id;
+  RETURN jsonb_build_object('ok', TRUE);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.close_quiz_session(UUID) TO authenticated;
+
+-- Update get_session_for_join to expose paused_at + pause_offset_seconds so the
+-- participant client can freeze its clock.
+CREATE OR REPLACE FUNCTION public.get_session_for_join(p_access_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  v_session quiz_sessions;
+  v_settings host_settings;
+  v_questions JSONB;
+  v_total INT;
+BEGIN
+  SELECT * INTO v_session FROM quiz_sessions
+  WHERE access_code = p_access_code AND mode = 'qr_link';
+  IF v_session.id IS NULL THEN RETURN jsonb_build_object('error', 'not_found'); END IF;
+  SELECT * INTO v_settings FROM host_settings WHERE owner_id = v_session.owner_id;
+  SELECT count(*) INTO v_total FROM quiz_session_questions WHERE session_id = v_session.id;
+
+  IF v_session.status IN ('active', 'completed') THEN
+    SELECT jsonb_agg(jsonb_build_object(
+      'id',           q.id,
+      'text',         q.text,
+      'options',      q.options,
+      'position',     sq.position,
+      'time_seconds', COALESCE(sq.time_seconds, v_session.default_time_per_question)
+    ) ORDER BY sq.position) INTO v_questions
+    FROM quiz_session_questions sq
+    JOIN questions q ON q.id = sq.question_id
+    WHERE sq.session_id = v_session.id;
+  ELSE
+    v_questions := '[]'::jsonb;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'session', jsonb_build_object(
+      'id',                        v_session.id,
+      'title',                     v_session.title,
+      'status',                    v_session.status,
+      'started_at',                v_session.started_at,
+      'scheduled_at',              v_session.scheduled_at,
+      'paused_at',                 v_session.paused_at,
+      'pause_offset_seconds',      COALESCE(v_session.pause_offset_seconds, 0),
+      'default_time_per_question', v_session.default_time_per_question,
+      'access_code',               v_session.access_code,
+      'is_open',                   v_session.is_open,
+      'total_questions',           COALESCE(v_total, 0)
+    ),
+    'registration_fields', COALESCE(v_settings.registration_fields, '{
+      "name": {"visible": true, "required": true}
+    }'::jsonb),
+    'questions', COALESCE(v_questions, '[]'::jsonb)
+  );
+END;
+$$;
 
 -- ===== Tell PostgREST to reload the schema cache so the new FKs are usable from the front-end. =====
 NOTIFY pgrst, 'reload schema';

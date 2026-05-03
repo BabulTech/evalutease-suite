@@ -648,6 +648,8 @@ export type Database = {
           language: string | null
           mode: Database["public"]["Enums"]["session_mode"]
           owner_id: string
+          pause_offset_seconds: number
+          paused_at: string | null
           scheduled_at: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["session_status"]
@@ -669,6 +671,8 @@ export type Database = {
           language?: string | null
           mode?: Database["public"]["Enums"]["session_mode"]
           owner_id: string
+          pause_offset_seconds?: number
+          paused_at?: string | null
           scheduled_at?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
@@ -690,6 +694,8 @@ export type Database = {
           language?: string | null
           mode?: Database["public"]["Enums"]["session_mode"]
           owner_id?: string
+          pause_offset_seconds?: number
+          paused_at?: string | null
           scheduled_at?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
@@ -788,6 +794,18 @@ export type Database = {
           p_mobile?: string | null
           p_metadata?: Json
         }
+        Returns: Json
+      }
+      pause_quiz_session: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      resume_quiz_session: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      close_quiz_session: {
+        Args: { p_session_id: string }
         Returns: Json
       }
     }

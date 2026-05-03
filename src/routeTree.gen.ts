@@ -20,10 +20,12 @@ import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSessionsRouteImport } from './routes/_app/sessions'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppQuizHistoryRouteImport } from './routes/_app/quiz-history'
 import { Route as AppParticipantTypesRouteImport } from './routes/_app/participant-types'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCategoriesRouteImport } from './routes/_app/categories'
 import { Route as AppSessionsNewRouteImport } from './routes/_app/sessions.new'
+import { Route as AppSessionsSessionIdRouteImport } from './routes/_app/sessions.$sessionId'
 import { Route as AppParticipantTypesTypeIdRouteImport } from './routes/_app/participant-types.$typeId'
 import { Route as AppCategoriesCategoryIdRouteImport } from './routes/_app/categories.$categoryId'
 import { Route as AppParticipantTypesTypeIdSubIdRouteImport } from './routes/_app/participant-types.$typeId.$subId'
@@ -83,6 +85,11 @@ const AppReportsRoute = AppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AppRoute,
 } as any)
+const AppQuizHistoryRoute = AppQuizHistoryRouteImport.update({
+  id: '/quiz-history',
+  path: '/quiz-history',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppParticipantTypesRoute = AppParticipantTypesRouteImport.update({
   id: '/participant-types',
   path: '/participant-types',
@@ -101,6 +108,11 @@ const AppCategoriesRoute = AppCategoriesRouteImport.update({
 const AppSessionsNewRoute = AppSessionsNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => AppSessionsRoute,
+} as any)
+const AppSessionsSessionIdRoute = AppSessionsSessionIdRouteImport.update({
+  id: '/$sessionId',
+  path: '/$sessionId',
   getParentRoute: () => AppSessionsRoute,
 } as any)
 const AppParticipantTypesTypeIdRoute =
@@ -136,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/categories': typeof AppCategoriesRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/participant-types': typeof AppParticipantTypesRouteWithChildren
+  '/quiz-history': typeof AppQuizHistoryRoute
   '/reports': typeof AppReportsRoute
   '/sessions': typeof AppSessionsRouteWithChildren
   '/settings': typeof AppSettingsRoute
@@ -143,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/q/$code': typeof QCodeRoute
   '/categories/$categoryId': typeof AppCategoriesCategoryIdRouteWithChildren
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
+  '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
@@ -156,6 +170,7 @@ export interface FileRoutesByTo {
   '/categories': typeof AppCategoriesRouteWithChildren
   '/dashboard': typeof AppDashboardRoute
   '/participant-types': typeof AppParticipantTypesRouteWithChildren
+  '/quiz-history': typeof AppQuizHistoryRoute
   '/reports': typeof AppReportsRoute
   '/sessions': typeof AppSessionsRouteWithChildren
   '/settings': typeof AppSettingsRoute
@@ -163,6 +178,7 @@ export interface FileRoutesByTo {
   '/q/$code': typeof QCodeRoute
   '/categories/$categoryId': typeof AppCategoriesCategoryIdRouteWithChildren
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
+  '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
@@ -178,6 +194,7 @@ export interface FileRoutesById {
   '/_app/categories': typeof AppCategoriesRouteWithChildren
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/participant-types': typeof AppParticipantTypesRouteWithChildren
+  '/_app/quiz-history': typeof AppQuizHistoryRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/sessions': typeof AppSessionsRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
@@ -185,6 +202,7 @@ export interface FileRoutesById {
   '/q/$code': typeof QCodeRoute
   '/_app/categories/$categoryId': typeof AppCategoriesCategoryIdRouteWithChildren
   '/_app/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
+  '/_app/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/_app/sessions/new': typeof AppSessionsNewRoute
   '/_app/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/_app/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
@@ -200,6 +218,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/dashboard'
     | '/participant-types'
+    | '/quiz-history'
     | '/reports'
     | '/sessions'
     | '/settings'
@@ -207,6 +226,7 @@ export interface FileRouteTypes {
     | '/q/$code'
     | '/categories/$categoryId'
     | '/participant-types/$typeId'
+    | '/sessions/$sessionId'
     | '/sessions/new'
     | '/categories/$categoryId/$subId'
     | '/participant-types/$typeId/$subId'
@@ -220,6 +240,7 @@ export interface FileRouteTypes {
     | '/categories'
     | '/dashboard'
     | '/participant-types'
+    | '/quiz-history'
     | '/reports'
     | '/sessions'
     | '/settings'
@@ -227,6 +248,7 @@ export interface FileRouteTypes {
     | '/q/$code'
     | '/categories/$categoryId'
     | '/participant-types/$typeId'
+    | '/sessions/$sessionId'
     | '/sessions/new'
     | '/categories/$categoryId/$subId'
     | '/participant-types/$typeId/$subId'
@@ -241,6 +263,7 @@ export interface FileRouteTypes {
     | '/_app/categories'
     | '/_app/dashboard'
     | '/_app/participant-types'
+    | '/_app/quiz-history'
     | '/_app/reports'
     | '/_app/sessions'
     | '/_app/settings'
@@ -248,6 +271,7 @@ export interface FileRouteTypes {
     | '/q/$code'
     | '/_app/categories/$categoryId'
     | '/_app/participant-types/$typeId'
+    | '/_app/sessions/$sessionId'
     | '/_app/sessions/new'
     | '/_app/categories/$categoryId/$subId'
     | '/_app/participant-types/$typeId/$subId'
@@ -343,6 +367,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppReportsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/quiz-history': {
+      id: '/_app/quiz-history'
+      path: '/quiz-history'
+      fullPath: '/quiz-history'
+      preLoaderRoute: typeof AppQuizHistoryRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/participant-types': {
       id: '/_app/participant-types'
       path: '/participant-types'
@@ -369,6 +400,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/sessions/new'
       preLoaderRoute: typeof AppSessionsNewRouteImport
+      parentRoute: typeof AppSessionsRoute
+    }
+    '/_app/sessions/$sessionId': {
+      id: '/_app/sessions/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/sessions/$sessionId'
+      preLoaderRoute: typeof AppSessionsSessionIdRouteImport
       parentRoute: typeof AppSessionsRoute
     }
     '/_app/participant-types/$typeId': {
@@ -454,10 +492,12 @@ const AppParticipantTypesRouteWithChildren =
   AppParticipantTypesRoute._addFileChildren(AppParticipantTypesRouteChildren)
 
 interface AppSessionsRouteChildren {
+  AppSessionsSessionIdRoute: typeof AppSessionsSessionIdRoute
   AppSessionsNewRoute: typeof AppSessionsNewRoute
 }
 
 const AppSessionsRouteChildren: AppSessionsRouteChildren = {
+  AppSessionsSessionIdRoute: AppSessionsSessionIdRoute,
   AppSessionsNewRoute: AppSessionsNewRoute,
 }
 
@@ -469,6 +509,7 @@ interface AppRouteChildren {
   AppCategoriesRoute: typeof AppCategoriesRouteWithChildren
   AppDashboardRoute: typeof AppDashboardRoute
   AppParticipantTypesRoute: typeof AppParticipantTypesRouteWithChildren
+  AppQuizHistoryRoute: typeof AppQuizHistoryRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSessionsRoute: typeof AppSessionsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
@@ -478,6 +519,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCategoriesRoute: AppCategoriesRouteWithChildren,
   AppDashboardRoute: AppDashboardRoute,
   AppParticipantTypesRoute: AppParticipantTypesRouteWithChildren,
+  AppQuizHistoryRoute: AppQuizHistoryRoute,
   AppReportsRoute: AppReportsRoute,
   AppSessionsRoute: AppSessionsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,

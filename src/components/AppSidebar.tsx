@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Archive,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { useAuth } from "@/lib/auth";
@@ -24,6 +25,7 @@ export function AppSidebar() {
     { to: "/categories", icon: FolderTree, label: t("nav.manageCategories") },
     { to: "/participant-types", icon: UsersRound, label: t("nav.manageParticipants") },
     { to: "/sessions", icon: PlayCircle, label: t("nav.sessions") },
+    { to: "/quiz-history", icon: Archive, label: t("nav.quizHistory") },
     { to: "/reports", icon: BarChart3, label: t("nav.reports") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },
   ];

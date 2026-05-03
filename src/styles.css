@@ -135,3 +135,24 @@
     color: transparent;
   }
 }
+
+/* ===== Print stylesheet for the Quiz Results page (Print / Download PDF) ===== */
+@media print {
+  /* Light page background — easier to read on paper. */
+  html, body {
+    background: #ffffff !important;
+    background-image: none !important;
+    color: #000 !important;
+  }
+  /* Hide chrome that doesn't belong on a printed leaderboard. */
+  aside, nav, header, .print\:hidden { display: none !important; }
+  main, .min-h-screen { padding: 0 !important; min-height: 0 !important; }
+  /* Drop dark theme tweaks. */
+  * {
+    color: #000 !important;
+    border-color: #d4d4d8 !important;
+    box-shadow: none !important;
+  }
+  /* Keep table rows from splitting across pages mid-row. */
+  tr, li { break-inside: avoid; }
+}

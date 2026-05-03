@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
-import { PlayCircle, Pencil, Trash2, Crown, ListTree, Calendar } from "lucide-react";
+import { useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { ArrowRight, Calendar, Crown, ListTree, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -15,35 +16,27 @@ import { formatTimePerQuestion, statusBadge, type Session } from "./types";
 
 type Props = {
   session: Session;
-  onStart: (id: string) => Promise<void>;
-  onOpenLobby: (session: Session) => void;
-  editTrigger: ReactNode;
   onDelete: (id: string) => Promise<void>;
 };
 
-export function SessionCard({ session, onStart, onOpenLobby, editTrigger, onDelete }: Props) {
+export function SessionCard({ session, onDelete }: Props) {
   const badge = statusBadge(session);
   const { joined, waiting, submitted, avgPercent, topThree } = session.attempts;
-  const canStartFromCard = session.status !== "completed" && session.status !== "expired";
 
-  const [starting, setStarting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const handleStart = async () => {
-    setStarting(true);
-    try {
-      await onStart(session.id);
-    } finally {
-      setStarting(false);
-    }
-  };
 
   return (
     <div className="rounded-2xl border border-border bg-card/60 p-5 transition-colors hover:border-primary/30 space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-display text-lg font-bold truncate">{session.title}</h3>
+        <Link
+          to="/sessions/$sessionId"
+          params={{ sessionId: session.id }}
+          className="min-w-0 flex-1 group"
+        >
+          <h3 className="font-display text-lg font-bold truncate group-hover:text-primary transition-colors">
+            {session.title}
+          </h3>
           <div className="mt-1 text-xs text-muted-foreground flex items-center flex-wrap gap-x-2 gap-y-0.5">
             <span className="inline-flex items-center gap-1">
               <ListTree className="h-3 w-3" />
@@ -65,7 +58,7 @@ export function SessionCard({ session, onStart, onOpenLobby, editTrigger, onDele
               </>
             )}
           </div>
-        </div>
+        </Link>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${badge.className}`}
         >
@@ -113,20 +106,16 @@ export function SessionCard({ session, onStart, onOpenLobby, editTrigger, onDele
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 pt-1">
+      <div className="flex items-center gap-2 pt-1">
         <Button
+          asChild
           size="sm"
-          onClick={handleStart}
-          disabled={!canStartFromCard || starting}
-          className="bg-gradient-primary text-primary-foreground shadow-glow"
+          className="bg-gradient-primary text-primary-foreground shadow-glow gap-1.5"
         >
-          <PlayCircle className="h-4 w-4 mr-1" />
-          {session.status === "active" ? "Resume" : starting ? "Starting…" : "Start Live Quiz"}
+          <Link to="/sessions/$sessionId" params={{ sessionId: session.id }}>
+            Open Lobby <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </Button>
-        <Button size="sm" variant="outline" onClick={() => onOpenLobby(session)}>
-          Open Lobby
-        </Button>
-        {editTrigger}
         <Button
           size="sm"
           variant="outline"
@@ -196,12 +185,4 @@ function CounterPill({
 
 function Divider() {
   return <span className="text-muted-foreground/50">|</span>;
-}
-
-export function EditTriggerButton() {
-  return (
-    <Button size="sm" variant="outline">
-      <Pencil className="h-4 w-4 mr-1" /> Edit Quiz
-    </Button>
-  );
 }
