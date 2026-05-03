@@ -110,6 +110,7 @@ export type Database = {
           mobile: string | null
           name: string
           owner_id: string
+          subtype_id: string | null
         }
         Insert: {
           created_at?: string
@@ -119,6 +120,7 @@ export type Database = {
           mobile?: string | null
           name: string
           owner_id: string
+          subtype_id?: string | null
         }
         Update: {
           created_at?: string
@@ -128,8 +130,17 @@ export type Database = {
           mobile?: string | null
           name?: string
           owner_id?: string
+          subtype_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "participants_subtype_id_fkey"
+            columns: ["subtype_id"]
+            isOneToOne: false
+            referencedRelation: "participant_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -179,6 +190,7 @@ export type Database = {
       question_categories: {
         Row: {
           created_at: string
+          icon: string | null
           id: string
           name: string
           owner_id: string
@@ -186,6 +198,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          icon?: string | null
           id?: string
           name: string
           owner_id: string
@@ -193,12 +206,188 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          icon?: string | null
           id?: string
           name?: string
           owner_id?: string
           subject?: string | null
         }
         Relationships: []
+      }
+      question_subcategories: {
+        Row: {
+          category_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_subcategories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "question_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      participant_types: {
+        Row: {
+          created_at: string
+          icon: string | null
+          id: string
+          name: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+        }
+        Relationships: []
+      }
+      participant_subtypes: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+          type_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+          type_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participant_subtypes_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "participant_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      participant_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_participant_id: string | null
+          created_at: string
+          email: string | null
+          id: string
+          owner_id: string
+          status: string
+          subtype_id: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_participant_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          owner_id: string
+          status?: string
+          subtype_id: string
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_participant_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          owner_id?: string
+          status?: string
+          subtype_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participant_invites_subtype_id_fkey"
+            columns: ["subtype_id"]
+            isOneToOne: false
+            referencedRelation: "participant_subtypes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "participant_invites_accepted_participant_id_fkey"
+            columns: ["accepted_participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_session_subtypes: {
+        Row: {
+          session_id: string
+          subtype_id: string
+        }
+        Insert: {
+          session_id: string
+          subtype_id: string
+        }
+        Update: {
+          session_id?: string
+          subtype_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_session_subtypes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_session_subtypes_subtype_id_fkey"
+            columns: ["subtype_id"]
+            isOneToOne: false
+            referencedRelation: "participant_subtypes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       questions: {
         Row: {
@@ -212,8 +401,10 @@ export type Database = {
           options: Json | null
           owner_id: string
           source: Database["public"]["Enums"]["question_source"]
+          subcategory_id: string | null
           subject: string | null
           text: string
+          time_seconds: number
           topic: string | null
           type: Database["public"]["Enums"]["question_type"]
           updated_at: string
@@ -229,8 +420,10 @@ export type Database = {
           options?: Json | null
           owner_id: string
           source?: Database["public"]["Enums"]["question_source"]
+          subcategory_id?: string | null
           subject?: string | null
           text: string
+          time_seconds?: number
           topic?: string | null
           type?: Database["public"]["Enums"]["question_type"]
           updated_at?: string
@@ -246,8 +439,10 @@ export type Database = {
           options?: Json | null
           owner_id?: string
           source?: Database["public"]["Enums"]["question_source"]
+          subcategory_id?: string | null
           subject?: string | null
           text?: string
+          time_seconds?: number
           topic?: string | null
           type?: Database["public"]["Enums"]["question_type"]
           updated_at?: string
@@ -258,6 +453,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "question_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questions_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "question_subcategories"
             referencedColumns: ["id"]
           },
         ]
@@ -449,6 +651,7 @@ export type Database = {
           scheduled_at: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["session_status"]
+          subcategory_id: string | null
           subject: string | null
           title: string
           topic: string | null
@@ -469,6 +672,7 @@ export type Database = {
           scheduled_at?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
+          subcategory_id?: string | null
           subject?: string | null
           title: string
           topic?: string | null
@@ -489,6 +693,7 @@ export type Database = {
           scheduled_at?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
+          subcategory_id?: string | null
           subject?: string | null
           title?: string
           topic?: string | null
@@ -500,6 +705,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "question_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_sessions_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "question_subcategories"
             referencedColumns: ["id"]
           },
         ]
@@ -562,6 +774,20 @@ export type Database = {
       }
       complete_quiz_attempt: {
         Args: { p_attempt_id: string }
+        Returns: Json
+      }
+      get_invite_for_token: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      redeem_participant_invite: {
+        Args: {
+          p_token: string
+          p_name: string
+          p_email?: string | null
+          p_mobile?: string | null
+          p_metadata?: Json
+        }
         Returns: Json
       }
     }

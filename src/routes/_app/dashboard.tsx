@@ -87,11 +87,11 @@ function DashboardPage() {
   ];
 
   const actions = [
-    { label: t("dash.createQuiz"), to: "/sessions", icon: Plus },
-    { label: t("dash.createQuestions"), to: "/questions", icon: HelpCircle },
-    { label: "Add Participant", to: "/participants", icon: UserPlus },
-    { label: t("dash.manageParticipants"), to: "/participants", icon: Users },
-    { label: t("dash.generateQR"), to: "/sessions", icon: QrCode },
+    { label: t("dash.createQuiz"), to: "/sessions/new", icon: Plus },
+    { label: t("dash.createQuestions"), to: "/categories", icon: HelpCircle },
+    { label: "Add Participant", to: "/participant-types", icon: UserPlus },
+    { label: t("dash.manageParticipants"), to: "/participant-types", icon: Users },
+    { label: t("dash.generateQR"), to: "/sessions/new", icon: QrCode },
   ];
 
   return (

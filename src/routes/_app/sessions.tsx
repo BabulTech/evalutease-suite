@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PlayCircle, QrCode } from "lucide-react";
@@ -10,7 +10,6 @@ import { SessionDialog } from "@/components/sessions/SessionDialog";
 import { SessionCard, EditTriggerButton } from "@/components/sessions/SessionCard";
 import { LobbyDialog } from "@/components/sessions/LobbyDialog";
 import {
-  generateAccessCode,
   type AttemptStats,
   type Category,
   type ParticipantLite,
@@ -21,11 +20,20 @@ import {
   type TopThreeEntry,
 } from "@/components/sessions/types";
 
-export const Route = createFileRoute("/_app/sessions")({ component: SessionsPage });
+type SessionsSearch = { lobby?: string };
+
+export const Route = createFileRoute("/_app/sessions")({
+  validateSearch: (s: Record<string, unknown>): SessionsSearch => ({
+    lobby: typeof s.lobby === "string" ? s.lobby : undefined,
+  }),
+  component: SessionsPage,
+});
 
 function SessionsPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const search = Route.useSearch();
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -82,7 +90,8 @@ function SessionsPage() {
     const { data, error } = await supabase
       .from("quiz_sessions")
       .select(
-        `id, title, status, default_time_per_question, access_code, is_open, scheduled_at, created_at, category_id,
+        `id, title, status, default_time_per_question, access_code, is_open, scheduled_at, created_at, category_id, subcategory_id,
+         question_subcategories ( name ),
          question_categories ( name ),
          quiz_session_questions ( id, question_id ),
          quiz_session_participants ( participant_id ),
@@ -105,61 +114,15 @@ function SessionsPage() {
     void loadSessions();
   }, [loadCategories, loadQuestions, loadParticipants, loadSessions]);
 
-  const create = async (draft: SessionDraft) => {
-    if (!user) return;
-    const isScheduled = draft.saveMode === "schedule";
-    const status: SessionStatus = "scheduled";
-    const scheduled_at = isScheduled ? new Date(draft.scheduledAtLocal).toISOString() : null;
-    const { data: inserted, error: insErr } = await supabase
-      .from("quiz_sessions")
-      .insert({
-        owner_id: user.id,
-        title: draft.title.trim(),
-        category_id: draft.categoryId,
-        mode: "qr_link",
-        status,
-        is_open: true,
-        default_time_per_question: draft.timePerQuestionSec,
-        access_code: generateAccessCode(),
-        scheduled_at,
-      })
-      .select("id")
-      .single();
-    if (insErr || !inserted) {
-      toast.error(insErr?.message ?? "Could not create session");
-      throw insErr;
+  // Auto-open the lobby for a session ?lobby=<id> redirected from /sessions/new
+  useEffect(() => {
+    if (!search.lobby) return;
+    const target = sessions.find((s) => s.id === search.lobby);
+    if (target) {
+      setOpenLobby(target);
+      void navigate({ to: "/sessions", search: {}, replace: true });
     }
-    const sessionId = inserted.id;
-
-    if (draft.questionIds.length > 0) {
-      const rows = draft.questionIds.map((qid, i) => ({
-        session_id: sessionId,
-        question_id: qid,
-        position: i,
-        time_seconds: draft.timePerQuestionSec,
-      }));
-      const { error } = await supabase.from("quiz_session_questions").insert(rows);
-      if (error) {
-        toast.error(`Saved session but failed to add questions: ${error.message}`);
-        throw error;
-      }
-    }
-
-    if (draft.participantIds.length > 0) {
-      const rows = draft.participantIds.map((pid) => ({
-        session_id: sessionId,
-        participant_id: pid,
-      }));
-      const { error } = await supabase.from("quiz_session_participants").insert(rows);
-      if (error) {
-        toast.error(`Saved session but failed to invite participants: ${error.message}`);
-        throw error;
-      }
-    }
-
-    toast.success(isScheduled ? "Session scheduled" : "Lobby is open");
-    await loadSessions();
-  };
+  }, [search.lobby, sessions, navigate]);
 
   const edit = async (id: string, draft: SessionDraft, original: Session) => {
     if (!user) return;
@@ -273,24 +236,14 @@ function SessionsPage() {
             Generate QR/link sessions, schedule them, and run live quizzes for your participants.
           </p>
         </div>
-        <SessionDialog
-          title="Generate QR Session"
-          description="Pick a category, choose questions and (optionally) participants, then save now or schedule for later."
-          submitLabel="Save session"
-          categories={categories}
-          questions={questions}
-          participants={participants}
-          onSubmit={create}
-          trigger={
-            <Button
-              className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
-              disabled={!hasCategories}
-              title={hasCategories ? "" : "Create a category first on the Questions page"}
-            >
-              <QrCode className="h-4 w-4" /> Generate QR Session
-            </Button>
-          }
-        />
+        <Button
+          asChild
+          className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
+        >
+          <Link to="/sessions/new">
+            <QrCode className="h-4 w-4" /> Generate QR Session
+          </Link>
+        </Button>
       </div>
 
       {loading ? (
@@ -420,7 +373,9 @@ type SessionRow = {
   scheduled_at: string | null;
   created_at: string;
   category_id: string | null;
+  subcategory_id: string | null;
   question_categories: { name: string } | null;
+  question_subcategories: { name: string } | null;
   quiz_session_questions: { id: string; question_id: string }[] | null;
   quiz_session_participants: { participant_id: string }[] | null;
   quiz_attempts:
@@ -469,7 +424,8 @@ function rowToSession(row: SessionRow): Session {
     id: row.id,
     title: row.title,
     category_id: row.category_id,
-    category_name: row.question_categories?.name ?? null,
+    category_name:
+      row.question_subcategories?.name ?? row.question_categories?.name ?? null,
     status: row.status,
     default_time_per_question: row.default_time_per_question ?? 60,
     access_code: row.access_code,

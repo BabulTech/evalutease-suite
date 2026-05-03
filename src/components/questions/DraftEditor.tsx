@@ -107,7 +107,7 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
       </div>
 
       {!compact && (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-3">
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
               Difficulty
@@ -125,6 +125,22 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
                 <SelectItem value="hard">Hard</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+              Time (seconds)
+            </Label>
+            <Input
+              type="number"
+              min={5}
+              max={3600}
+              value={draft.timeSeconds}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                onChange({ ...draft, timeSeconds: Number.isFinite(n) ? n : 10 });
+              }}
+              placeholder="10"
+            />
           </div>
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">

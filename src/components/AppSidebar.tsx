@@ -1,8 +1,8 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
-  HelpCircle,
-  Users,
+  FolderTree,
+  UsersRound,
   PlayCircle,
   BarChart3,
   Settings,
@@ -21,8 +21,8 @@ export function AppSidebar() {
 
   const items = [
     { to: "/dashboard", icon: LayoutDashboard, label: t("nav.dashboard") },
-    { to: "/questions", icon: HelpCircle, label: t("nav.questions") },
-    { to: "/participants", icon: Users, label: t("nav.participants") },
+    { to: "/categories", icon: FolderTree, label: t("nav.manageCategories") },
+    { to: "/participant-types", icon: UsersRound, label: t("nav.manageParticipants") },
     { to: "/sessions", icon: PlayCircle, label: t("nav.sessions") },
     { to: "/reports", icon: BarChart3, label: t("nav.reports") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },

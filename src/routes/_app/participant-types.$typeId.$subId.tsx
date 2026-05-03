@@ -1,12 +1,23 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Users, UserPlus, Search, Pencil, Trash2, Mail, Phone, Hash, Armchair } from "lucide-react";
+import {
+  Armchair,
+  ChevronLeft,
+  Hash,
+  Mail,
+  Pencil,
+  Phone,
+  Search,
+  Trash2,
+  UserPlus,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -26,6 +37,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ParticipantDialog } from "@/components/participants/ParticipantDialog";
+import { InviteDialog, type InviteRow } from "@/components/participants/InviteDialog";
 import {
   draftFromParticipant,
   draftToRow,
@@ -34,7 +46,12 @@ import {
   type ParticipantMeta,
 } from "@/components/participants/types";
 
-export const Route = createFileRoute("/_app/participants")({ component: ParticipantsPage });
+export const Route = createFileRoute("/_app/participant-types/$typeId/$subId")({
+  component: SubTypeParticipantsPage,
+});
+
+type SubRow = { id: string; type_id: string; name: string };
+type TypeRow = { id: string; name: string };
 
 type ParticipantRow = {
   id: string;
@@ -42,6 +59,7 @@ type ParticipantRow = {
   email: string | null;
   mobile: string | null;
   metadata: unknown;
+  subtype_id: string | null;
   created_at: string;
 };
 
@@ -58,9 +76,11 @@ function rowToParticipant(row: ParticipantRow): Participant {
   };
 }
 
-function ParticipantsPage() {
+function SubTypeParticipantsPage() {
+  const { typeId, subId } = Route.useParams();
   const { user } = useAuth();
-  const { t } = useI18n();
+  const [type, setType] = useState<TypeRow | null>(null);
+  const [sub, setSub] = useState<SubRow | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -68,18 +88,34 @@ function ParticipantsPage() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("participants")
-      .select("id, name, email, mobile, metadata, created_at")
-      .eq("owner_id", user.id)
-      .order("created_at", { ascending: false });
+    const [t, s, p] = await Promise.all([
+      supabase
+        .from("participant_types")
+        .select("id, name")
+        .eq("id", typeId)
+        .eq("owner_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("participant_subtypes")
+        .select("id, type_id, name")
+        .eq("id", subId)
+        .eq("owner_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("participants")
+        .select("id, name, email, mobile, metadata, subtype_id, created_at")
+        .eq("owner_id", user.id)
+        .eq("subtype_id", subId)
+        .order("created_at", { ascending: false }),
+    ]);
     setLoading(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    setParticipants((data ?? []).map((row) => rowToParticipant(row as ParticipantRow)));
-  }, [user]);
+    if (t.error) toast.error(t.error.message);
+    if (s.error) toast.error(s.error.message);
+    if (p.error) toast.error(p.error.message);
+    setType(t.data ?? null);
+    setSub(s.data ?? null);
+    setParticipants(((p.data ?? []) as ParticipantRow[]).map(rowToParticipant));
+  }, [user, typeId, subId]);
 
   useEffect(() => {
     void load();
@@ -90,8 +126,8 @@ function ParticipantsPage() {
     const row = draftToRow(draft, user.id);
     const { data, error } = await supabase
       .from("participants")
-      .insert(row)
-      .select("id, name, email, mobile, metadata, created_at")
+      .insert({ ...row, subtype_id: subId })
+      .select("id, name, email, mobile, metadata, subtype_id, created_at")
       .single();
     if (error) {
       toast.error(error.message);
@@ -122,13 +158,7 @@ function ParticipantsPage() {
     setParticipants((prev) =>
       prev.map((p) =>
         p.id === id
-          ? {
-              ...p,
-              name: row.name,
-              email: row.email,
-              mobile: row.mobile,
-              metadata: row.metadata,
-            }
+          ? { ...p, name: row.name, email: row.email, mobile: row.mobile, metadata: row.metadata }
           : p,
       ),
     );
@@ -143,6 +173,28 @@ function ParticipantsPage() {
     }
     setParticipants((prev) => prev.filter((p) => p.id !== id));
     toast.success("Participant removed");
+  };
+
+  const generateInvites = async (emails: string[]): Promise<InviteRow[]> => {
+    if (!user) return [];
+    const inputs: Array<{ owner_id: string; subtype_id: string; email: string | null }> =
+      emails.length > 0
+        ? emails.map((e) => ({ owner_id: user.id, subtype_id: subId, email: e }))
+        : [{ owner_id: user.id, subtype_id: subId, email: null }];
+    const { data, error } = await supabase
+      .from("participant_invites")
+      .insert(inputs)
+      .select("id, email, token");
+    if (error) {
+      toast.error(error.message);
+      throw error;
+    }
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return (data ?? []).map((r) => ({
+      email: r.email,
+      token: r.token,
+      url: `${origin}/invite/${r.token}`,
+    }));
   };
 
   const filtered = useMemo(() => {
@@ -169,26 +221,59 @@ function ParticipantsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Link to="/participant-types" className="hover:text-foreground">
+          All types
+        </Link>
+        <ChevronLeft className="h-3 w-3 rotate-180" />
+        <Link
+          to="/participant-types/$typeId"
+          params={{ typeId }}
+          className="hover:text-foreground"
+        >
+          {type?.name ?? "Type"}
+        </Link>
+        <ChevronLeft className="h-3 w-3 rotate-180" />
+        <span className="text-foreground">{sub?.name ?? "Sub-type"}</span>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">
-            {t("nav.participants")}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Add students and assignees who will join your quiz sessions.
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+            <UsersRound className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold tracking-tight">
+              {sub?.name ?? "Sub-type"}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Add participants to this sub-type, or invite them by link to register themselves.
+            </p>
+          </div>
         </div>
-        <ParticipantDialog
-          title="Add participant"
-          description="Capture the contact and identification details you'll need to invite them to a session."
-          submitLabel="Add"
-          onSubmit={create}
-          trigger={
-            <Button className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              <UserPlus className="h-4 w-4" /> Add participant
-            </Button>
-          }
-        />
+        <div className="flex flex-wrap gap-2">
+          <InviteDialog
+            subtypeId={subId}
+            subtypeName={sub?.name ?? "this group"}
+            onGenerate={generateInvites}
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <Mail className="h-4 w-4" /> Invite by Email
+              </Button>
+            }
+          />
+          <ParticipantDialog
+            title="Add participant"
+            description={`They'll be added under ${type?.name ?? "this type"} → ${sub?.name ?? "this sub-type"}.`}
+            submitLabel="Add"
+            onSubmit={create}
+            trigger={
+              <Button className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+                <UserPlus className="h-4 w-4" /> Add Manually
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -215,9 +300,9 @@ function ParticipantsPage() {
           <Users className="mx-auto h-10 w-10 text-muted-foreground/60" />
           {participants.length === 0 ? (
             <>
-              <p className="mt-3 text-sm font-medium">No participants yet</p>
+              <p className="mt-3 text-sm font-medium">No participants in this sub-type yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Add your first participant to invite them to a quiz session.
+                Add them manually or generate invite links.
               </p>
             </>
           ) : (
@@ -241,7 +326,7 @@ function ParticipantsPage() {
             </TableHeader>
             <TableBody>
               {filtered.map((p) => (
-                <ParticipantRow key={p.id} p={p} onUpdate={update} onDelete={remove} />
+                <ParticipantTableRow key={p.id} p={p} onUpdate={update} onDelete={remove} />
               ))}
             </TableBody>
           </Table>
@@ -251,7 +336,7 @@ function ParticipantsPage() {
   );
 }
 
-function ParticipantRow({
+function ParticipantTableRow({
   p,
   onUpdate,
   onDelete,

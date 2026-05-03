@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Trash2, CheckCircle2, Sparkles, ScanLine, Upload, FileEdit } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  Sparkles,
+  ScanLine,
+  Upload,
+  FileEdit,
+  Timer,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -102,6 +111,9 @@ function QuestionCard({
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             <SrcIcon className="h-3 w-3" /> {SOURCE_META[q.source].label}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <Timer className="h-3 w-3" /> {q.time_seconds}s
           </span>
         </div>
         <div className="flex gap-1">
@@ -261,5 +273,6 @@ function questionToDraft(q: Question): DraftQuestion {
     correctIndex: correctIndex === -1 ? 0 : correctIndex,
     difficulty: q.difficulty,
     explanation: q.explanation ?? "",
+    timeSeconds: q.time_seconds,
   };
 }
