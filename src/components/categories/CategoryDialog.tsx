@@ -71,7 +71,7 @@ export function CategoryDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Categories group your questions by subject — pick a name and an icon.
+            Categories group your questions by subject, pick a name and an icon.
           </DialogDescription>
         </DialogHeader>
 
