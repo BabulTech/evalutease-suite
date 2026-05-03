@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FolderTree, Plus } from "lucide-react";
@@ -15,6 +15,8 @@ export const Route = createFileRoute("/_app/categories")({ component: Categories
 function CategoriesPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onIndex = pathname === "/categories" || pathname === "/categories/";
   const [cards, setCards] = useState<CategoryCard[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -59,8 +61,10 @@ function CategoriesPage() {
   }, [user]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (onIndex) void load();
+  }, [load, onIndex]);
+
+  if (!onIndex) return <Outlet />;
 
   const create = async (draft: CategoryDraft) => {
     if (!user) return;

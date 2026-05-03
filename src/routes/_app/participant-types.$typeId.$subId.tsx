@@ -8,8 +8,10 @@ import {
   Mail,
   Pencil,
   Phone,
+  ScanLine,
   Search,
   Trash2,
+  Upload,
   UserPlus,
   Users,
   UsersRound,
@@ -38,6 +40,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ParticipantDialog } from "@/components/participants/ParticipantDialog";
 import { InviteDialog, type InviteRow } from "@/components/participants/InviteDialog";
+import { UploadParticipantsDialog } from "@/components/participants/UploadParticipantsDialog";
+import { ScanParticipantsDialog } from "@/components/participants/ScanParticipantsDialog";
 import {
   draftFromParticipant,
   draftToRow,
@@ -137,6 +141,22 @@ function SubTypeParticipantsPage() {
       setParticipants((prev) => [rowToParticipant(data as ParticipantRow), ...prev]);
       toast.success(`Added ${data.name}`);
     }
+  };
+
+  const createMany = async (drafts: ParticipantDraft[]) => {
+    if (!user || drafts.length === 0) return;
+    const rows = drafts.map((d) => ({ ...draftToRow(d, user.id), subtype_id: subId }));
+    const { data, error } = await supabase
+      .from("participants")
+      .insert(rows)
+      .select("id, name, email, mobile, metadata, subtype_id, created_at");
+    if (error) {
+      toast.error(error.message);
+      throw error;
+    }
+    const inserted = ((data ?? []) as ParticipantRow[]).map(rowToParticipant);
+    setParticipants((prev) => [...inserted, ...prev]);
+    toast.success(`Added ${inserted.length} participant${inserted.length === 1 ? "" : "s"}`);
   };
 
   const update = async (id: string, draft: ParticipantDraft) => {
@@ -252,6 +272,22 @@ function SubTypeParticipantsPage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <UploadParticipantsDialog
+            onSave={createMany}
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <Upload className="h-4 w-4" /> Upload File
+              </Button>
+            }
+          />
+          <ScanParticipantsDialog
+            onSave={createMany}
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <ScanLine className="h-4 w-4" /> Scan Image
+              </Button>
+            }
+          />
           <InviteDialog
             subtypeId={subId}
             subtypeName={sub?.name ?? "this group"}

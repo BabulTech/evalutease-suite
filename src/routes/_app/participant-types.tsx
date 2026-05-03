@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, UsersRound } from "lucide-react";
@@ -15,6 +15,8 @@ export const Route = createFileRoute("/_app/participant-types")({ component: Typ
 function TypesPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onIndex = pathname === "/participant-types" || pathname === "/participant-types/";
   const [cards, setCards] = useState<TypeCard[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -61,8 +63,10 @@ function TypesPage() {
   }, [user]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (onIndex) void load();
+  }, [load, onIndex]);
+
+  if (!onIndex) return <Outlet />;
 
   const create = async (draft: TypeDraft) => {
     if (!user) return;

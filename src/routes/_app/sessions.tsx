@@ -1,4 +1,10 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PlayCircle, QrCode } from "lucide-react";
@@ -34,6 +40,8 @@ function SessionsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const search = Route.useSearch();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onIndex = pathname === "/sessions" || pathname === "/sessions/";
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -87,42 +95,85 @@ function SessionsPage() {
   const loadSessions = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    // Fetch session rows + the per-session children (questions/participants/attempts) but
+    // resolve the category / subcategory NAME with separate queries. This avoids relying on
+    // PostgREST's schema-cache for FK joins, which lags after migrations.
     const { data, error } = await supabase
       .from("quiz_sessions")
       .select(
         `id, title, status, default_time_per_question, access_code, is_open, scheduled_at, created_at, category_id, subcategory_id,
-         question_subcategories ( name ),
-         question_categories ( name ),
          quiz_session_questions ( id, question_id ),
          quiz_session_participants ( participant_id ),
          quiz_attempts ( id, completed, score, total_questions, participant_name )`,
       )
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       toast.error(error.message);
       return;
     }
-    setSessions((data ?? []).map((row) => rowToSession(row as SessionRow)));
+
+    const rows = (data ?? []) as Omit<SessionRow, "question_categories" | "question_subcategories">[];
+    const subIds = Array.from(
+      new Set(rows.map((r) => r.subcategory_id).filter((v): v is string => !!v)),
+    );
+    const catIds = Array.from(
+      new Set(rows.map((r) => r.category_id).filter((v): v is string => !!v)),
+    );
+
+    const [subRes, catRes] = await Promise.all([
+      subIds.length > 0
+        ? supabase.from("question_subcategories").select("id, name").in("id", subIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
+      catIds.length > 0
+        ? supabase.from("question_categories").select("id, name").in("id", catIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
+    ]);
+    setLoading(false);
+    if (subRes.error) toast.error(subRes.error.message);
+    if (catRes.error) toast.error(catRes.error.message);
+
+    const subNames = new Map<string, string>();
+    for (const s of subRes.data ?? []) subNames.set(s.id, s.name);
+    const catNames = new Map<string, string>();
+    for (const c of catRes.data ?? []) catNames.set(c.id, c.name);
+
+    setSessions(
+      rows.map((row) =>
+        rowToSession({
+          ...row,
+          question_subcategories: row.subcategory_id
+            ? { name: subNames.get(row.subcategory_id) ?? "" }
+            : null,
+          question_categories: row.category_id
+            ? { name: catNames.get(row.category_id) ?? "" }
+            : null,
+        } as SessionRow),
+      ),
+    );
   }, [user]);
 
   useEffect(() => {
+    if (!onIndex) return;
     void loadCategories();
     void loadQuestions();
     void loadParticipants();
     void loadSessions();
-  }, [loadCategories, loadQuestions, loadParticipants, loadSessions]);
+  }, [loadCategories, loadQuestions, loadParticipants, loadSessions, onIndex]);
 
   // Auto-open the lobby for a session ?lobby=<id> redirected from /sessions/new
   useEffect(() => {
+    if (!onIndex) return;
     if (!search.lobby) return;
     const target = sessions.find((s) => s.id === search.lobby);
     if (target) {
       setOpenLobby(target);
       void navigate({ to: "/sessions", search: {}, replace: true });
     }
-  }, [search.lobby, sessions, navigate]);
+  }, [search.lobby, sessions, navigate, onIndex]);
+
+  if (!onIndex) return <Outlet />;
 
   const edit = async (id: string, draft: SessionDraft, original: Session) => {
     if (!user) return;

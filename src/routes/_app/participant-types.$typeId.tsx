@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, Plus, UsersRound } from "lucide-react";
@@ -18,6 +18,9 @@ type TypeRow = { id: string; name: string; icon: string | null };
 function TypeDetailPage() {
   const { typeId } = Route.useParams();
   const { user } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const expected = `/participant-types/${typeId}`;
+  const onIndex = pathname === expected || pathname === expected + "/";
   const [type, setType] = useState<TypeRow | null>(null);
   const [cards, setCards] = useState<SubTypeCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,8 +66,10 @@ function TypeDetailPage() {
   }, [user, typeId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (onIndex) void load();
+  }, [load, onIndex]);
+
+  if (!onIndex) return <Outlet />;
 
   const create = async (draft: SubTypeDraft) => {
     if (!user) return;

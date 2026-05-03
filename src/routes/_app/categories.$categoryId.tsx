@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, FolderOpen, Plus } from "lucide-react";
@@ -21,6 +21,9 @@ type CategoryRow = { id: string; name: string; icon: string | null };
 function CategoryDetailPage() {
   const { categoryId } = Route.useParams();
   const { user } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const expected = `/categories/${categoryId}`;
+  const onIndex = pathname === expected || pathname === expected + "/";
   const [category, setCategory] = useState<CategoryRow | null>(null);
   const [cards, setCards] = useState<SubCategoryCard[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,8 +76,10 @@ function CategoryDetailPage() {
   }, [user, categoryId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (onIndex) void load();
+  }, [load, onIndex]);
+
+  if (!onIndex) return <Outlet />;
 
   const create = async (draft: SubCategoryDraft) => {
     if (!user) return;

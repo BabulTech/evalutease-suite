@@ -5,11 +5,10 @@ import {
   Users,
   PlayCircle,
   FileText,
-  Plus,
   QrCode,
   Sparkles,
   ArrowRight,
-  UserPlus,
+  Activity,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -20,30 +19,42 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
 });
 
-type Stats = { quizzes: number; sessions: number; participants: number; questions: number };
+type Stats = {
+  sessions: number;
+  active: number;
+  participants: number;
+  questions: number;
+};
 
 function DashboardPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const [stats, setStats] = useState<Stats>({
-    quizzes: 0,
     sessions: 0,
+    active: 0,
     participants: 0,
     questions: 0,
   });
   const [recent, setRecent] = useState<
     Array<{ id: string; title: string; status: string; created_at: string }>
   >([]);
+  const [upcoming, setUpcoming] = useState<
+    Array<{ id: string; title: string; scheduled_at: string }>
+  >([]);
 
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const [q, s, p, qs, recentSessions] = await Promise.all([
+      const [sess, active, parts, qs, recentSessions, upcomingSessions] = await Promise.all([
         supabase
           .from("quiz_sessions")
           .select("id", { count: "exact", head: true })
           .eq("owner_id", user.id),
-        supabase.from("quiz_attempts").select("id", { count: "exact", head: true }),
+        supabase
+          .from("quiz_sessions")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_id", user.id)
+          .eq("status", "active"),
         supabase
           .from("participants")
           .select("id", { count: "exact", head: true })
@@ -58,40 +69,68 @@ function DashboardPage() {
           .eq("owner_id", user.id)
           .order("created_at", { ascending: false })
           .limit(5),
+        supabase
+          .from("quiz_sessions")
+          .select("id, title, scheduled_at")
+          .eq("owner_id", user.id)
+          .eq("status", "scheduled")
+          .gte("scheduled_at", new Date().toISOString())
+          .order("scheduled_at", { ascending: true })
+          .limit(5),
       ]);
       setStats({
-        quizzes: q.count ?? 0,
-        sessions: s.count ?? 0,
-        participants: p.count ?? 0,
+        sessions: sess.count ?? 0,
+        active: active.count ?? 0,
+        participants: parts.count ?? 0,
         questions: qs.count ?? 0,
       });
       setRecent(recentSessions.data ?? []);
+      setUpcoming(
+        (upcomingSessions.data ?? []).map((s) => ({
+          id: s.id,
+          title: s.title,
+          scheduled_at: s.scheduled_at as string,
+        })),
+      );
     })();
   }, [user]);
 
+  // Each card is a link to the relevant management page.
   const cards = [
-    { label: t("dash.quizzes"), value: stats.quizzes, icon: PlayCircle, color: "text-primary" },
-    { label: t("dash.sessions"), value: stats.sessions, icon: Sparkles, color: "text-success" },
+    {
+      label: "Total Sessions",
+      value: stats.sessions,
+      icon: PlayCircle,
+      color: "text-primary",
+      to: "/sessions" as const,
+    },
+    {
+      label: "Active Sessions",
+      value: stats.active,
+      icon: Activity,
+      color: "text-success",
+      to: "/sessions" as const,
+    },
     {
       label: t("dash.participants"),
       value: stats.participants,
       icon: Users,
       color: "text-warning",
+      to: "/participant-types" as const,
     },
     {
       label: t("dash.questions"),
       value: stats.questions,
       icon: HelpCircle,
       color: "text-primary-glow",
+      to: "/categories" as const,
     },
   ];
 
   const actions = [
-    { label: t("dash.createQuiz"), to: "/sessions/new", icon: Plus },
-    { label: t("dash.createQuestions"), to: "/categories", icon: HelpCircle },
-    { label: "Add Participant", to: "/participant-types", icon: UserPlus },
-    { label: t("dash.manageParticipants"), to: "/participant-types", icon: Users },
-    { label: t("dash.generateQR"), to: "/sessions/new", icon: QrCode },
+    { label: t("dash.generateQR"), to: "/sessions/new" as const, icon: QrCode },
+    { label: "Manage Categories", to: "/categories" as const, icon: HelpCircle },
+    { label: "Manage Participants", to: "/participant-types" as const, icon: Users },
   ];
 
   return (
@@ -105,9 +144,10 @@ function DashboardPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c) => (
-          <div
+          <Link
             key={c.label}
-            className="rounded-2xl border border-border bg-card/60 backdrop-blur p-5 shadow-card hover:border-primary/30 transition-colors"
+            to={c.to}
+            className="rounded-2xl border border-border bg-card/60 backdrop-blur p-5 shadow-card hover:border-primary/40 hover:shadow-glow transition-all"
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -116,13 +156,13 @@ function DashboardPage() {
               <c.icon className={`h-4 w-4 ${c.color}`} />
             </div>
             <div className="mt-3 font-display text-3xl font-bold">{c.value}</div>
-          </div>
+          </Link>
         ))}
       </div>
 
       <div>
         <h2 className="font-display text-lg font-semibold mb-3">{t("dash.quickActions")}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {actions.map((a) => (
             <Link
               key={a.label}
@@ -150,19 +190,22 @@ function DashboardPage() {
           ) : (
             <ul className="space-y-2">
               {recent.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex items-center justify-between rounded-xl bg-secondary/40 px-3 py-2.5"
-                >
-                  <div>
-                    <div className="text-sm font-medium">{r.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(r.created_at).toLocaleDateString()}
+                <li key={r.id}>
+                  <Link
+                    to="/sessions"
+                    search={r.status === "active" || r.status === "scheduled" ? { lobby: r.id } : {}}
+                    className="flex items-center justify-between rounded-xl bg-secondary/40 hover:bg-secondary/70 px-3 py-2.5 transition-colors"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{r.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(r.created_at).toLocaleDateString()}
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-xs px-2 py-1 rounded-full bg-primary/15 text-primary capitalize">
-                    {r.status}
-                  </span>
+                    <span className="text-xs px-2 py-1 rounded-full bg-primary/15 text-primary capitalize">
+                      {r.status}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -172,10 +215,32 @@ function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">{t("dash.upcoming")}</h3>
             <Button size="sm" variant="ghost" className="text-primary text-xs" asChild>
-              <Link to="/sessions">+ Schedule</Link>
+              <Link to="/sessions/new">+ Schedule</Link>
             </Button>
           </div>
-          <EmptyState />
+          {upcoming.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <ul className="space-y-2">
+              {upcoming.map((u) => (
+                <li key={u.id}>
+                  <Link
+                    to="/sessions"
+                    search={{ lobby: u.id }}
+                    className="flex items-center justify-between rounded-xl bg-secondary/40 hover:bg-secondary/70 px-3 py-2.5 transition-colors"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{u.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(u.scheduled_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <Sparkles className="h-4 w-4 text-primary" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>
