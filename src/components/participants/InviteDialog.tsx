@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/copy-text";
 
 export type InviteRow = { email: string | null; token: string; url: string };
 
@@ -45,13 +46,17 @@ export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
     }
   };
 
+  const [copied, setCopied] = useState(false);
+
   const copy = async (url: string) => {
     if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
+    const ok = await copyText(url);
+    if (ok) {
+      setCopied(true);
       toast.success("Link copied");
-    } catch {
-      toast.error("Could not copy - copy manually");
+      window.setTimeout(() => setCopied(false), 1500);
+    } else {
+      toast.error("Could not copy - select and copy manually");
     }
   };
 
@@ -107,23 +112,37 @@ export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
         ) : (
           <div className="space-y-3">
             {results.map((r) => (
-              <div key={r.token} className="rounded-xl border border-border bg-card/40 p-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate rounded-md bg-muted/30 px-2 py-1.5 text-xs">
-                    {r.url}
-                  </code>
-                  <Button size="icon" variant="ghost" onClick={() => copy(r.url)} title="Copy">
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
+              <div
+                key={r.token}
+                className="flex items-center gap-2 rounded-xl border border-border bg-card/40 p-2"
+              >
+                <input
+                  readOnly
+                  value={r.url}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="flex-1 min-w-0 rounded-md bg-muted/30 px-3 py-2 font-mono text-xs text-foreground outline-none"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copy(r.url)}
+                  title="Copy link"
+                  className="shrink-0"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
               </div>
             ))}
-            <DialogFooter className="flex-row justify-between sm:justify-between">
-              <Button variant="ghost" onClick={reset}>
+            <DialogFooter className="flex-row items-center justify-between sm:justify-between gap-2 sm:space-x-0">
+              <Button variant="ghost" size="sm" onClick={reset}>
                 Create new
               </Button>
-              <Button onClick={() => copy(results[0]?.url ?? "")} className="gap-1.5">
-                <Check className="h-4 w-4" /> Copy URL
+              <Button
+                onClick={() => copy(results[0]?.url ?? "")}
+                className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
+              >
+                <Check className="h-4 w-4" />
+                {copied ? "Copied" : "Copy URL"}
               </Button>
             </DialogFooter>
           </div>

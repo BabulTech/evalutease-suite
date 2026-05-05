@@ -49,6 +49,7 @@ import {
   getQuizReportRows,
   type QuizReportAttempt,
 } from "@/lib/quiz-reports";
+import { copyText } from "@/lib/copy-text";
 
 export const Route = createFileRoute("/_app/sessions/$sessionId")({
   component: SessionLobbyPage,
@@ -261,12 +262,9 @@ function SessionLobbyPage() {
   }, [session?.access_code]);
 
   const copy = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(`${label} copied`);
-    } catch {
-      toast.error(`Could not copy ${label}`);
-    }
+    const ok = await copyText(text);
+    if (ok) toast.success(`${label} copied`);
+    else toast.error(`Could not copy ${label}`);
   };
 
   const emailParticipants = () => {

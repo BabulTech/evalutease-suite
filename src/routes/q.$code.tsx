@@ -91,11 +91,33 @@ function PublicQuizPage() {
     };
   }, [code, reload]);
 
+  const isPaused = phase.kind === "quiz" && !!phase.data.session.paused_at;
+
   useEffect(() => {
     if (phase.kind !== "quiz") return;
+    if (isPaused) return;
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
-  }, [phase.kind]);
+  }, [phase.kind, isPaused]);
+
+  const wasPausedRef = useRef(false);
+  useEffect(() => {
+    if (phase.kind !== "quiz") {
+      wasPausedRef.current = false;
+      return;
+    }
+    if (isPaused) {
+      wasPausedRef.current = true;
+      return;
+    }
+    if (wasPausedRef.current) {
+      const realNow = Date.now();
+      const gap = realNow - now;
+      if (gap > 0) setLocalQuestionStartedAt((prev) => prev + gap);
+      setNow(realNow);
+      wasPausedRef.current = false;
+    }
+  }, [phase.kind, isPaused, now]);
 
   useEffect(() => {
     if (phase.kind !== "quiz") {
@@ -241,6 +263,7 @@ function PublicQuizPage() {
 
   useEffect(() => {
     if (phase.kind !== "quiz" || localQuestionIndex === null) return;
+    if (phase.data.session.paused_at) return;
     const question = phase.data.questions[localQuestionIndex];
     if (!question || answeredQuestionIds.has(question.id)) return;
     const totalSeconds = question.time_seconds || phase.data.session.default_time_per_question;
@@ -326,6 +349,7 @@ function PublicQuizPage() {
           secondsLeft={secondsLeft}
           totalSeconds={totalSeconds}
           isAnswered={answeredQuestionIds.has(question.id)}
+          paused={isPaused}
           onLockAnswer={async (option) => {
             await submitAnswer(question.id, option, Math.max(0, timeTaken));
             advanceAfterAnswer();

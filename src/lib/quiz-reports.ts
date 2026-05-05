@@ -11,7 +11,9 @@ export type QuizReportAttempt = {
   wrongAnswers: number;
   unattemptedQuestions: number;
   completed: boolean;
+  startedAt?: string | null;
   completedAt: string | null;
+  durationSeconds?: number | null;
 };
 
 export type QuizReportSession = {
@@ -48,8 +50,11 @@ export function getQuizReportRows(attempts: QuizReportAttempt[]): QuizReportRow[
     }));
 }
 
-export function downloadQuizReportCsv(session: QuizReportSession) {
-  const rows = getQuizReportRows(session.attempts);
+export function downloadQuizReportCsv(
+  session: QuizReportSession,
+  options?: { rows?: QuizReportRow[]; filterSummary?: string },
+) {
+  const rows = options?.rows ?? getQuizReportRows(session.attempts);
   const headers = [
     "Position",
     "Name",
@@ -63,6 +68,7 @@ export function downloadQuizReportCsv(session: QuizReportSession) {
     "Attempted Questions",
     "Total Questions",
     "Percent",
+    "Duration",
     "Status",
     "Completed At",
   ];
@@ -73,6 +79,7 @@ export function downloadQuizReportCsv(session: QuizReportSession) {
     [`Subject: ${session.subjectLabel || session.categoryLabel || "Not specified"}`],
     [`Topic: ${session.topicLabel || "Not specified"}`],
     [`Category: ${session.categoryLabel || "Uncategorised"}`],
+    options?.filterSummary ? [`Filters: ${options.filterSummary}`] : null,
     [`Generated: ${new Date().toLocaleString()}`],
     [],
     headers,
@@ -89,10 +96,12 @@ export function downloadQuizReportCsv(session: QuizReportSession) {
       r.attemptedQuestions,
       r.totalQuestions,
       `${r.percent}%`,
+      formatDuration(r.durationSeconds ?? null),
       r.completed ? "Completed" : "Did not finish",
       r.completedAt ? new Date(r.completedAt).toLocaleString() : "",
     ]),
   ]
+    .filter((row): row is (string | number)[] => row !== null)
     .map((row) => row.map(csvCell).join(","))
     .join("\n");
 
@@ -121,4 +130,15 @@ function slugify(value: string) {
       .replace(/^-+|-+$/g, "")
       .slice(0, 80) || "quiz"
   );
+}
+
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds) || seconds < 0) return "—";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds - m * 60);
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m - h * 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
 }
