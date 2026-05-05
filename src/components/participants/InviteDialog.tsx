@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { Check, Copy, Mail, X } from "lucide-react";
+import { Check, Copy, Link2, Mail } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,8 +10,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 export type InviteRow = { email: string | null; token: string; url: string };
@@ -20,50 +18,26 @@ type Props = {
   trigger: ReactNode;
   subtypeId: string;
   subtypeName: string;
-  /** Returns an array of newly created invite rows (one per email). */
+  /** Empty input creates one reusable common invite link. */
   onGenerate: (emails: string[]) => Promise<InviteRow[]>;
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
   const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<InviteRow[]>([]);
 
   const reset = () => {
-    setText("");
     setResults([]);
     setBusy(false);
   };
 
   const generate = async () => {
-    const lines = text
-      .split(/[\n,;]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const invalid = lines.filter((e) => !EMAIL_RE.test(e));
-    if (invalid.length) {
-      toast.error(`These don't look like emails: ${invalid.join(", ")}`);
-      return;
-    }
-    if (lines.length === 0) {
-      // still allow link-without-email
-      setBusy(true);
-      try {
-        const rows = await onGenerate([]);
-        setResults(rows);
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
     setBusy(true);
     try {
-      const rows = await onGenerate(lines);
+      const rows = await onGenerate([]);
       setResults(rows);
-      toast.success(`${rows.length} invite link${rows.length === 1 ? "" : "s"} generated`);
+      toast.success("Invite link generated");
     } catch {
       // onGenerate handles its own toast
     } finally {
@@ -72,22 +46,12 @@ export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
   };
 
   const copy = async (url: string) => {
+    if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied");
     } catch {
-      toast.error("Could not copy — copy manually");
-    }
-  };
-
-  const copyAll = async () => {
-    if (results.length === 0) return;
-    const lines = results.map((r) => (r.email ? `${r.email}  ${r.url}` : r.url));
-    try {
-      await navigator.clipboard.writeText(lines.join("\n"));
-      toast.success("All links copied");
-    } catch {
-      toast.error("Could not copy");
+      toast.error("Could not copy - copy manually");
     }
   };
 
@@ -102,28 +66,29 @@ export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Invite to {subtypeName}</DialogTitle>
+          <DialogTitle>Common invite link</DialogTitle>
           <DialogDescription>
-            Generate per-participant invite links. Paste them into your email, WhatsApp, or any
-            channel — when opened, the recipient sees a registration form already pinned to{" "}
-            <span className="font-semibold text-foreground">{subtypeName}</span>.
+            Generate one reusable URL for{" "}
+            <span className="font-semibold text-foreground">{subtypeName}</span>. Students open it,
+            fill the form, and appear in this participant list.
           </DialogDescription>
         </DialogHeader>
 
         {results.length === 0 ? (
           <div className="space-y-3">
-            <div>
-              <Label className="mb-1.5">Emails (one per line — optional)</Label>
-              <Textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder={"alice@example.com\nbob@example.com"}
-                rows={5}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Adding emails just labels each link — nothing is sent automatically. Leave empty to
-                generate a single anonymous invite.
-              </p>
+            <div className="rounded-2xl border border-border bg-card/40 p-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-xl bg-primary/10 p-2 text-primary">
+                  <Link2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-semibold">No email list needed</div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The teacher copies one URL and shares it anywhere. Every student who fills it is
+                    saved under this group.
+                  </p>
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
@@ -135,44 +100,31 @@ export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
                 className="bg-gradient-primary text-primary-foreground shadow-glow"
               >
                 <Mail className="h-4 w-4 mr-1" />
-                {busy ? "Generating…" : "Generate links"}
+                {busy ? "Generating..." : "Generate URL"}
               </Button>
             </DialogFooter>
           </div>
         ) : (
           <div className="space-y-3">
-            <ul className="space-y-2 max-h-[40vh] overflow-y-auto">
-              {results.map((r) => (
-                <li
-                  key={r.token}
-                  className="rounded-xl border border-border bg-card/40 p-3 text-sm"
-                >
-                  {r.email && (
-                    <div className="text-xs text-muted-foreground mb-1 truncate">{r.email}</div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 truncate text-xs bg-muted/30 px-2 py-1.5 rounded-md">
-                      {r.url}
-                    </code>
-                    <Button size="icon" variant="ghost" onClick={() => copy(r.url)} title="Copy">
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {results.map((r) => (
+              <div key={r.token} className="rounded-xl border border-border bg-card/40 p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate rounded-md bg-muted/30 px-2 py-1.5 text-xs">
+                    {r.url}
+                  </code>
+                  <Button size="icon" variant="ghost" onClick={() => copy(r.url)} title="Copy">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
             <DialogFooter className="flex-row justify-between sm:justify-between">
               <Button variant="ghost" onClick={reset}>
-                <X className="h-4 w-4 mr-1" />
-                Generate more
+                Create new
               </Button>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={copyAll}>
-                  <Check className="h-4 w-4 mr-1" />
-                  Copy all
-                </Button>
-                <Button onClick={() => setOpen(false)}>Done</Button>
-              </div>
+              <Button onClick={() => copy(results[0]?.url ?? "")} className="gap-1.5">
+                <Check className="h-4 w-4" /> Copy URL
+              </Button>
             </DialogFooter>
           </div>
         )}

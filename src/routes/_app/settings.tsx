@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Trophy, ListChecks, User } from "lucide-react";
+import { Settings as SettingsIcon, Trophy, ListChecks, User, Upload } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   defaultHostSettings,
   normalizeRegistrationFields,
@@ -71,7 +72,9 @@ function ProfileForm({ userId }: { userId: string }) {
     organization: "",
     mobile: "",
     country: "",
+    avatar_url: "",
   });
+  const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -88,9 +91,50 @@ function ProfileForm({ userId }: { userId: string }) {
             organization: data.organization ?? "",
             mobile: data.mobile ?? "",
             country: data.country ?? "",
+            avatar_url: data.avatar_url ?? "",
           });
       });
   }, [userId]);
+
+  const name = `${profile.first_name} ${profile.last_name}`.trim() || "User";
+  const initials = name.slice(0, 2).toUpperCase();
+
+  const uploadAvatar = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file");
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error("Profile picture must be under 3 MB");
+      return;
+    }
+    setUploading(true);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${userId}/avatar-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, {
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (error) {
+      setUploading(false);
+      toast.error(error.message);
+      return;
+    }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const avatar_url = data.publicUrl;
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url })
+      .eq("id", userId);
+    setUploading(false);
+    if (updateError) {
+      toast.error(updateError.message);
+      return;
+    }
+    setProfile((prev) => ({ ...prev, avatar_url }));
+    toast.success("Profile picture updated");
+  };
 
   const save = async () => {
     setSaving(true);
@@ -109,6 +153,31 @@ function ProfileForm({ userId }: { userId: string }) {
 
   return (
     <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-4">
+      <div className="flex flex-wrap items-center gap-4">
+        <Avatar className="h-20 w-20 border border-primary/30">
+          {profile.avatar_url && <AvatarImage src={profile.avatar_url} />}
+          <AvatarFallback className="bg-primary/15 text-primary text-xl font-semibold">
+            {initials}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <Label htmlFor="avatar-upload" className="mb-1.5 block">
+            Profile picture
+          </Label>
+          <Input
+            id="avatar-upload"
+            type="file"
+            accept="image/*"
+            className="max-w-xs"
+            disabled={uploading}
+            onChange={(e) => void uploadAvatar(e.target.files?.[0])}
+          />
+          <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Upload className="h-3.5 w-3.5" /> {uploading ? "Uploading..." : "JPG, PNG, or WebP up to 3 MB"}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="mb-1.5">{t("auth.firstName")}</Label>

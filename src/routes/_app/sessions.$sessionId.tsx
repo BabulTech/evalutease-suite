@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   Copy,
   Download,
+  Mail,
   PauseCircle,
   Pencil,
   PlayCircle,
@@ -43,6 +44,11 @@ import {
 import { formatTimePerQuestion, statusBadge } from "@/components/sessions/types";
 import type { Session as SessionLite, SessionStatus } from "@/components/sessions/types";
 import { Leaderboard, type LeaderboardEntry } from "@/components/sessions/Leaderboard";
+import {
+  downloadQuizReportCsv,
+  getQuizReportRows,
+  type QuizReportAttempt,
+} from "@/lib/quiz-reports";
 
 export const Route = createFileRoute("/_app/sessions/$sessionId")({
   component: SessionLobbyPage,
@@ -62,15 +68,45 @@ type SessionRow = {
   category_id: string | null;
   subcategory_id: string | null;
   created_at: string;
+  subject: string | null;
+  topic: string | null;
+  description: string | null;
 };
 
 type Attendee = {
   id: string;
   name: string;
   email: string | null;
+  rollNumber: string | null;
+  seatNumber: string | null;
   completed: boolean;
   score: number;
   total: number;
+  attempted: number;
+  correct: number;
+  wrong: number;
+  unattempted: number;
+  completedAt: string | null;
+};
+
+type AttemptWithDetails = {
+  id: string;
+  participant_name: string | null;
+  participant_email: string | null;
+  participant_id: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  score: number;
+  total_questions: number;
+  quiz_answers: { id: string; is_correct: boolean | null }[] | null;
+  participants: { metadata: unknown } | null;
+};
+
+type ProfileRow = {
+  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  organization: string | null;
 };
 
 function SessionLobbyPage() {
@@ -80,6 +116,8 @@ function SessionLobbyPage() {
   const [session, setSession] = useState<SessionRow | null>(null);
   const [categoryName, setCategoryName] = useState<string>("");
   const [subcategoryName, setSubcategoryName] = useState<string>("");
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [rosterEmails, setRosterEmails] = useState<string[]>([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [busy, setBusy] = useState(false);
@@ -92,7 +130,7 @@ function SessionLobbyPage() {
     const { data, error } = await supabase
       .from("quiz_sessions")
       .select(
-        "id, title, status, default_time_per_question, access_code, is_open, scheduled_at, started_at, paused_at, pause_offset_seconds, category_id, subcategory_id, created_at",
+        "id, title, status, default_time_per_question, access_code, is_open, scheduled_at, started_at, paused_at, pause_offset_seconds, category_id, subcategory_id, created_at, subject, topic, description",
       )
       .eq("id", sessionId)
       .eq("owner_id", user.id)
@@ -104,7 +142,7 @@ function SessionLobbyPage() {
     if (!data) return;
     setSession(data as SessionRow);
 
-    const [catRes, subRes, qCount] = await Promise.all([
+    const [catRes, subRes, qCount, profileRes, rosterRes] = await Promise.all([
       data.category_id
         ? supabase
             .from("question_categories")
@@ -123,28 +161,61 @@ function SessionLobbyPage() {
         .from("quiz_session_questions")
         .select("id", { count: "exact", head: true })
         .eq("session_id", sessionId),
+      supabase
+        .from("profiles")
+        .select("full_name, first_name, last_name, organization")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("quiz_session_participants")
+        .select("participants ( email )")
+        .eq("session_id", sessionId),
     ]);
     setCategoryName(catRes.data?.name ?? "");
     setSubcategoryName(subRes.data?.name ?? "");
     setQuestionCount(qCount.count ?? 0);
+    if (profileRes.data) setProfile(profileRes.data as ProfileRow);
+    const emails = ((rosterRes.data ?? []) as { participants: { email: string | null } | null }[])
+      .map((row) => row.participants?.email?.trim())
+      .filter((email): email is string => !!email);
+    setRosterEmails(Array.from(new Set(emails)));
   }, [sessionId, user]);
 
   const loadAttendees = useCallback(async () => {
     const { data, error } = await supabase
       .from("quiz_attempts")
-      .select("id, participant_name, participant_email, completed, score, total_questions")
+      .select(
+        "id, participant_name, participant_email, participant_id, completed, completed_at, score, total_questions, quiz_answers ( id, is_correct ), participants ( metadata )",
+      )
       .eq("session_id", sessionId)
       .order("started_at", { ascending: true });
     if (error) return;
     setAttendees(
-      (data ?? []).map((a) => ({
-        id: a.id,
-        name: a.participant_name ?? "Anonymous",
-        email: a.participant_email,
-        completed: a.completed,
-        score: a.score,
-        total: a.total_questions,
-      })),
+      ((data ?? []) as AttemptWithDetails[]).map((a) => {
+        const meta =
+          a.participants?.metadata && typeof a.participants.metadata === "object"
+            ? (a.participants.metadata as Record<string, unknown>)
+            : {};
+        const answers = a.quiz_answers ?? [];
+        const correct = answers.filter((answer) => answer.is_correct === true).length;
+        const wrong = answers.filter((answer) => answer.is_correct === false).length;
+        const attempted = answers.length;
+        return {
+          id: a.id,
+          name: a.participant_name ?? "Anonymous",
+          email: a.participant_email,
+          rollNumber: stringMeta(meta.roll_number),
+          seatNumber: stringMeta(meta.seat_number),
+          completed: a.completed,
+          score: a.score,
+          total: a.total_questions,
+          attempted,
+          correct,
+          wrong,
+          unattempted: Math.max(0, a.total_questions - attempted),
+          completedAt: a.completed_at,
+        };
+      }),
     );
   }, [sessionId]);
 
@@ -196,6 +267,20 @@ function SessionLobbyPage() {
     } catch {
       toast.error(`Could not copy ${label}`);
     }
+  };
+
+  const emailParticipants = () => {
+    if (!joinUrl || rosterEmails.length === 0) return;
+    const subjectLine = encodeURIComponent(`Quiz invite: ${session?.title ?? "Quiz"}`);
+    const body = encodeURIComponent(
+      [
+        `Please join the quiz using this link:`,
+        joinUrl,
+        "",
+        `Access code: ${session?.access_code ?? ""}`,
+      ].join("\n"),
+    );
+    window.location.href = `mailto:?bcc=${encodeURIComponent(rosterEmails.join(","))}&subject=${subjectLine}&body=${body}`;
   };
 
   const start = async () => {
@@ -339,6 +424,10 @@ function SessionLobbyPage() {
   const joined = attendees.length;
   const waiting = attendees.filter((a) => !a.completed);
   const submitted = attendees.filter((a) => a.completed);
+  const reportAttempts = toReportAttempts(attendees);
+  const teacherName = getTeacherName(profile, user?.email);
+  const schoolName = profile?.organization ?? "";
+  const subject = session.subject || [categoryName, subcategoryName].filter(Boolean).join(" -> ") || "Not specified";
 
   return (
     <div className="space-y-6">
@@ -384,6 +473,11 @@ function SessionLobbyPage() {
             <PlayCircle className="h-4 w-4" /> Start Quiz
           </Button>
         )}
+        {!isCompleted && rosterEmails.length > 0 && (
+          <Button variant="outline" onClick={emailParticipants} className="gap-1.5">
+            <Mail className="h-4 w-4" /> Email Participants
+          </Button>
+        )}
         {isActive && !paused && (
           <Button onClick={pause} disabled={busy} variant="outline" className="gap-1.5">
             <PauseCircle className="h-4 w-4" /> Pause
@@ -398,8 +492,13 @@ function SessionLobbyPage() {
             <PlaySquare className="h-4 w-4" /> Resume
           </Button>
         )}
-        {!isCompleted && (
-          <Button variant="outline" onClick={() => setEditOpen(true)} className="gap-1.5">
+        {!isActive && !isCompleted && (
+          <Button
+            variant="outline"
+            onClick={() => setEditOpen(true)}
+            disabled={busy}
+            className="gap-1.5"
+          >
             <Pencil className="h-4 w-4" /> Edit Quiz
           </Button>
         )}
@@ -413,10 +512,11 @@ function SessionLobbyPage() {
             <StopCircle className="h-4 w-4" /> Close Session
           </Button>
         )}
-        {!isCompleted && (
+        {!isActive && !isCompleted && (
           <Button
             variant="outline"
             onClick={() => setConfirmDelete(true)}
+            disabled={busy}
             className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" /> Delete
@@ -432,10 +532,22 @@ function SessionLobbyPage() {
               <Printer className="h-4 w-4" /> Print Results
             </Button>
             <Button
-              onClick={() => window.print()}
+              onClick={() =>
+                downloadQuizReportCsv({
+                  title: session.title,
+                  categoryLabel: [categoryName, subcategoryName].filter(Boolean).join(" -> "),
+                  teacherName,
+                  schoolName,
+                  subjectLabel: subject,
+                  topicLabel: session.topic ?? "",
+                  createdAt: session.created_at,
+                  questionCount,
+                  attempts: reportAttempts,
+                })
+              }
               className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
             >
-              <Download className="h-4 w-4" /> Download PDF
+              <Download className="h-4 w-4" /> Download Excel
             </Button>
           </>
         )}
@@ -449,6 +561,11 @@ function SessionLobbyPage() {
           categoryLabel={[categoryName, subcategoryName].filter(Boolean).join(" → ") || ""}
           questionCount={questionCount}
           createdAt={session.created_at}
+          reportAttempts={reportAttempts}
+          teacherName={teacherName}
+          schoolName={schoolName}
+          subjectLabel={subject}
+          topicLabel={session.topic ?? ""}
         />
       ) : isActive ? (
         <LiveView
@@ -657,12 +774,22 @@ function ResultsView({
   categoryLabel,
   questionCount,
   createdAt,
+  reportAttempts,
+  teacherName,
+  schoolName,
+  subjectLabel,
+  topicLabel,
 }: {
   attendees: Attendee[];
   title: string;
   categoryLabel: string;
   questionCount: number;
   createdAt: string;
+  reportAttempts: QuizReportAttempt[];
+  teacherName: string;
+  schoolName: string;
+  subjectLabel: string;
+  topicLabel: string;
 }) {
   const entries: LeaderboardEntry[] = attendees.map((a) => ({
     id: a.id,
@@ -673,8 +800,16 @@ function ResultsView({
     completed: a.completed,
   }));
   const submittedCount = attendees.filter((a) => a.completed).length;
-  const sorted = [...entries].sort((a, b) => b.score - a.score);
-  const top = sorted[0];
+  const rows = getQuizReportRows(reportAttempts);
+  const top = rows[0];
+  const totals = rows.reduce(
+    (sum, row) => ({
+      correct: sum.correct + row.correctAnswers,
+      wrong: sum.wrong + row.wrongAnswers,
+      unattempted: sum.unattempted + row.unattemptedQuestions,
+    }),
+    { correct: 0, wrong: 0, unattempted: 0 },
+  );
 
   return (
     <div className="space-y-5 print:space-y-3" id="quiz-results">
@@ -704,6 +839,12 @@ function ResultsView({
                 <span>·</span>
                 <span>{new Date(createdAt).toLocaleString()}</span>
               </div>
+              <dl className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+                <ReportDetail label="Teacher" value={teacherName} />
+                <ReportDetail label="School/Organization" value={schoolName || "Not specified"} />
+                <ReportDetail label="Subject" value={subjectLabel} />
+                <ReportDetail label="Topic" value={topicLabel || "Not specified"} />
+              </dl>
             </div>
           </div>
           {top && (
@@ -718,11 +859,132 @@ function ResultsView({
         </div>
       </div>
 
+      {rows.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-3 print:grid-cols-3">
+          {rows.slice(0, 3).map((row) => (
+            <div key={row.id} className="rounded-2xl border border-border bg-card/50 p-4 print:border-black">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Position {row.rank}
+              </div>
+              <div className="mt-1 font-display text-lg font-bold">{row.name}</div>
+              <div className="text-xs text-muted-foreground truncate">{row.email || "No email"}</div>
+              <div className="mt-2 text-xl font-bold text-success">{row.score} pts</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-3 print:grid-cols-3">
+        <ScoreMetric label="Correct answers" value={totals.correct} tone="success" />
+        <ScoreMetric label="Wrong answers" value={totals.wrong} tone="danger" />
+        <ScoreMetric label="Unattempted" value={totals.unattempted} tone="muted" />
+      </div>
+
       <div className="rounded-2xl border border-border bg-card/40 p-5 print:border-0 print:bg-transparent print:p-0">
         <Leaderboard entries={entries} mode="final" />
       </div>
+
+      <div className="rounded-2xl border border-border bg-card/40 overflow-hidden print:border-black">
+        <table className="w-full text-sm">
+          <thead className="bg-secondary/40">
+            <tr>
+              {[
+                "Pos",
+                "Name",
+                "Email",
+                "Roll",
+                "Seat",
+                "Points",
+                "Correct",
+                "Wrong",
+                "Unattempted",
+                "Attempted",
+                "Total",
+              ].map((h) => (
+                <th key={h} className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-border/50">
+                <td className="px-3 py-2 font-bold">{row.rank}</td>
+                <td className="px-3 py-2 font-semibold">{row.name}</td>
+                <td className="px-3 py-2 text-muted-foreground">{row.email || "-"}</td>
+                <td className="px-3 py-2">{row.rollNumber || "-"}</td>
+                <td className="px-3 py-2">{row.seatNumber || "-"}</td>
+                <td className="px-3 py-2 font-bold text-success">{row.score}</td>
+                <td className="px-3 py-2 text-success font-semibold">{row.correctAnswers}</td>
+                <td className="px-3 py-2 text-destructive font-semibold">{row.wrongAnswers}</td>
+                <td className="px-3 py-2">{row.unattemptedQuestions}</td>
+                <td className="px-3 py-2">{row.attemptedQuestions}</td>
+                <td className="px-3 py-2">{row.totalQuestions}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
+}
+
+function ReportDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 font-semibold text-foreground">{value || "Not specified"}</dd>
+    </div>
+  );
+}
+
+function ScoreMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "success" | "danger" | "muted";
+}) {
+  const color =
+    tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : "text-muted-foreground";
+  return (
+    <div className="rounded-2xl border border-border bg-card/50 p-4">
+      <div className={`font-display text-3xl font-bold ${color}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
+function toReportAttempts(attendees: Attendee[]): QuizReportAttempt[] {
+  return attendees.map((a) => ({
+    id: a.id,
+    name: a.name,
+    email: a.email,
+    rollNumber: a.rollNumber,
+    seatNumber: a.seatNumber,
+    score: a.score,
+    totalQuestions: a.total,
+    attemptedQuestions: a.attempted,
+    correctAnswers: a.correct,
+    wrongAnswers: a.wrong,
+    unattemptedQuestions: a.unattempted,
+    completed: a.completed,
+    completedAt: a.completedAt,
+  }));
+}
+
+function getTeacherName(profile: ProfileRow | null, email?: string | null) {
+  const full = profile?.full_name?.trim();
+  if (full) return full;
+  const joined = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim();
+  return joined || email?.split("@")[0] || "Teacher";
+}
+
+function stringMeta(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function JoinPanel({

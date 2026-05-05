@@ -92,7 +92,12 @@ function SessionsPage() {
   if (!onIndex) return <Outlet />;
 
   const remove = async (id: string) => {
-    const { error } = await supabase.from("quiz_sessions").delete().eq("id", id);
+    const target = sessions.find((s) => s.id === id);
+    if (target?.status === "active") {
+      toast.error("Active quizzes are locked. Close the session before deleting it.");
+      return;
+    }
+    const { error } = await supabase.from("quiz_sessions").delete().eq("id", id).neq("status", "active");
     if (error) {
       toast.error(error.message);
       return;

@@ -28,6 +28,8 @@ function PublicQuizPage() {
   const [phase, setPhase] = useState<QuizPhase>({ kind: "loading" });
   const [now, setNow] = useState(() => Date.now());
   const [answeredQuestionIds, setAnsweredQuestionIds] = useState<Set<string>>(new Set());
+  const [localQuestionIndex, setLocalQuestionIndex] = useState<number | null>(null);
+  const [localQuestionStartedAt, setLocalQuestionStartedAt] = useState(() => Date.now());
 
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
@@ -94,6 +96,26 @@ function PublicQuizPage() {
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, [phase.kind]);
+
+  useEffect(() => {
+    if (phase.kind !== "quiz") {
+      setLocalQuestionIndex(null);
+      return;
+    }
+    const clock = computeClock(
+      phase.data.session.started_at,
+      phase.data.questions,
+      phase.data.session.default_time_per_question,
+      now,
+      phase.data.session.paused_at,
+      phase.data.session.pause_offset_seconds,
+    );
+    setLocalQuestionIndex((current) => {
+      const next = current === null ? clock.index : Math.max(current, clock.index);
+      if (next !== current) setLocalQuestionStartedAt(Date.now());
+      return next;
+    });
+  }, [phase, now]);
 
   useEffect(() => {
     if (phase.kind !== "lobby" && phase.kind !== "completed") return;
@@ -173,6 +195,20 @@ function PublicQuizPage() {
     }
   }, []);
 
+  const advanceAfterAnswer = useCallback(() => {
+    if (phaseRef.current.kind !== "quiz") return;
+    const total = phaseRef.current.data.questions.length;
+    setLocalQuestionIndex((current) => {
+      const next = (current ?? 0) + 1;
+      if (next >= total) {
+        window.setTimeout(() => void completeAttempt(), 150);
+        return current;
+      }
+      setLocalQuestionStartedAt(Date.now());
+      return next;
+    });
+  }, [completeAttempt]);
+
   const lastSubmittedIndex = useRef<number>(-1);
 
   useEffect(() => {
@@ -202,6 +238,25 @@ function PublicQuizPage() {
       lastSubmittedIndex.current = previous;
     }
   }, [phase, now, completeAttempt, submitAnswer, answeredQuestionIds]);
+
+  useEffect(() => {
+    if (phase.kind !== "quiz" || localQuestionIndex === null) return;
+    const question = phase.data.questions[localQuestionIndex];
+    if (!question || answeredQuestionIds.has(question.id)) return;
+    const totalSeconds = question.time_seconds || phase.data.session.default_time_per_question;
+    const elapsed = Math.floor((now - localQuestionStartedAt) / 1000);
+    if (elapsed < totalSeconds) return;
+    void submitAnswer(question.id, null, totalSeconds);
+    advanceAfterAnswer();
+  }, [
+    phase,
+    localQuestionIndex,
+    localQuestionStartedAt,
+    now,
+    answeredQuestionIds,
+    submitAnswer,
+    advanceAfterAnswer,
+  ]);
 
   if (phase.kind === "loading") {
     return <Wrapper>Loading session…</Wrapper>;
@@ -238,33 +293,42 @@ function PublicQuizPage() {
     );
   }
   if (phase.kind === "quiz") {
-    const clock = computeClock(
+    const sessionClock = computeClock(
       phase.data.session.started_at,
       phase.data.questions,
       phase.data.session.default_time_per_question,
       now,
     );
-    const question = phase.data.questions[clock.index];
+    const currentIndex = Math.max(localQuestionIndex ?? sessionClock.index, sessionClock.index);
+    const question = phase.data.questions[currentIndex];
     if (!question) {
       return (
         <Wrapper>
-          <Lobby session={phase.data.session} />
+          <Completion
+            session={phase.data.session}
+            score={0}
+            total={phase.data.session.total_questions}
+            speedBonus={0}
+          />
         </Wrapper>
       );
     }
     const totalSeconds = question.time_seconds || phase.data.session.default_time_per_question;
-    const timeTaken = totalSeconds - clock.secondsLeft;
+    const elapsed = Math.max(0, Math.floor((now - localQuestionStartedAt) / 1000));
+    const secondsLeft = Math.max(0, totalSeconds - elapsed);
+    const timeTaken = totalSeconds - secondsLeft;
     return (
       <Wrapper>
         <QuestionView
           question={question}
           total={phase.data.questions.length}
-          index={clock.index}
-          secondsLeft={clock.secondsLeft}
+          index={currentIndex}
+          secondsLeft={secondsLeft}
           totalSeconds={totalSeconds}
           isAnswered={answeredQuestionIds.has(question.id)}
           onLockAnswer={async (option) => {
             await submitAnswer(question.id, option, Math.max(0, timeTaken));
+            advanceAfterAnswer();
           }}
         />
       </Wrapper>
@@ -346,7 +410,9 @@ function mapJoinError(code: string): string {
     case "session_closed":
       return "This session has already finished.";
     case "not_invited":
-      return "Sorry, you're not on this quiz's invited roster. Check with the host.";
+      return "Sorry, this email is not on the invited roster. Check with the host.";
+    case "email_required":
+      return "This private quiz requires the same email your teacher added to the roster.";
     case "name_required":
       return "Name is required to join.";
     default:

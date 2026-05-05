@@ -3,11 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Calendar,
+  CalendarClock,
   Check,
   ChevronLeft,
   ChevronsUpDown,
   Globe,
   Lock,
+  Save,
   Search,
   X,
   Zap,
@@ -50,6 +52,7 @@ function NewSessionPage() {
   const [isPublic, setIsPublic] = useState(true);
   const [selectedSubtypeIds, setSelectedSubtypeIds] = useState<Set<string>>(new Set());
   const [timeText, setTimeText] = useState("10");
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledAtLocal, setScheduledAtLocal] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -120,7 +123,7 @@ function NewSessionPage() {
     });
   };
 
-  const submit = async (mode: "open" | "schedule") => {
+  const submit = async (mode: "draft" | "open" | "schedule") => {
     if (!user) return;
     const t = title.trim();
     if (!t) {
@@ -191,6 +194,7 @@ function NewSessionPage() {
 
     setBusy(true);
     const isScheduled = mode === "schedule";
+    const isDraft = mode === "draft";
     const subcat = subcategories.find((s) => s.id === subcategoryId);
     // Both modes start as 'scheduled' — that's what tells the lobby to show "Start Quiz".
     // Immediate (Save & Open) just leaves scheduled_at NULL, so the cron won't auto-start
@@ -203,7 +207,7 @@ function NewSessionPage() {
         category_id: subcat?.category_id ?? null,
         subcategory_id: subcategoryId,
         mode: "qr_link",
-        status: "scheduled",
+        status: isDraft ? "draft" : "scheduled",
         is_open: true,
         default_time_per_question: timeNum,
         access_code: generateAccessCode(),
@@ -260,8 +264,8 @@ function NewSessionPage() {
     }
 
     setBusy(false);
-    toast.success(isScheduled ? "Session scheduled" : "Lobby is open");
-    if (isScheduled) {
+    toast.success(isDraft ? "Draft saved" : isScheduled ? "Session scheduled" : "Lobby is open");
+    if (isDraft || isScheduled) {
       void navigate({ to: "/sessions" });
     } else {
       void navigate({ to: "/sessions/$sessionId", params: { sessionId } });
@@ -406,42 +410,70 @@ function NewSessionPage() {
             )}
           </div>
 
-          <div>
-            <Label className="mb-1.5">Schedule for later (optional)</Label>
-            <Input
-              type="datetime-local"
-              value={scheduledAtLocal}
-              onChange={(e) => setScheduledAtLocal(e.target.value)}
-              min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Only used by the <span className="font-semibold">Schedule</span> button. Leave empty
-              to use Save & Open Lobby.
-            </p>
+          <div className="rounded-2xl border border-border bg-card/40 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-primary" />
+                <div>
+                  <Label htmlFor="schedule-switch" className="text-sm font-semibold">
+                    Schedule for later
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Keep this off to create the lobby immediately.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="schedule-switch"
+                checked={scheduleEnabled}
+                onCheckedChange={(v) => {
+                  setScheduleEnabled(v);
+                  if (v && !scheduledAtLocal) {
+                    const next = new Date(Date.now() + 30 * 60_000);
+                    next.setSeconds(0, 0);
+                    setScheduledAtLocal(next.toISOString().slice(0, 16));
+                  }
+                  if (!v) setScheduledAtLocal("");
+                }}
+              />
+            </div>
+
+            {scheduleEnabled && (
+              <div className="pt-3 border-t border-border">
+                <Label className="mb-1.5">Date and time</Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledAtLocal}
+                  onChange={(e) => setScheduledAtLocal(e.target.value)}
+                  min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The session will appear in your list and auto-start when this time arrives.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-border">
             <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => void navigate({ to: "/sessions" })}
-            >
-              Cancel
-            </Button>
-            <Button
               variant="outline"
-              onClick={() => void submit("schedule")}
+              onClick={() => void submit("draft")}
               disabled={busy || noSubcategories}
               className="gap-1.5"
             >
-              <Calendar className="h-4 w-4" /> Schedule
+              <Save className="h-4 w-4" /> {busy ? "Saving..." : "Save Draft"}
             </Button>
             <Button
-              onClick={() => void submit("open")}
+              onClick={() => void submit(scheduleEnabled ? "schedule" : "open")}
               disabled={busy || noSubcategories}
               className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
             >
-              <Zap className="h-4 w-4" /> {busy ? "Saving…" : "Save & Open Lobby"}
+              {scheduleEnabled ? (
+                <Calendar className="h-4 w-4" />
+              ) : (
+                <Zap className="h-4 w-4" />
+              )}
+              {busy ? "Saving..." : scheduleEnabled ? "Schedule" : "Save & Open Lobby"}
             </Button>
           </div>
         </div>

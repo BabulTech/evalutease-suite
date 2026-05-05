@@ -294,7 +294,7 @@ function SubTypeParticipantsPage() {
             onGenerate={generateInvites}
             trigger={
               <Button variant="outline" className="gap-2">
-                <Mail className="h-4 w-4" /> Invite by Email
+                <Mail className="h-4 w-4" /> Invite Link
               </Button>
             }
           />

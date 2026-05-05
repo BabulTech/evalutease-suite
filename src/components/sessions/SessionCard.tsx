@@ -22,6 +22,7 @@ type Props = {
 export function SessionCard({ session, onDelete }: Props) {
   const badge = statusBadge(session);
   const { joined, waiting, submitted, avgPercent, topThree } = session.attempts;
+  const isActive = session.status === "active";
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -120,6 +121,8 @@ export function SessionCard({ session, onDelete }: Props) {
           size="sm"
           variant="outline"
           onClick={() => setConfirmDelete(true)}
+          disabled={isActive}
+          title={isActive ? "Quiz is locked while participants are playing" : undefined}
           className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash2 className="h-4 w-4 mr-1" /> Delete
@@ -138,7 +141,7 @@ export function SessionCard({ session, onDelete }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleting}
+              disabled={deleting || isActive}
               onClick={async (e) => {
                 e.preventDefault();
                 setDeleting(true);
