@@ -9,11 +9,26 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   emptyDraft,
   validateDraft,
   draftToRow,
   type ParticipantDraft,
+  type ParticipantType,
 } from "@/components/participants/types";
+
+const TYPE_OPTIONS: { value: ParticipantType; label: string; emoji: string }[] = [
+  { value: "student", label: "Student", emoji: "🎓" },
+  { value: "teacher", label: "Teacher", emoji: "📚" },
+  { value: "employee", label: "Employee", emoji: "💼" },
+  { value: "fun", label: "Fun / Guest", emoji: "🎉" },
+];
 
 export const Route = createFileRoute("/invite/$token")({ component: InvitePage });
 
@@ -157,74 +172,111 @@ function InvitePage() {
         </p>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {/* Type selector */}
           <div className="md:col-span-2">
-            <Label className="mb-1.5">
-              Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={draft.name}
-              onChange={(e) => set("name", e.target.value)}
-              placeholder="Full name"
-              autoFocus
-              maxLength={120}
-            />
+            <Label className="mb-1.5">I am a…</Label>
+            <Select
+              value={draft.participant_type || "__none__"}
+              onValueChange={(v) => set("participant_type", v === "__none__" ? "" : v as ParticipantType)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select your role (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— Not specified —</SelectItem>
+                {TYPE_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Name — always */}
+          <div className="md:col-span-2">
+            <Label className="mb-1.5">Name <span className="text-destructive">*</span></Label>
+            <Input value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" autoFocus maxLength={120} />
           </div>
           <div>
             <Label className="mb-1.5">Email</Label>
-            <Input
-              type="email"
-              value={draft.email}
-              onChange={(e) => set("email", e.target.value)}
-              placeholder="you@example.com"
-            />
+            <Input type="email" value={draft.email} onChange={(e) => set("email", e.target.value)} placeholder="you@example.com" />
           </div>
           <div>
-            <Label className="mb-1.5">Contact number</Label>
-            <Input
-              type="tel"
-              value={draft.mobile}
-              onChange={(e) => set("mobile", e.target.value)}
-              placeholder="+92 300 0000000"
-            />
+            <Label className="mb-1.5">Mobile</Label>
+            <Input type="tel" value={draft.mobile} onChange={(e) => set("mobile", e.target.value)} placeholder="+92 300 0000000" />
           </div>
-          <div>
-            <Label className="mb-1.5">Roll number</Label>
-            <Input
-              value={draft.roll_number}
-              onChange={(e) => set("roll_number", e.target.value)}
-              placeholder="2026-CS-042"
-            />
-          </div>
-          <div>
-            <Label className="mb-1.5">Seat number</Label>
-            <Input
-              value={draft.seat_number}
-              onChange={(e) => set("seat_number", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label className="mb-1.5">Organization / school</Label>
-            <Input
-              value={draft.organization}
-              onChange={(e) => set("organization", e.target.value)}
-            />
-          </div>
-          <div>
-            <Label className="mb-1.5">Class / grade</Label>
-            <Input value={draft.class} onChange={(e) => set("class", e.target.value)} />
-          </div>
-          <div className="md:col-span-2">
-            <Label className="mb-1.5">Address</Label>
-            <Input value={draft.address} onChange={(e) => set("address", e.target.value)} />
-          </div>
-          <div className="md:col-span-2">
-            <Label className="mb-1.5">Notes</Label>
-            <Textarea
-              value={draft.notes}
-              onChange={(e) => set("notes", e.target.value)}
-              rows={3}
-            />
-          </div>
+
+          {/* Student / unset fields */}
+          {(draft.participant_type === "student" || draft.participant_type === "") && (
+            <>
+              <div>
+                <Label className="mb-1.5">School / Organization</Label>
+                <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
+              </div>
+              <div>
+                <Label className="mb-1.5">Class / Grade</Label>
+                <Input value={draft.grade || draft.class} onChange={(e) => { set("grade", e.target.value); set("class", e.target.value); }} placeholder="Class 10 / Year 12" />
+              </div>
+              <div>
+                <Label className="mb-1.5">Roll number</Label>
+                <Input value={draft.roll_number} onChange={(e) => set("roll_number", e.target.value)} placeholder="2026-CS-042" />
+              </div>
+              <div>
+                <Label className="mb-1.5">Seat number</Label>
+                <Input value={draft.seat_number} onChange={(e) => set("seat_number", e.target.value)} />
+              </div>
+            </>
+          )}
+
+          {/* Teacher fields */}
+          {draft.participant_type === "teacher" && (
+            <>
+              <div>
+                <Label className="mb-1.5">Employee ID</Label>
+                <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
+              </div>
+              <div>
+                <Label className="mb-1.5">School / Institution</Label>
+                <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
+              </div>
+              <div>
+                <Label className="mb-1.5">Subject / Class</Label>
+                <Input value={draft.class} onChange={(e) => set("class", e.target.value)} placeholder="Mathematics, Class 9–10" />
+              </div>
+            </>
+          )}
+
+          {/* Employee fields */}
+          {draft.participant_type === "employee" && (
+            <>
+              <div>
+                <Label className="mb-1.5">Employee ID</Label>
+                <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
+              </div>
+              <div>
+                <Label className="mb-1.5">Company / Organization</Label>
+                <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Acme Corp" />
+              </div>
+              <div>
+                <Label className="mb-1.5">Department</Label>
+                <Input value={draft.department} onChange={(e) => set("department", e.target.value)} placeholder="Engineering" />
+              </div>
+            </>
+          )}
+
+          {/* Fun / Guest */}
+          {draft.participant_type === "fun" && (
+            <div>
+              <Label className="mb-1.5">Nickname / Alias</Label>
+              <Input value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="e.g. QuizMaster99" />
+            </div>
+          )}
+
+          {draft.participant_type !== "fun" && (
+            <div className="md:col-span-2">
+              <Label className="mb-1.5">Notes</Label>
+              <Textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} rows={2} placeholder="Anything worth noting" />
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end">

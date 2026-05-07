@@ -30,7 +30,7 @@ const dictionaries: Record<Language, Dict> = {
     "nav.dashboard": "Dashboard",
     "nav.questions": "Questions",
     "nav.participants": "Participants",
-    "nav.manageCategories": "Manage Categories",
+    "nav.manageCategories": "Manage Questions",
     "nav.manageParticipants": "Manage Participants",
     "nav.sessions": "Quiz Sessions",
     "nav.quizHistory": "Quiz History",

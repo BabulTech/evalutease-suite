@@ -8,8 +8,13 @@ import {
   ChevronLeft,
   ChevronsUpDown,
   Globe,
+  Hash,
+  Layers,
   Lock,
   Search,
+  Shuffle,
+  TrendingDown,
+  TrendingUp,
   X,
   Zap,
 } from "lucide-react";
@@ -45,6 +50,17 @@ type CategoryRow = { id: string; name: string };
 type SubcategoryRow = { id: string; category_id: string; name: string };
 type TypeRow = { id: string; name: string };
 type SubtypeRow = { id: string; type_id: string; name: string };
+
+type DifficultyCustom = { easy: number; medium: number; hard: number; enabled: boolean };
+type PickStrategy = "random" | "least_used" | "most_used" | "newest" | "oldest";
+
+const PICK_STRATEGIES: { value: PickStrategy; label: string; desc: string; icon: React.ElementType }[] = [
+  { value: "random",     label: "Random",           desc: "Shuffle and pick randomly",           icon: Shuffle },
+  { value: "least_used", label: "Least used first",  desc: "Questions rarely seen in past quizzes", icon: TrendingDown },
+  { value: "most_used",  label: "Most used first",   desc: "Your most-tested questions",           icon: TrendingUp },
+  { value: "newest",     label: "Newest first",      desc: "Recently added questions first",       icon: Hash },
+  { value: "oldest",     label: "Oldest first",      desc: "Questions added earliest",             icon: Hash },
+];
 
 const QUIZ_TYPES = [
   { value: "mcq", label: "MCQ (Multiple Choice)" },
@@ -111,8 +127,14 @@ function NewSessionPage() {
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
   const [subcategoryId, setSubcategoryId] = useState<string>("");
+  const [subQuestionCount, setSubQuestionCount] = useState<number | null>(null);
+  const [useAllQuestions, setUseAllQuestions] = useState(true);
+  const [numQuestions, setNumQuestions] = useState(10);
+  const [pickStrategy, setPickStrategy] = useState<PickStrategy>("random");
   const [quizType, setQuizType] = useState<string>("");
+  const [diffCustom, setDiffCustom] = useState<DifficultyCustom>({ easy: 3, medium: 4, hard: 3, enabled: false });
   const [isPublic, setIsPublic] = useState(true);
   const [selectedSubtypeIds, setSelectedSubtypeIds] = useState<Set<string>>(new Set());
   const [timeText, setTimeText] = useState("10");
@@ -160,6 +182,19 @@ function NewSessionPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!subcategoryId || !user) { setSubQuestionCount(null); return; }
+    supabase.from("questions").select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id).eq("subcategory_id", subcategoryId)
+      .then(({ count }) => {
+        const n = count ?? 0;
+        setSubQuestionCount(n);
+        setNumQuestions(Math.min(numQuestions || n, n));
+        setUseAllQuestions(true);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subcategoryId, user]);
 
   const categoryNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -224,10 +259,11 @@ function NewSessionPage() {
     const titleVal = title.trim();
     const timeNum = Number(timeText);
 
+    // Fetch all questions from subcategory with created_at for ordering
     const [{ data: qs, error: qErr }, partsResult] = await Promise.all([
       supabase
         .from("questions")
-        .select("id")
+        .select("id, created_at")
         .eq("owner_id", user.id)
         .eq("subcategory_id", subcategoryId),
       !isPublic && selectedSubtypeIds.size > 0
@@ -240,12 +276,48 @@ function NewSessionPage() {
     ]);
     if (qErr) { toast.error(qErr.message); return; }
     if (partsResult.error) { toast.error(partsResult.error.message); return; }
-    const questionIds = (qs ?? []).map((q) => q.id);
-    if (questionIds.length === 0) {
+    let allQuestions = qs ?? [];
+    if (allQuestions.length === 0) {
       setErrors((prev) => ({ ...prev, category: "That sub-category has no questions yet — add some first" }));
       toast.error("No questions in that sub-category");
       return;
     }
+
+    // Apply pick strategy if not using all questions
+    const wantN = useAllQuestions ? allQuestions.length : Math.min(numQuestions, allQuestions.length);
+    let selectedQs = allQuestions;
+    if (wantN < allQuestions.length) {
+      if (pickStrategy === "random") {
+        // Fisher-Yates shuffle then slice
+        const arr = [...allQuestions];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        selectedQs = arr.slice(0, wantN);
+      } else if (pickStrategy === "newest") {
+        selectedQs = [...allQuestions].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, wantN);
+      } else if (pickStrategy === "oldest") {
+        selectedQs = [...allQuestions].sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(0, wantN);
+      } else {
+        // least_used / most_used — need usage counts
+        const ids = allQuestions.map((q) => q.id);
+        const { data: usageData } = await supabase
+          .from("quiz_session_questions")
+          .select("question_id")
+          .in("question_id", ids);
+        const usageMap = new Map<string, number>();
+        for (const row of usageData ?? []) {
+          usageMap.set(row.question_id, (usageMap.get(row.question_id) ?? 0) + 1);
+        }
+        selectedQs = [...allQuestions].sort((a, b) => {
+          const ua = usageMap.get(a.id) ?? 0;
+          const ub = usageMap.get(b.id) ?? 0;
+          return pickStrategy === "least_used" ? ua - ub : ub - ua;
+        }).slice(0, wantN);
+      }
+    }
+    const questionIds = selectedQs.map((q) => q.id);
     const participantIds = (partsResult.data ?? []).map((p) => p.id);
 
     setBusy(true);
@@ -358,70 +430,214 @@ function NewSessionPage() {
             {errors.title && <p className="mt-1 text-xs text-destructive">{errors.title}</p>}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Category */}
-            <div>
-              <Label className="mb-1.5">
-                Select Category <span className="text-destructive">*</span>
-              </Label>
-              <CategoryCombobox
-                value={subcategoryId}
-                label={selectedSubcategoryLabel}
-                categories={categories}
-                subcategories={subcategories}
-                onChange={(id) => { setSubcategoryId(id); setErrors((p) => ({ ...p, category: undefined })); }}
-                disabled={noSubcategories}
-                hasError={!!errors.category}
-              />
-              {errors.category ? (
-                <p className="mt-1 text-xs text-destructive">{errors.category}</p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Questions come from the sub-category you pick.
-                </p>
-              )}
+          {/* Step 1: Category → Sub-category cascade */}
+          <div className="rounded-2xl border border-border bg-muted/10 p-4 space-y-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">1</span>
+              Select Question Source
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="mb-1">Category <span className="text-destructive">*</span></Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">Main subject area</p>
+                <Select value={categoryId} onValueChange={(v) => { setCategoryId(v); setSubcategoryId(""); setErrors((p) => ({ ...p, category: undefined })); }}>
+                  <SelectTrigger className={errors.category && !categoryId ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Select category…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="mb-1">Sub-category <span className="text-destructive">*</span></Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">Specific topic — questions come from here</p>
+                <Select value={subcategoryId} disabled={!categoryId}
+                  onValueChange={(v) => { setSubcategoryId(v); setErrors((p) => ({ ...p, category: undefined })); }}>
+                  <SelectTrigger className={errors.category ? "border-destructive" : ""}>
+                    <SelectValue placeholder={categoryId ? "Select sub-category…" : "Pick a category first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subcategories.filter((s) => s.category_id === categoryId).map((s) =>
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
+
+            {/* Question count + pick strategy */}
+            {subcategoryId && subQuestionCount !== null && (
+              <div className="rounded-xl border border-border bg-card/40 p-4 space-y-4">
+                {/* Available count badge */}
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold">
+                    {subQuestionCount} question{subQuestionCount !== 1 ? "s" : ""} available
+                  </span>
+                  {subQuestionCount === 0 && (
+                    <span className="text-xs text-destructive">— add questions to this sub-category first</span>
+                  )}
+                </div>
+
+                {subQuestionCount > 0 && (
+                  <>
+                    {/* All vs. custom count toggle */}
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setUseAllQuestions(true)}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors text-left ${
+                          useAllQuestions
+                            ? "border-primary/50 bg-primary/10 text-primary"
+                            : "border-border bg-card/30 text-muted-foreground hover:border-primary/30"
+                        }`}
+                      >
+                        <div className="font-semibold">All questions</div>
+                        <div className="text-[11px] mt-0.5 opacity-80">Use all {subQuestionCount} questions</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setUseAllQuestions(false); if (numQuestions === 0 || numQuestions > subQuestionCount) setNumQuestions(Math.min(10, subQuestionCount)); }}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors text-left ${
+                          !useAllQuestions
+                            ? "border-primary/50 bg-primary/10 text-primary"
+                            : "border-border bg-card/30 text-muted-foreground hover:border-primary/30"
+                        }`}
+                      >
+                        <div className="font-semibold">Pick a number</div>
+                        <div className="text-[11px] mt-0.5 opacity-80">Choose how many to include</div>
+                      </button>
+                    </div>
+
+                    {/* Number input + strategy */}
+                    {!useAllQuestions && (
+                      <div className="space-y-3 pt-1 border-t border-border">
+                        <div>
+                          <Label className="mb-1.5 text-sm">
+                            Number of questions
+                            <span className="ml-2 text-xs font-normal text-muted-foreground">
+                              (max {subQuestionCount})
+                            </span>
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={subQuestionCount}
+                              value={numQuestions}
+                              onChange={(e) => {
+                                const v = Math.max(1, Math.min(subQuestionCount, Number(e.target.value) || 1));
+                                setNumQuestions(v);
+                              }}
+                              className="w-28"
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              of {subQuestionCount} will be selected
+                            </span>
+                          </div>
+                        </div>
+
+                        {numQuestions < subQuestionCount && (
+                          <div>
+                            <Label className="mb-2 text-sm">How to pick them</Label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {PICK_STRATEGIES.map((s) => {
+                                const Icon = s.icon;
+                                return (
+                                  <button
+                                    key={s.value}
+                                    type="button"
+                                    onClick={() => setPickStrategy(s.value)}
+                                    className={`flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                                      pickStrategy === s.value
+                                        ? "border-primary/50 bg-primary/10"
+                                        : "border-border bg-card/30 hover:border-primary/30"
+                                    }`}
+                                  >
+                                    <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${pickStrategy === s.value ? "text-primary" : "text-muted-foreground"}`} />
+                                    <div>
+                                      <div className={`text-xs font-semibold ${pickStrategy === s.value ? "text-primary" : ""}`}>
+                                        {s.label}
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground">{s.desc}</div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Step 2: Quiz config */}
+          <div className="rounded-2xl border border-border bg-muted/10 p-4 space-y-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">2</span>
+              Quiz Settings
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="mb-1">Quiz Type <span className="text-destructive">*</span></Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">Format of questions in this session</p>
+                <Select value={quizType} onValueChange={(v) => { setQuizType(v); setErrors((p) => ({ ...p, quizType: undefined })); }}>
+                  <SelectTrigger className={errors.quizType ? "border-destructive" : ""}>
+                    <SelectValue placeholder="Select quiz type…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUIZ_TYPES.map((qt) => <SelectItem key={qt.value} value={qt.value}>{qt.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
+              </div>
+              <div>
+                <Label className="mb-1">Time per question (seconds)</Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">How long each participant gets to answer</p>
+                <Input type="number" min={5} max={3600} value={timeText}
+                  onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
+                  className={errors.time ? "border-destructive" : ""} />
+                {errors.time && <p className="mt-1 text-xs text-destructive">{errors.time}</p>}
+              </div>
             </div>
 
-            {/* Quiz Type */}
-            <div>
-              <Label className="mb-1.5">
-                Quiz Type <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={quizType}
-                onValueChange={(v) => { setQuizType(v); setErrors((p) => ({ ...p, quizType: undefined })); }}
-              >
-                <SelectTrigger className={errors.quizType ? "border-destructive focus:ring-destructive" : ""}>
-                  <SelectValue placeholder="Select a quiz type…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {QUIZ_TYPES.map((qt) => (
-                    <SelectItem key={qt.value} value={qt.value}>
-                      {qt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
-            </div>
-
-            {/* Time per question */}
-            <div>
-              <Label className="mb-1.5">Time per question (seconds)</Label>
-              <Input
-                type="number"
-                min={5}
-                max={3600}
-                value={timeText}
-                onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
-                className={errors.time ? "border-destructive focus-visible:ring-destructive" : ""}
-              />
-              {errors.time ? (
-                <p className="mt-1 text-xs text-destructive">{errors.time}</p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Overrides each question's individual time for this session only.
-                </p>
+            {/* Difficulty customization */}
+            <div className="rounded-xl border border-border bg-card/40 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold">Customize question selection by difficulty</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    When enabled, pick how many easy, medium, and hard questions to include.
+                  </div>
+                </div>
+                <Switch checked={diffCustom.enabled}
+                  onCheckedChange={(v) => setDiffCustom((p) => ({ ...p, enabled: v }))} />
+              </div>
+              {diffCustom.enabled && (
+                <div className="grid grid-cols-3 gap-3 pt-1 border-t border-border">
+                  {(["easy", "medium", "hard"] as const).map((level) => {
+                    const colors = { easy: "text-success", medium: "text-primary", hard: "text-destructive" };
+                    return (
+                      <div key={level}>
+                        <label className={`text-xs font-semibold capitalize ${colors[level]} mb-1 block`}>
+                          {level === "easy" ? "🟢" : level === "medium" ? "🟡" : "🔴"} {level}
+                        </label>
+                        <p className="text-[10px] text-muted-foreground mb-1">Number of questions</p>
+                        <Input type="number" min={0} max={50} value={diffCustom[level]}
+                          onChange={(e) => setDiffCustom((p) => ({ ...p, [level]: Math.max(0, Number(e.target.value)) }))}
+                          className="h-8 text-sm" />
+                      </div>
+                    );
+                  })}
+                  <div className="col-span-3 text-xs text-muted-foreground">
+                    Total: <span className="font-semibold">{diffCustom.easy + diffCustom.medium + diffCustom.hard}</span> questions will be selected randomly from the sub-category.
+                  </div>
+                </div>
               )}
             </div>
           </div>

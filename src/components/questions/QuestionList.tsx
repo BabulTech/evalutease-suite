@@ -49,9 +49,11 @@ type Props = {
   loading: boolean;
   onUpdate: (id: string, draft: DraftQuestion) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  usageCounts?: Map<string, number>;
+  lastUsed?: Map<string, string>;
 };
 
-export function QuestionList({ questions, loading, onUpdate, onDelete }: Props) {
+export function QuestionList({ questions, loading, onUpdate, onDelete, usageCounts, lastUsed }: Props) {
   if (loading) {
     return (
       <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
@@ -75,7 +77,9 @@ export function QuestionList({ questions, loading, onUpdate, onDelete }: Props) 
     <ul className="space-y-3">
       {questions.map((q) => (
         <li key={q.id}>
-          <QuestionCard q={q} onUpdate={onUpdate} onDelete={onDelete} />
+          <QuestionCard q={q} onUpdate={onUpdate} onDelete={onDelete}
+            usageCount={usageCounts?.get(q.id) ?? 0}
+            lastUsedAt={lastUsed?.get(q.id) ?? null} />
         </li>
       ))}
     </ul>
@@ -83,13 +87,13 @@ export function QuestionList({ questions, loading, onUpdate, onDelete }: Props) 
 }
 
 function QuestionCard({
-  q,
-  onUpdate,
-  onDelete,
+  q, onUpdate, onDelete, usageCount, lastUsedAt,
 }: {
   q: Question;
   onUpdate: Props["onUpdate"];
   onDelete: Props["onDelete"];
+  usageCount: number;
+  lastUsedAt: string | null;
 }) {
   const SrcIcon = SOURCE_META[q.source].icon;
   const correctIdx = q.options.findIndex((o) => o === q.correct_answer);
@@ -114,6 +118,12 @@ function QuestionCard({
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             <Timer className="h-3 w-3" /> {q.time_seconds}s
+          </span>
+          {/* Usage info */}
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+            usageCount === 0 ? "bg-muted/50 text-muted-foreground" : "bg-primary/10 text-primary"
+          }`} title={lastUsedAt ? `Last used: ${new Date(lastUsedAt).toLocaleDateString()}` : "Never used in a quiz"}>
+            📊 Used {usageCount}×{lastUsedAt ? ` · ${new Date(lastUsedAt).toLocaleDateString()}` : ""}
           </span>
         </div>
         <div className="flex gap-1">

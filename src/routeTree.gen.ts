@@ -28,7 +28,9 @@ import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCategoriesRouteImport } from './routes/_app/categories'
 import { Route as AppSessionsNewRouteImport } from './routes/_app/sessions.new'
 import { Route as AppSessionsSessionIdRouteImport } from './routes/_app/sessions.$sessionId'
+import { Route as AppParticipantTypesAddRouteImport } from './routes/_app/participant-types.add'
 import { Route as AppParticipantTypesTypeIdRouteImport } from './routes/_app/participant-types.$typeId'
+import { Route as AppCategoriesAddRouteImport } from './routes/_app/categories.add'
 import { Route as AppCategoriesCategoryIdRouteImport } from './routes/_app/categories.$categoryId'
 import { Route as AppParticipantTypesTypeIdSubIdRouteImport } from './routes/_app/participant-types.$typeId.$subId'
 import { Route as AppCategoriesCategoryIdSubIdRouteImport } from './routes/_app/categories.$categoryId.$subId'
@@ -127,12 +129,22 @@ const AppSessionsSessionIdRoute = AppSessionsSessionIdRouteImport.update({
   path: '/$sessionId',
   getParentRoute: () => AppSessionsRoute,
 } as any)
+const AppParticipantTypesAddRoute = AppParticipantTypesAddRouteImport.update({
+  id: '/add',
+  path: '/add',
+  getParentRoute: () => AppParticipantTypesRoute,
+} as any)
 const AppParticipantTypesTypeIdRoute =
   AppParticipantTypesTypeIdRouteImport.update({
     id: '/$typeId',
     path: '/$typeId',
     getParentRoute: () => AppParticipantTypesRoute,
   } as any)
+const AppCategoriesAddRoute = AppCategoriesAddRouteImport.update({
+  id: '/add',
+  path: '/add',
+  getParentRoute: () => AppCategoriesRoute,
+} as any)
 const AppCategoriesCategoryIdRoute = AppCategoriesCategoryIdRouteImport.update({
   id: '/$categoryId',
   path: '/$categoryId',
@@ -169,7 +181,9 @@ export interface FileRoutesByFullPath {
   '/invite/$token': typeof InviteTokenRoute
   '/q/$code': typeof QCodeRoute
   '/categories/$categoryId': typeof AppCategoriesCategoryIdRouteWithChildren
+  '/categories/add': typeof AppCategoriesAddRoute
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
+  '/participant-types/add': typeof AppParticipantTypesAddRoute
   '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
@@ -193,7 +207,9 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/q/$code': typeof QCodeRoute
   '/categories/$categoryId': typeof AppCategoriesCategoryIdRouteWithChildren
+  '/categories/add': typeof AppCategoriesAddRoute
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
+  '/participant-types/add': typeof AppParticipantTypesAddRoute
   '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
@@ -219,7 +235,9 @@ export interface FileRoutesById {
   '/invite/$token': typeof InviteTokenRoute
   '/q/$code': typeof QCodeRoute
   '/_app/categories/$categoryId': typeof AppCategoriesCategoryIdRouteWithChildren
+  '/_app/categories/add': typeof AppCategoriesAddRoute
   '/_app/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
+  '/_app/participant-types/add': typeof AppParticipantTypesAddRoute
   '/_app/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/_app/sessions/new': typeof AppSessionsNewRoute
   '/_app/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
@@ -245,7 +263,9 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/q/$code'
     | '/categories/$categoryId'
+    | '/categories/add'
     | '/participant-types/$typeId'
+    | '/participant-types/add'
     | '/sessions/$sessionId'
     | '/sessions/new'
     | '/categories/$categoryId/$subId'
@@ -269,7 +289,9 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/q/$code'
     | '/categories/$categoryId'
+    | '/categories/add'
     | '/participant-types/$typeId'
+    | '/participant-types/add'
     | '/sessions/$sessionId'
     | '/sessions/new'
     | '/categories/$categoryId/$subId'
@@ -294,7 +316,9 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/q/$code'
     | '/_app/categories/$categoryId'
+    | '/_app/categories/add'
     | '/_app/participant-types/$typeId'
+    | '/_app/participant-types/add'
     | '/_app/sessions/$sessionId'
     | '/_app/sessions/new'
     | '/_app/categories/$categoryId/$subId'
@@ -448,12 +472,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSessionsSessionIdRouteImport
       parentRoute: typeof AppSessionsRoute
     }
+    '/_app/participant-types/add': {
+      id: '/_app/participant-types/add'
+      path: '/add'
+      fullPath: '/participant-types/add'
+      preLoaderRoute: typeof AppParticipantTypesAddRouteImport
+      parentRoute: typeof AppParticipantTypesRoute
+    }
     '/_app/participant-types/$typeId': {
       id: '/_app/participant-types/$typeId'
       path: '/$typeId'
       fullPath: '/participant-types/$typeId'
       preLoaderRoute: typeof AppParticipantTypesTypeIdRouteImport
       parentRoute: typeof AppParticipantTypesRoute
+    }
+    '/_app/categories/add': {
+      id: '/_app/categories/add'
+      path: '/add'
+      fullPath: '/categories/add'
+      preLoaderRoute: typeof AppCategoriesAddRouteImport
+      parentRoute: typeof AppCategoriesRoute
     }
     '/_app/categories/$categoryId': {
       id: '/_app/categories/$categoryId'
@@ -495,10 +533,12 @@ const AppCategoriesCategoryIdRouteWithChildren =
 
 interface AppCategoriesRouteChildren {
   AppCategoriesCategoryIdRoute: typeof AppCategoriesCategoryIdRouteWithChildren
+  AppCategoriesAddRoute: typeof AppCategoriesAddRoute
 }
 
 const AppCategoriesRouteChildren: AppCategoriesRouteChildren = {
   AppCategoriesCategoryIdRoute: AppCategoriesCategoryIdRouteWithChildren,
+  AppCategoriesAddRoute: AppCategoriesAddRoute,
 }
 
 const AppCategoriesRouteWithChildren = AppCategoriesRoute._addFileChildren(
@@ -521,10 +561,12 @@ const AppParticipantTypesTypeIdRouteWithChildren =
 
 interface AppParticipantTypesRouteChildren {
   AppParticipantTypesTypeIdRoute: typeof AppParticipantTypesTypeIdRouteWithChildren
+  AppParticipantTypesAddRoute: typeof AppParticipantTypesAddRoute
 }
 
 const AppParticipantTypesRouteChildren: AppParticipantTypesRouteChildren = {
   AppParticipantTypesTypeIdRoute: AppParticipantTypesTypeIdRouteWithChildren,
+  AppParticipantTypesAddRoute: AppParticipantTypesAddRoute,
 }
 
 const AppParticipantTypesRouteWithChildren =
