@@ -1,7 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Settings as SettingsIcon, Trophy, ListChecks, User, Upload } from "lucide-react";
+import {
+  Settings as SettingsIcon,
+  Trophy,
+  ListChecks,
+  User,
+  Upload,
+  MessageSquare,
+  CreditCard,
+  Check,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { usePlan } from "@/contexts/PlanContext";
+import { UpgradeModal } from "@/components/UpgradeModal";
 import {
   defaultHostSettings,
   normalizeRegistrationFields,
@@ -21,6 +35,27 @@ import {
 } from "@/components/settings/host-settings";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
+
+// Default customizable messages
+const DEFAULT_MESSAGES = {
+  lobby_title: "Welcome to the Quiz Lobby!",
+  lobby_subtitle: "Please wait while the host starts the quiz.",
+  lobby_waiting: "You're all set. The quiz will begin shortly.",
+  completion_title: "Quiz Completed!",
+  completion_subtitle: "Thanks for participating. The host will announce the final results.",
+  registration_welcome: "Enter your details to join the quiz.",
+};
+
+type AppMessages = typeof DEFAULT_MESSAGES;
+
+const MESSAGE_FIELDS: { key: keyof AppMessages; label: string; description: string; multiline?: boolean }[] = [
+  { key: "lobby_title", label: "Lobby Title", description: "Main heading shown in the waiting room." },
+  { key: "lobby_subtitle", label: "Lobby Subtitle", description: "Supporting text below the lobby title." },
+  { key: "lobby_waiting", label: "Lobby Waiting Message", description: "Status message shown while waiting for the host to start.", multiline: true },
+  { key: "completion_title", label: "Completion Title", description: "Heading shown when a participant finishes the quiz." },
+  { key: "completion_subtitle", label: "Completion Subtitle", description: "Text shown below the score when quiz is complete.", multiline: true },
+  { key: "registration_welcome", label: "Registration Welcome", description: "Text shown at the top of the participant registration screen.", multiline: true },
+];
 
 function SettingsPage() {
   const { user } = useAuth();
@@ -33,20 +68,26 @@ function SettingsPage() {
           <SettingsIcon className="h-7 w-7 text-primary" /> {t("nav.settings")}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Profile, the registration form participants see when they join, and your scoring rules.
+          Profile, registration form, scoring rules, and custom messages.
         </p>
       </div>
 
       <Tabs defaultValue="profile">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="profile" className="gap-1.5">
             <User className="h-4 w-4" /> Profile
           </TabsTrigger>
           <TabsTrigger value="registration" className="gap-1.5">
-            <ListChecks className="h-4 w-4" /> Registration form
+            <ListChecks className="h-4 w-4" /> Registration
           </TabsTrigger>
           <TabsTrigger value="scoring" className="gap-1.5">
             <Trophy className="h-4 w-4" /> Scoring
+          </TabsTrigger>
+          <TabsTrigger value="messages" className="gap-1.5">
+            <MessageSquare className="h-4 w-4" /> Messages
+          </TabsTrigger>
+          <TabsTrigger value="plan" className="gap-1.5">
+            <CreditCard className="h-4 w-4" /> Plan
           </TabsTrigger>
         </TabsList>
 
@@ -59,7 +100,306 @@ function SettingsPage() {
         <TabsContent value="scoring" className="mt-4">
           {user && <HostSettingsForm userId={user.id} section="scoring" />}
         </TabsContent>
+        <TabsContent value="messages" className="mt-4">
+          {user && <MessagesForm userId={user.id} />}
+        </TabsContent>
+        <TabsContent value="plan" className="mt-4">
+          {user && <PlanSection userId={user.id} />}
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PLAN SECTION — fully DB-driven, no hardcoded plan data
+// ─────────────────────────────────────────────────────────────────
+const LIMIT_ROWS: { label: string; key: string }[] = [
+  { label: "Quizzes / day",          key: "quizzes_per_day" },
+  { label: "AI calls / day",         key: "ai_calls_per_day" },
+  { label: "Participants / session",  key: "participants_per_session" },
+  { label: "Question bank",          key: "question_bank" },
+  { label: "Total sessions",         key: "sessions_total" },
+];
+
+function limitLabel(v: number) { return v === -1 ? "Unlimited" : v.toLocaleString(); }
+
+type DbPlan = {
+  id: string; slug: string; name: string; description: string | null;
+  price_monthly: number; price_yearly: number;
+  features: string[]; limits: Record<string, number>;
+  stripe_price_id_monthly: string | null;
+};
+
+
+function PlanSection({ userId }: { userId: string }) {
+  const { plan: ctxPlan, usage, usedPct } = usePlan();
+  const [plans, setPlans] = useState<DbPlan[]>([]);
+  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [targetSlug, setTargetSlug] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    supabase.from("plans").select("*").eq("is_active", true).order("sort_order")
+      .then(({ data }) => {
+        if (data) setPlans(data.map((p) => ({
+          ...p,
+          features: (p.features as string[]) ?? [],
+          limits: (p.limits as Record<string, number>) ?? {},
+        })));
+      });
+  }, []);
+
+  const openUpgrade = (slug?: string) => { setTargetSlug(slug); setShowUpgrade(true); };
+
+  const usageItems = [
+    { label: "Quizzes today",  used: usage.quizzes_today,   pct: usedPct("quizzes_per_day"),  limit: ctxPlan?.limits.quizzes_per_day ?? 5 },
+    { label: "AI calls today", used: usage.ai_calls_today,  pct: usedPct("ai_calls_per_day"), limit: ctxPlan?.limits.ai_calls_per_day ?? 3 },
+    { label: "Total sessions", used: usage.sessions_total,  pct: usedPct("sessions_total"),   limit: ctxPlan?.limits.sessions_total ?? 20 },
+    { label: "Question bank",  used: usage.questions_total, pct: usedPct("question_bank"),    limit: ctxPlan?.limits.question_bank ?? 100 },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* ── Current plan card ── */}
+      <div className="rounded-2xl border border-primary/30 bg-card/60 p-5 shadow-glow">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-display font-bold text-xl capitalize">{ctxPlan?.name ?? "Free"} Plan</span>
+              <Badge className="bg-primary/15 text-primary border-0 text-[10px]">Current</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {ctxPlan?.price_monthly === 0 ? "Free forever" : `$${ctxPlan?.price_monthly ?? 0}/mo · $${ctxPlan?.price_yearly ?? 0}/yr`}
+            </p>
+          </div>
+          {ctxPlan?.slug !== "enterprise" && (
+            <Button size="sm" className="bg-gradient-primary text-primary-foreground shadow-glow gap-1.5" onClick={() => openUpgrade()}>
+              Upgrade Plan
+            </Button>
+          )}
+        </div>
+
+        {/* Usage bars */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {usageItems.map((item) => {
+            const danger = item.pct >= 80 && item.limit !== -1;
+            const unlimited = item.limit === -1;
+            return (
+              <div key={item.label} className="rounded-xl border border-border bg-card/30 p-3">
+                <div className="text-[10px] text-muted-foreground mb-1">{item.label}</div>
+                <div className={`text-sm font-semibold mb-1.5 ${danger ? "text-destructive" : ""}`}>
+                  {item.used}
+                  <span className="text-muted-foreground font-normal"> / {unlimited ? "∞" : item.limit}</span>
+                </div>
+                {unlimited ? (
+                  <div className="h-1 rounded-full bg-success/30"><div className="h-full w-full rounded-full bg-success/50" /></div>
+                ) : (
+                  <Progress value={item.pct} className={`h-1 ${danger ? "[&>div]:bg-destructive" : ""}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Billing toggle ── */}
+      <div className="flex items-center justify-center gap-3">
+        <span className={`text-sm ${billing === "monthly" ? "text-foreground font-medium" : "text-muted-foreground"}`}>Monthly</span>
+        <button type="button"
+          onClick={() => setBilling((b) => b === "monthly" ? "yearly" : "monthly")}
+          className={`relative h-6 w-11 rounded-full transition-colors ${billing === "yearly" ? "bg-primary" : "bg-muted"}`}>
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${billing === "yearly" ? "left-[22px]" : "left-0.5"}`} />
+        </button>
+        <span className={`text-sm ${billing === "yearly" ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+          Yearly <Badge className="bg-success/15 text-success border-0 text-[10px] ml-1">Save ~30%</Badge>
+        </span>
+      </div>
+
+      {/* ── Plan cards — DB driven ── */}
+      {plans.length === 0 ? (
+        <div className="grid grid-cols-3 gap-4">
+          {[1,2,3].map((i) => <div key={i} className="h-64 rounded-2xl bg-muted/30 animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {plans.map((plan) => {
+            const isCurrent = ctxPlan?.slug === plan.slug;
+            const price = billing === "yearly" ? plan.price_yearly : plan.price_monthly;
+            return (
+              <div key={plan.id}
+                className={`relative rounded-2xl border p-5 flex flex-col gap-4 transition-all duration-300 hover:shadow-glow hover:scale-[1.02] ${
+                  isCurrent ? "border-primary/60 bg-primary/5 shadow-glow" : "border-border bg-card/40"
+                }`}>
+                {plan.slug === "pro" && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 shadow-glow">
+                    Most Popular
+                  </span>
+                )}
+
+                {/* Name */}
+                <div className="flex items-center gap-2">
+                  <div className={`rounded-xl p-2 ${isCurrent ? "bg-primary/20" : "bg-muted/40"}`}>
+                    <CreditCard className="h-4 w-4 text-primary" />
+                  </div>
+                  <span className="font-display font-bold">{plan.name}</span>
+                  {isCurrent && <Badge className="ml-auto bg-primary/20 text-primary border-0 text-[9px]">Active</Badge>}
+                </div>
+
+                {/* Price */}
+                <div>
+                  <span className="font-display text-3xl font-bold">
+                    {price === 0 ? "Free" : `$${price}`}
+                  </span>
+                  {price > 0 && (
+                    <span className="text-xs text-muted-foreground ml-1">/{billing === "yearly" ? "yr" : "mo"}</span>
+                  )}
+                  {plan.description && (
+                    <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{plan.description}</p>
+                  )}
+                </div>
+
+                {/* Features — from DB */}
+                <ul className="space-y-1.5 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <Check className="h-3.5 w-3.5 text-success mt-0.5 shrink-0" />{f}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button
+                  size="sm"
+                  variant={isCurrent ? "outline" : "default"}
+                  disabled={isCurrent}
+                  onClick={() => openUpgrade(plan.slug)}
+                  className={`w-full gap-1.5 ${!isCurrent ? "bg-gradient-primary text-primary-foreground shadow-glow" : ""}`}
+                >
+                  {isCurrent ? "Current Plan" : `Upgrade to ${plan.name}`}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Compare table — DB driven ── */}
+      {plans.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card/40 overflow-hidden">
+          <div className="px-5 py-3 border-b border-border bg-muted/20 text-sm font-semibold">Plan Comparison</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted/10">
+                  <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs w-40">Limit</th>
+                  {plans.map((p) => (
+                    <th key={p.id} className={`px-4 py-3 text-center text-xs font-semibold ${ctxPlan?.slug === p.slug ? "text-primary" : "text-foreground"}`}>
+                      {p.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {LIMIT_ROWS.map((row) => (
+                  <tr key={row.key} className="hover:bg-muted/10">
+                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{row.label}</td>
+                    {plans.map((p) => (
+                      <td key={p.id} className={`px-4 py-2.5 text-center text-xs font-medium ${ctxPlan?.slug === p.slug ? "text-primary" : ""}`}>
+                        {limitLabel(p.limits[row.key] ?? 0)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <p className="text-center text-xs text-muted-foreground">
+        Secure payments via Stripe · Cancel anytime ·{" "}
+        <a href="mailto:support@evalutease.com" className="text-primary underline-offset-4 hover:underline">
+          Contact support
+        </a>
+      </p>
+
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} targetSlug={targetSlug} />
+    </div>
+  );
+}
+
+function MessagesForm({ userId }: { userId: string }) {
+  const storageKey = `app_messages_${userId}`;
+  const [messages, setMessages] = useState<AppMessages>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return { ...DEFAULT_MESSAGES, ...JSON.parse(saved) };
+    } catch { /* ignore */ }
+    return { ...DEFAULT_MESSAGES };
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = () => {
+    setSaving(true);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+      toast.success("Messages saved");
+    } catch {
+      toast.error("Failed to save messages");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reset = () => {
+    setMessages({ ...DEFAULT_MESSAGES });
+    localStorage.removeItem(storageKey);
+    toast.success("Messages reset to defaults");
+  };
+
+  return (
+    <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-5">
+      <div>
+        <h3 className="font-semibold">Customize App Messages</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Personalize the text shown to participants in the lobby, registration, and completion screens.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {MESSAGE_FIELDS.map((f) => (
+          <div key={f.key}>
+            <Label className="mb-1">{f.label}</Label>
+            <p className="text-xs text-muted-foreground mb-1.5">{f.description}</p>
+            {f.multiline ? (
+              <Textarea
+                value={messages[f.key]}
+                onChange={(e) => setMessages((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                rows={2}
+                className="resize-none"
+              />
+            ) : (
+              <Input
+                value={messages[f.key]}
+                onChange={(e) => setMessages((prev) => ({ ...prev, [f.key]: e.target.value }))}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2 pt-2 border-t border-border">
+        <Button
+          onClick={save}
+          disabled={saving}
+          className="bg-gradient-primary text-primary-foreground shadow-glow"
+        >
+          {saving ? "Saving…" : "Save messages"}
+        </Button>
+        <Button variant="outline" onClick={reset}>
+          Reset to defaults
+        </Button>
+      </div>
     </div>
   );
 }
@@ -173,7 +513,8 @@ function ProfileForm({ userId }: { userId: string }) {
             onChange={(e) => void uploadAvatar(e.target.files?.[0])}
           />
           <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Upload className="h-3.5 w-3.5" /> {uploading ? "Uploading..." : "JPG, PNG, or WebP up to 3 MB"}
+            <Upload className="h-3.5 w-3.5" />{" "}
+            {uploading ? "Uploading..." : "JPG, PNG, or WebP up to 3 MB"}
           </div>
         </div>
       </div>
@@ -388,9 +729,7 @@ function RegistrationFieldsEditor({
         </ul>
       </div>
       <p className="text-xs text-muted-foreground">
-        For closed-roster sessions, whichever fields you require also act as identity checks — a
-        participant whose entered values don't match any invited person on your roster won't be able
-        to join.
+        For closed-roster sessions, required fields also act as identity checks.
       </p>
     </div>
   );
@@ -415,8 +754,7 @@ function ScoringEditor({
       <div>
         <h3 className="font-semibold">How answers turn into a score</h3>
         <p className="text-xs text-muted-foreground mt-1">
-          Applied to every quiz session you create. Speed bonus is optional and rewards quicker
-          correct answers with extra points.
+          Applied to every quiz session you create.
         </p>
       </div>
 
@@ -441,8 +779,7 @@ function ScoringEditor({
           <div>
             <div className="text-sm font-semibold">Speed bonus</div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Extra points for correct answers given quickly. Disabled = everyone with the same
-              correct count gets the same score.
+              Extra points for correct answers given quickly.
             </p>
           </div>
           <Switch
@@ -465,10 +802,6 @@ function ScoringEditor({
               }
               className="w-32"
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              The fastest answerer gets close to this; slower answerers get proportionally less,
-              floored at zero. Bonus is added once when the participant finishes.
-            </p>
           </div>
         )}
       </div>
@@ -477,7 +810,7 @@ function ScoringEditor({
         <div>
           <div className="text-sm font-semibold">Show explanation after each question</div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            If on, participants see your stored explanation right after the timer expires.
+            Participants see your stored explanation right after the timer expires.
           </p>
         </div>
         <Switch

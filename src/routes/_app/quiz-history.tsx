@@ -1,10 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Archive, ChevronDown, ChevronRight, Crown, Download, Printer } from "lucide-react";
+import {
+  Archive,
+  ChevronDown,
+  ChevronRight,
+  Crown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Filter,
+  Printer,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { downloadQuizReportCsv, getQuizReportRows, type QuizReportAttempt } from "@/lib/quiz-reports";
 
 export const Route = createFileRoute("/_app/quiz-history")({
@@ -51,6 +63,14 @@ type ProfileRow = {
   organization: string | null;
 };
 
+const QUIZ_TYPE_LABELS: Record<string, string> = {
+  mcq: "MCQ",
+  true_false: "True / False",
+  mixed: "Mixed",
+  short_answer: "Short Answer",
+  descriptive: "Descriptive",
+};
+
 function QuizHistoryPage() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<SessionWithStats[]>([]);
@@ -58,12 +78,35 @@ function QuizHistoryPage() {
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
+  // Filters
+  const [filterTitle, setFilterTitle] = useState("");
+  const [filterType, setFilterType] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Download dropdown per session
+  const [downloadOpenId, setDownloadOpenId] = useState<string | null>(null);
+  const downloadRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) {
+        setDownloadOpenId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
     const { data: ss, error } = await supabase
       .from("quiz_sessions")
-      .select("id, title, created_at, category_id, subcategory_id, default_time_per_question, subject, topic, description")
+      .select(
+        "id, title, created_at, category_id, subcategory_id, default_time_per_question, subject, topic, description",
+      )
       .eq("owner_id", user.id)
       .eq("status", "completed")
       .order("created_at", { ascending: false });
@@ -79,8 +122,12 @@ function QuizHistoryPage() {
       return;
     }
     const sessionIds = rows.map((r) => r.id);
-    const subIds = Array.from(new Set(rows.map((r) => r.subcategory_id).filter((v): v is string => !!v)));
-    const catIds = Array.from(new Set(rows.map((r) => r.category_id).filter((v): v is string => !!v)));
+    const subIds = Array.from(
+      new Set(rows.map((r) => r.subcategory_id).filter((v): v is string => !!v)),
+    );
+    const catIds = Array.from(
+      new Set(rows.map((r) => r.category_id).filter((v): v is string => !!v)),
+    );
 
     const [attemptsRes, subRes, catRes, profileRes] = await Promise.all([
       supabase
@@ -126,8 +173,10 @@ function QuizHistoryPage() {
           submitted.length === 0
             ? 0
             : Math.round(
-                submitted.reduce((acc, a) => acc + (a.score / Math.max(1, a.total_questions)) * 100, 0) /
-                  submitted.length,
+                submitted.reduce(
+                  (acc, a) => acc + (a.score / Math.max(1, a.total_questions)) * 100,
+                  0,
+                ) / submitted.length,
               );
         return {
           ...r,
@@ -153,19 +202,178 @@ function QuizHistoryPage() {
     });
   };
 
-  const printReport = (id: string) => {
-    setOpenIds((prev) => new Set(prev).add(id));
-    window.setTimeout(() => window.print(), 50);
+  // Print only the specific quiz section
+  const printQuiz = (s: SessionWithStats) => {
+    const reportRows = getQuizReportRows(s.attempts.map(toReportAttempt));
+    const submitted = reportRows.filter((a) => a.completed);
+    const teacherName = getTeacherName(profile, user?.email);
+    const schoolName = profile?.organization ?? "";
+
+    const rows = submitted
+      .map(
+        (a) => `
+      <tr>
+        <td>${a.rank}</td>
+        <td>${a.name}</td>
+        <td>${a.email || "-"}</td>
+        <td>${a.rollNumber || "-"}</td>
+        <td>${a.score}</td>
+        <td>${a.attemptedQuestions}/${a.totalQuestions}</td>
+        <td>${a.correctAnswers}</td>
+        <td>${a.wrongAnswers}</td>
+        <td>${a.unattemptedQuestions}</td>
+      </tr>`,
+      )
+      .join("");
+
+    const html = `<!DOCTYPE html><html><head><title>${s.title} — Report</title>
+    <style>
+      body { font-family: sans-serif; padding: 24px; color: #111; }
+      h1 { font-size: 20px; margin-bottom: 4px; }
+      .meta { font-size: 12px; color: #555; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { background: #f3f4f6; text-align: left; padding: 8px 10px; border-bottom: 2px solid #e5e7eb; }
+      td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+      tr:nth-child(even) td { background: #f9fafb; }
+    </style></head><body>
+    <h1>${s.title}</h1>
+    <div class="meta">
+      Teacher: ${teacherName} · School: ${schoolName || "Not specified"} ·
+      Type: ${QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "—"} ·
+      Date: ${new Date(s.created_at).toLocaleDateString()} ·
+      Avg Score: ${s.avgPercent}%
+    </div>
+    <table>
+      <thead><tr>
+        <th>Rank</th><th>Name</th><th>Email</th><th>Roll</th>
+        <th>Score</th><th>Attempted</th><th>Correct</th><th>Wrong</th><th>Unattempted</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </body></html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.print();
+  };
+
+  // Print the full history page
+  const printAll = () => {
+    window.print();
+  };
+
+  // Filtered sessions
+  const filtered = useMemo(() => {
+    return sessions.filter((s) => {
+      if (filterTitle && !s.title.toLowerCase().includes(filterTitle.toLowerCase())) return false;
+      if (filterType && s.topic !== filterType) return false;
+      if (filterDateFrom && new Date(s.created_at) < new Date(filterDateFrom)) return false;
+      if (filterDateTo && new Date(s.created_at) > new Date(filterDateTo + "T23:59:59")) return false;
+      return true;
+    });
+  }, [sessions, filterTitle, filterType, filterDateFrom, filterDateTo]);
+
+  const hasFilters = filterTitle || filterType || filterDateFrom || filterDateTo;
+
+  const clearFilters = () => {
+    setFilterTitle("");
+    setFilterType("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Quiz History</h1>
-        <p className="text-muted-foreground mt-1">
-          Closed quiz sessions with their final participant results. Click any session to expand.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Quiz History</h1>
+          <p className="text-muted-foreground mt-1">
+            Closed quiz sessions with their final participant results. Click any session to expand.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filters
+            {hasFilters && (
+              <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                !
+              </span>
+            )}
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5 print:hidden" onClick={printAll}>
+            <Printer className="h-3.5 w-3.5" /> Print All
+          </Button>
+        </div>
       </div>
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div className="rounded-2xl border border-border bg-card/60 p-4 space-y-3 print:hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Filter History</span>
+            {hasFilters && (
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={clearFilters}>
+                <X className="h-3 w-3" /> Clear all
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Quiz Title</label>
+              <Input
+                placeholder="Search title…"
+                value={filterTitle}
+                onChange={(e) => setFilterTitle(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Quiz Type</label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="h-8 w-full rounded-lg border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">All types</option>
+                {Object.entries(QUIZ_TYPE_LABELS).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">From date</label>
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">To date</label>
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          {hasFilters && (
+            <p className="text-xs text-muted-foreground">
+              Showing {filtered.length} of {sessions.length} sessions
+            </p>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
@@ -179,19 +387,29 @@ function QuizHistoryPage() {
             Once you close a live quiz session, it'll move here with the leaderboard.
           </p>
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
+          <Filter className="mx-auto h-10 w-10 text-muted-foreground/60" />
+          <p className="mt-3 text-sm font-medium">No sessions match your filters</p>
+          <Button variant="ghost" size="sm" className="mt-2" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        </div>
       ) : (
         <ul className="space-y-3">
-          {sessions.map((s) => {
+          {filtered.map((s) => {
             const isOpen = openIds.has(s.id);
             const reportRows = getQuizReportRows(s.attempts.map(toReportAttempt));
             const submitted = reportRows.filter((a) => a.completed);
             const top = submitted[0];
             const teacherName = getTeacherName(profile, user?.email);
             const schoolName = profile?.organization ?? "";
+            const quizTypeLabel = QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "—";
+
             return (
               <li
                 key={s.id}
-                className="rounded-2xl border border-border bg-card/60 transition-colors hover:border-primary/30"
+                className="rounded-2xl border border-border bg-card/60 transition-all hover:border-primary/30 hover:shadow-glow"
               >
                 <button
                   type="button"
@@ -211,6 +429,12 @@ function QuizHistoryPage() {
                           {[s.categoryName, s.subcategoryName].filter(Boolean).join(" → ") ||
                             "Uncategorised"}
                         </span>
+                        {s.topic && (
+                          <>
+                            <span>·</span>
+                            <span className="text-primary/80">{quizTypeLabel}</span>
+                          </>
+                        )}
                         <span>·</span>
                         <span>{new Date(s.created_at).toLocaleDateString()}</span>
                         <span>·</span>
@@ -223,53 +447,90 @@ function QuizHistoryPage() {
                   {top && (
                     <div className="hidden sm:flex items-center gap-2 text-xs">
                       <Crown className="h-3.5 w-3.5 text-warning" />
-                      <span className="font-medium truncate max-w-[120px]">
-                        {top.name}
-                      </span>
+                      <span className="font-medium truncate max-w-[120px]">{top.name}</span>
                       <span className="text-success font-bold">
                         {top.score}/{top.totalQuestions}
                       </span>
                     </div>
                   )}
                 </button>
+
                 {isOpen && (
                   <div className="border-t border-border p-4" id={`history-report-${s.id}`}>
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
                       <div>
                         <div className="text-xs font-semibold">Final report</div>
                         <p className="text-xs text-muted-foreground">
-                          Ranked by points, with email, roll/seat number, attempted questions, and total questions.
+                          Ranked by points — email, roll/seat, attempted, correct, wrong.
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Teacher: {teacherName} · School: {schoolName || "Not specified"} · Subject:{" "}
-                          {subjectLabel(s)}
+                          Teacher: {teacherName} · School: {schoolName || "Not specified"} · Type:{" "}
+                          {quizTypeLabel} · Subject: {subjectLabel(s)}
                         </p>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => printReport(s.id)} className="gap-1.5">
-                          <Printer className="h-3.5 w-3.5" /> PDF
-                        </Button>
+                      <div className="flex gap-2" ref={downloadRef}>
+                        {/* Print this quiz */}
                         <Button
+                          variant="outline"
                           size="sm"
-                          onClick={() =>
-                            downloadQuizReportCsv({
-                              title: s.title,
-                              categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> "),
-                              teacherName,
-                              schoolName,
-                              subjectLabel: subjectLabel(s),
-                              topicLabel: s.topic ?? "",
-                              createdAt: s.created_at,
-                              questionCount: s.attempts[0]?.total_questions ?? 0,
-                              attempts: s.attempts.map(toReportAttempt),
-                            })
-                          }
-                          className="gap-1.5 bg-gradient-primary text-primary-foreground"
+                          onClick={() => printQuiz(s)}
+                          className="gap-1.5"
                         >
-                          <Download className="h-3.5 w-3.5" /> Excel
+                          <Printer className="h-3.5 w-3.5" /> Print
                         </Button>
+
+                        {/* Download dropdown */}
+                        <div className="relative">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              setDownloadOpenId((prev) => (prev === s.id ? null : s.id))
+                            }
+                            className="gap-1.5 bg-gradient-primary text-primary-foreground"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Download
+                            <ChevronDown className="h-3 w-3 ml-0.5" />
+                          </Button>
+                          {downloadOpenId === s.id && (
+                            <div className="absolute right-0 mt-1 w-40 rounded-xl border border-border bg-card shadow-card z-10 overflow-hidden">
+                              <button
+                                type="button"
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
+                                onClick={() => {
+                                  setDownloadOpenId(null);
+                                  downloadQuizReportCsv({
+                                    title: s.title,
+                                    categoryLabel: [s.categoryName, s.subcategoryName]
+                                      .filter(Boolean)
+                                      .join(" -> "),
+                                    teacherName,
+                                    schoolName,
+                                    subjectLabel: subjectLabel(s),
+                                    topicLabel: quizTypeLabel,
+                                    createdAt: s.created_at,
+                                    questionCount: s.attempts[0]?.total_questions ?? 0,
+                                    attempts: s.attempts.map(toReportAttempt),
+                                  });
+                                }}
+                              >
+                                <FileSpreadsheet className="h-3.5 w-3.5 text-success" /> Excel (CSV)
+                              </button>
+                              <button
+                                type="button"
+                                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
+                                onClick={() => {
+                                  setDownloadOpenId(null);
+                                  printQuiz(s);
+                                }}
+                              >
+                                <FileText className="h-3.5 w-3.5 text-primary" /> PDF (Print)
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
+
                     {submitted.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
                         No participants completed this quiz.
@@ -279,15 +540,13 @@ function QuizHistoryPage() {
                         {submitted.map((a) => (
                           <li
                             key={a.id}
-                            className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2"
+                            className="flex items-center gap-3 rounded-lg bg-secondary/40 hover:bg-secondary/60 hover:shadow-glow px-3 py-2 transition-all"
                           >
                             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
                               {a.rank}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold truncate">
-                                {a.name}
-                              </div>
+                              <div className="text-sm font-semibold truncate">{a.name}</div>
                               <div className="text-[10px] text-muted-foreground truncate">
                                 {[
                                   a.email || "No email",
@@ -302,9 +561,7 @@ function QuizHistoryPage() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-sm font-bold text-success">
-                                {a.score} pts
-                              </div>
+                              <div className="text-sm font-bold text-success">{a.score} pts</div>
                               <div className="text-[10px] text-muted-foreground">
                                 {a.attemptedQuestions}/{a.totalQuestions} attempted
                               </div>
@@ -356,8 +613,14 @@ function toReportAttempt(a: AttemptRow): QuizReportAttempt {
   };
 }
 
-function subjectLabel(s: Pick<SessionWithStats, "subject" | "categoryName" | "subcategoryName">) {
-  return s.subject || [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> ") || "Not specified";
+function subjectLabel(
+  s: Pick<SessionWithStats, "subject" | "categoryName" | "subcategoryName">,
+) {
+  return (
+    s.subject ||
+    [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> ") ||
+    "Not specified"
+  );
 }
 
 function getTeacherName(profile: ProfileRow | null, email?: string | null) {

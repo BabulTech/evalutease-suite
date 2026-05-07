@@ -118,6 +118,7 @@
     min-height: 100vh;
   }
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.01em; }
+  button, [role="button"], select, label[for], summary { cursor: pointer; }
 
   /* RTL support for Urdu */
   [dir="rtl"] { font-family: "Noto Naskh Arabic", "Inter", system-ui, sans-serif; }

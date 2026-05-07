@@ -36,6 +36,7 @@ import {
   type QuizReportAttempt,
   type QuizReportRow,
 } from "@/lib/quiz-reports";
+import { ShareResultCard } from "@/components/ShareResultCard";
 
 export const Route = createFileRoute("/_app/reports")({ component: ReportsPage });
 
@@ -416,16 +417,16 @@ function ReportsPage() {
                 </button>
               </div>
 
-              <FilterField icon={Search} label="Search">
+              <FilterField icon={Search} label="Search quizzes" hint="Filter the quiz list by title, subject, or topic">
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Quiz title, subject, topic"
+                  placeholder="e.g. Science, Chapter 3…"
                   className="h-9"
                 />
               </FilterField>
 
-              <FilterField icon={CalendarRange} label="Date range">
+              <FilterField icon={CalendarRange} label="Date range" hint="Show only quizzes held within this period">
                 <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -440,7 +441,7 @@ function ReportsPage() {
                 </Select>
               </FilterField>
 
-              <FilterField icon={ListFilter} label="Subject">
+              <FilterField icon={ListFilter} label="Subject" hint="Narrow results to a specific subject">
                 <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="All subjects" />
@@ -456,47 +457,44 @@ function ReportsPage() {
                 </Select>
               </FilterField>
 
-              <FilterField icon={Target} label={`Pass mark (${passMark}%)`}>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={passMark}
-                  onChange={(e) => setPassMark(Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
+              <FilterField icon={Target} label={`Pass mark — ${passMark}%`} hint="Score % a participant needs to pass. Affects pass rate & result badges.">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range" min={0} max={100} step={5} value={passMark}
+                    onChange={(e) => setPassMark(Number(e.target.value))}
+                    className="flex-1 accent-primary"
+                  />
+                  <span className="text-xs font-bold text-primary w-9 text-right">{passMark}%</span>
+                </div>
               </FilterField>
 
-              <FilterField icon={Search} label={reportMode === "quiz" ? "Find student" : "Search"}>
+              <FilterField icon={Search} label={reportMode === "quiz" ? "Find participant" : "Search"} hint={reportMode === "quiz" ? "Search by name, email, roll or seat number" : "Search by name, email, or quiz title"}>
                 <Input
                   value={studentQuery}
                   onChange={(e) => setStudentQuery(e.target.value)}
-                  placeholder={
-                    reportMode === "quiz" ? "Name, email, roll, seat" : "Name, email, quiz"
-                  }
+                  placeholder={reportMode === "quiz" ? "Name, email, roll…" : "Name, email, quiz…"}
                   className="h-9"
                 />
               </FilterField>
 
-              <FilterField icon={Flame} label="Status">
+              <FilterField icon={Flame} label="Submission status" hint="Filter by whether participants finished the quiz">
                 <div className="grid grid-cols-3 gap-1.5">
-                  {(["all", "completed", "pending"] as const).map((value) => (
-                    <Button
-                      key={value}
-                      type="button"
-                      size="sm"
-                      variant={statusFilter === value ? "default" : "outline"}
-                      onClick={() => setStatusFilter(value)}
-                      className={statusFilter === value ? "bg-primary text-primary-foreground" : ""}
-                    >
-                      {value === "all" ? "All" : value === "completed" ? "Done" : "Left"}
+                  {([
+                    { val: "all", label: "All" },
+                    { val: "completed", label: "Submitted" },
+                    { val: "pending", label: "Left early" },
+                  ] as const).map(({ val, label }) => (
+                    <Button key={val} type="button" size="sm"
+                      variant={statusFilter === val ? "default" : "outline"}
+                      onClick={() => setStatusFilter(val)}
+                      className={statusFilter === val ? "bg-primary text-primary-foreground text-xs" : "text-xs"}>
+                      {label}
                     </Button>
                   ))}
                 </div>
               </FilterField>
 
-              <FilterField icon={ArrowDownAZ} label="Sort by">
+              <FilterField icon={ArrowDownAZ} label="Sort participants by" hint="Controls the order of rows in the results table">
                 <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -584,7 +582,7 @@ function ReportsPage() {
               passMark={passMark}
             />
           ) : selected ? (
-            <main className="space-y-5" id="report-print-area">
+            <main className="space-y-6" id="report-print-area">
               <QuizReportHeader
                 session={selected}
                 top={filteredRows[0] ?? baseRows[0]}
@@ -592,72 +590,109 @@ function ReportsPage() {
                 schoolName={schoolName}
               />
 
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-4 print:grid-cols-4">
-                <Metric icon={Users} label="Participants" value={stats.total} />
-                <Metric icon={Trophy} label="Submitted" value={stats.submitted} />
-                <Metric icon={BarChart3} label="Average %" value={`${stats.avg}%`} />
-                <Metric
-                  icon={Target}
-                  label={`Pass rate (≥${passMark}%)`}
-                  value={`${stats.passRate}%`}
-                />
+              {/* ── Section 1: Participation overview ── */}
+              <SectionLabel
+                title="Participation Overview"
+                desc="How many students joined and actually submitted their answers."
+              />
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                <Metric icon={Users} label="Joined" value={stats.total}
+                  desc="Total participants who entered the quiz session" />
+                <Metric icon={Trophy} label="Submitted" value={stats.submitted}
+                  desc="Participants who completed and submitted answers" />
+                <Metric icon={Target} label="Pass rate" value={`${stats.passRate}%`}
+                  desc={`% who scored ≥ ${passMark}% (your current pass mark)`} color="text-primary" />
+                <Metric icon={Timer} label="Avg time" value={stats.avgDuration === null ? "—" : formatDuration(stats.avgDuration)}
+                  desc="Average time taken to finish the quiz" />
               </div>
 
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-4 print:grid-cols-4">
-                <Metric icon={Trophy} label="Best %" value={stats.best === null ? "—" : `${stats.best}%`} />
-                <Metric
-                  icon={Trophy}
-                  label="Median %"
-                  value={stats.median === null ? "—" : `${stats.median}%`}
-                />
-                <Metric
-                  icon={BarChart3}
-                  label="Lowest %"
-                  value={stats.worst === null ? "—" : `${stats.worst}%`}
-                />
-                <Metric
-                  icon={Timer}
-                  label="Avg time"
-                  value={stats.avgDuration === null ? "—" : formatDuration(stats.avgDuration)}
-                />
+              {/* ── Section 2: Score performance ── */}
+              <SectionLabel
+                title="Score Performance"
+                desc="How well participants scored — from the top to the lowest result."
+              />
+              <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+                <Metric icon={BarChart3} label="Class average" value={`${stats.avg}%`}
+                  desc="Mean score across all submitted attempts" color={stats.avg >= passMark ? "text-success" : "text-destructive"} />
+                <Metric icon={Trophy} label="Highest score" value={stats.best === null ? "—" : `${stats.best}%`}
+                  desc="Best individual score in this session" color="text-success" />
+                <Metric icon={BarChart3} label="Median score" value={stats.median === null ? "—" : `${stats.median}%`}
+                  desc="Middle value — half scored above this, half below" />
+                <Metric icon={Flame} label="Lowest score" value={stats.worst === null ? "—" : `${stats.worst}%`}
+                  desc="Lowest individual score — shows who may need extra help" color="text-destructive" />
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3 print:grid-cols-3">
-                <ScoreMetric
-                  label="Correct answers"
-                  value={stats.totals.correct}
-                  tone="success"
-                />
-                <ScoreMetric label="Wrong answers" value={stats.totals.wrong} tone="danger" />
-                <ScoreMetric
-                  label="Unattempted"
-                  value={stats.totals.unattempted}
-                  tone="muted"
-                />
+              {/* ── Section 3: Answer breakdown ── */}
+              <SectionLabel
+                title="Answer Breakdown"
+                desc="Total correct, wrong, and skipped answers across all participants combined."
+              />
+              <div className="grid gap-3 md:grid-cols-3">
+                <AnswerMetric label="Correct answers" value={stats.totals.correct} tone="success"
+                  desc="Questions answered correctly across all participants" />
+                <AnswerMetric label="Wrong answers" value={stats.totals.wrong} tone="danger"
+                  desc="Incorrect answers — useful for spotting tricky questions" />
+                <AnswerMetric label="Skipped / not attempted" value={stats.totals.unattempted} tone="muted"
+                  desc="Questions left blank — may indicate time pressure or confusion" />
               </div>
 
+              {/* ── Section 4: Score distribution ── */}
+              <SectionLabel
+                title="Score Distribution"
+                desc="See how the class is spread across performance bands at a glance."
+              />
               <DistributionBar buckets={stats.buckets} passMark={passMark} />
 
+              {/* ── Section 5: Top performers ── */}
               {filteredRows.length > 0 && (
-                <div className="grid gap-3 md:grid-cols-3 print:grid-cols-3">
-                  {filteredRows.slice(0, 3).map((row) => (
-                    <div key={row.id} className="rounded-2xl border border-border bg-card/50 p-4">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Position {row.rank}
-                      </div>
-                      <div className="mt-1 font-display text-lg font-bold">{row.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {row.email || "No email"}
-                      </div>
-                      <div className="mt-2 flex items-baseline gap-2">
-                        <span className="text-xl font-bold text-success">{row.score} pts</span>
-                        <span className="text-xs text-muted-foreground">{row.percent}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <SectionLabel
+                    title="Top Performers"
+                    desc="The three highest-scoring participants in this session."
+                  />
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {filteredRows.slice(0, 3).map((row, i) => {
+                      const medals = ["🥇", "🥈", "🥉"];
+                      const borders = ["border-warning/50 bg-warning/5", "border-muted-foreground/30 bg-muted/10", "border-orange-400/30 bg-orange-400/5"];
+                      return (
+                        <div key={row.id} className={`rounded-2xl border p-5 space-y-2 ${borders[i] ?? "border-border bg-card/50"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl">{medals[i]}</span>
+                            <span className="text-xs text-muted-foreground font-medium">#{row.rank} place</span>
+                          </div>
+                          <div className="font-display font-bold text-lg leading-tight">{row.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">{row.email || "No email provided"}</div>
+                          <div className="flex items-baseline gap-2 pt-1">
+                            <span className="font-display text-2xl font-bold text-success">{row.score}</span>
+                            <span className="text-xs text-muted-foreground">pts · {row.percent}%</span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-muted/30">
+                            <div className="h-full rounded-full bg-success transition-all" style={{ width: `${row.percent}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
 
+              {/* ── Share ── */}
+              <ShareResultCard
+                mode="host"
+                quizTitle={selected.title}
+                totalParticipants={stats.total}
+                submitted={stats.submitted}
+                avgPct={stats.avg}
+                bestPct={stats.best ?? 0}
+                passRate={stats.passRate}
+                topScorer={filteredRows[0]?.name}
+              />
+
+              {/* ── Section 6: Full results table ── */}
+              <SectionLabel
+                title="Full Results Table"
+                desc="Every participant's detailed result. Use the filters on the left to narrow down."
+              />
               <AttemptsTable rows={filteredRows} passMark={passMark} />
             </main>
           ) : (
@@ -678,20 +713,35 @@ function ReportsPage() {
   );
 }
 
+function SectionLabel({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-3 pt-1">
+      <div className="h-6 w-1 rounded-full bg-primary mt-0.5 shrink-0" />
+      <div>
+        <div className="font-semibold text-sm">{title}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{desc}</div>
+      </div>
+    </div>
+  );
+}
+
 function FilterField({
   icon: Icon,
   label,
+  hint,
   children,
 }: {
   icon: typeof Users;
   label: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-        <Icon className="h-3 w-3" /> {label}
+      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/80">
+        <Icon className="h-3.5 w-3.5 text-primary/70" /> {label}
       </div>
+      {hint && <p className="text-[10px] text-muted-foreground -mt-0.5 pl-5">{hint}</p>}
       {children}
     </div>
   );
@@ -709,34 +759,29 @@ function QuizReportHeader({
   schoolName: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-6 print:border-0 print:bg-transparent print:p-0">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            Final quiz report
+    <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card/60 to-card/40 p-6 print:border-0 print:bg-transparent print:p-0">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1 flex-1 min-w-0">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+            <Trophy className="h-3 w-3" /> Final Quiz Report
           </div>
-          <h2 className="font-display text-2xl font-bold">{session.title}</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            {[categoryLabel(session), new Date(session.created_at).toLocaleString()]
-              .filter(Boolean)
-              .join(" · ")}
+          <h2 className="font-display text-2xl font-bold leading-tight">{session.title}</h2>
+          <p className="text-xs text-muted-foreground">
+            Held on {new Date(session.created_at).toLocaleString()} {categoryLabel(session) ? `· ${categoryLabel(session)}` : ""}
           </p>
-          <dl className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+          <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 md:grid-cols-4">
             <ReportDetail label="Teacher" value={teacherName} />
-            <ReportDetail label="School/Organization" value={schoolName || "Not specified"} />
+            <ReportDetail label="School / Org" value={schoolName || "Not specified"} />
             <ReportDetail label="Subject" value={subjectLabel(session)} />
             <ReportDetail label="Topic" value={session.topic || "Not specified"} />
           </dl>
         </div>
         {top && (
-          <div className="text-right">
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Top position
-            </div>
-            <div className="font-display text-lg font-bold">{top.name}</div>
-            <div className="text-success font-bold">
-              {top.score} pts · {top.percent}%
-            </div>
+          <div className="rounded-2xl border border-warning/30 bg-warning/5 px-5 py-4 text-center shrink-0">
+            <div className="text-2xl">🥇</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Top scorer</div>
+            <div className="font-display font-bold text-base mt-0.5 max-w-[140px] truncate">{top.name}</div>
+            <div className="text-success font-bold text-sm">{top.score} pts · {top.percent}%</div>
           </div>
         )}
       </div>
@@ -748,60 +793,64 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
   return (
     <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
       {rows.length === 0 ? (
-        <div className="p-8 text-center text-sm text-muted-foreground">
-          No participants match these filters.
+        <div className="p-10 text-center">
+          <Users className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
+          <p className="text-sm font-medium">No participants match these filters</p>
+          <p className="text-xs text-muted-foreground mt-1">Try changing the status or search filters on the left.</p>
         </div>
       ) : (
         <table className="w-full text-sm min-w-[860px]">
-          <thead className="bg-secondary/40">
-            <tr>
-              {[
-                "Pos",
-                "Name",
-                "Email",
-                "Roll",
-                "Seat",
-                "Points",
-                "%",
-                "Result",
-                "Correct",
-                "Wrong",
-                "Unattempted",
-                "Time",
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
+          <thead>
+            <tr className="border-b border-border bg-muted/30">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">#</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Participant</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Roll / Seat</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Score (pts)</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Score %</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Result</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-success/80">✓ Correct</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-destructive/80">✗ Wrong</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Skipped</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Time taken</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border/40">
             {rows.map((row) => (
-              <tr key={row.id} className="border-t border-border/50">
-                <td className="px-3 py-2 font-bold">{row.rank}</td>
-                <td className="px-3 py-2 font-semibold">{row.name}</td>
-                <td className="px-3 py-2 text-muted-foreground">{row.email || "—"}</td>
-                <td className="px-3 py-2">{row.rollNumber || "—"}</td>
-                <td className="px-3 py-2">{row.seatNumber || "—"}</td>
-                <td className="px-3 py-2 font-bold text-success">{row.score}</td>
-                <td className="px-3 py-2 font-mono">{row.percent}%</td>
-                <td className="px-3 py-2">
-                  <ResultBadge row={row} passMark={passMark} />
+              <tr key={row.id} className="hover:bg-muted/10 transition-colors">
+                <td className="px-4 py-3 font-bold text-muted-foreground">{row.rank}</td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold">{row.name}</div>
+                  <div className="text-xs text-muted-foreground">{row.email || "No email"}</div>
                 </td>
-                <td className="px-3 py-2 text-success font-semibold">{row.correctAnswers}</td>
-                <td className="px-3 py-2 text-destructive font-semibold">{row.wrongAnswers}</td>
-                <td className="px-3 py-2">{row.unattemptedQuestions}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {formatDuration(row.durationSeconds ?? null)}
+                <td className="px-4 py-3 text-xs text-muted-foreground">
+                  {row.rollNumber ? <span>Roll: {row.rollNumber}</span> : null}
+                  {row.rollNumber && row.seatNumber ? " · " : null}
+                  {row.seatNumber ? <span>Seat: {row.seatNumber}</span> : null}
+                  {!row.rollNumber && !row.seatNumber ? "—" : null}
                 </td>
+                <td className="px-4 py-3 font-bold text-success">{row.score}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{row.percent}%</span>
+                    <div className="w-16 h-1.5 rounded-full bg-muted/30 hidden sm:block">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${row.percent}%`, background: row.percent >= passMark ? "#34d399" : "#f87171" }} />
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3"><ResultBadge row={row} passMark={passMark} /></td>
+                <td className="px-4 py-3 font-semibold text-success">{row.correctAnswers}</td>
+                <td className="px-4 py-3 font-semibold text-destructive">{row.wrongAnswers}</td>
+                <td className="px-4 py-3 text-muted-foreground">{row.unattemptedQuestions}</td>
+                <td className="px-4 py-3 text-xs text-muted-foreground">{formatDuration(row.durationSeconds ?? null)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+      <div className="px-4 py-2 border-t border-border/40 text-xs text-muted-foreground">
+        {rows.length} participant{rows.length !== 1 ? "s" : ""} shown
+      </div>
     </div>
   );
 }
@@ -838,27 +887,37 @@ function DistributionBar({
   const total = buckets.top + buckets.pass + buckets.fail + buckets.left;
   if (total === 0) return null;
   const pct = (n: number) => (n / total) * 100;
+  const topThreshold = Math.min(100, passMark + 25);
+
+  const bands = [
+    { dot: "bg-success", label: `Excellent (≥ ${topThreshold}%)`, desc: "Scored in the top band", value: buckets.top },
+    { dot: "bg-primary/80", label: `Passed (${passMark}–${topThreshold - 1}%)`, desc: "Met the pass mark", value: buckets.pass },
+    { dot: "bg-destructive/80", label: `Below pass (< ${passMark}%)`, desc: "Did not meet the pass mark", value: buckets.fail },
+    { dot: "bg-muted-foreground/40", label: "Did not finish", desc: "Left without submitting", value: buckets.left },
+  ];
+
   return (
-    <div className="rounded-2xl border border-border bg-card/50 p-4">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          Score distribution
-        </div>
-        <div className="text-[10px] text-muted-foreground">
-          Pass mark {passMark}% · Top tier ≥ {Math.min(100, passMark + 25)}%
-        </div>
+    <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
+      {/* Bar */}
+      <div className="h-4 w-full overflow-hidden rounded-full bg-muted/30 flex gap-0.5">
+        {bands.map((b) => pct(b.value) > 0 && (
+          <div key={b.label} className={`h-full ${b.dot} first:rounded-l-full last:rounded-r-full transition-all`}
+            style={{ width: `${pct(b.value)}%` }} title={`${b.label}: ${b.value}`} />
+        ))}
       </div>
-      <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-muted/30 flex">
-        <div className="h-full bg-success" style={{ width: `${pct(buckets.top)}%` }} />
-        <div className="h-full bg-primary/80" style={{ width: `${pct(buckets.pass)}%` }} />
-        <div className="h-full bg-destructive/80" style={{ width: `${pct(buckets.fail)}%` }} />
-        <div className="h-full bg-muted-foreground/40" style={{ width: `${pct(buckets.left)}%` }} />
-      </div>
-      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-        <Legend dot="bg-success" label="Top tier" value={buckets.top} />
-        <Legend dot="bg-primary/80" label="Passed" value={buckets.pass} />
-        <Legend dot="bg-destructive/80" label="Below pass" value={buckets.fail} />
-        <Legend dot="bg-muted-foreground/40" label="Did not finish" value={buckets.left} />
+      {/* Legend */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {bands.map((b) => (
+          <div key={b.label} className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${b.dot}`} />
+              <span className="text-xs font-semibold">{b.value}</span>
+              <span className="text-xs text-muted-foreground">({Math.round(pct(b.value))}%)</span>
+            </div>
+            <div className="text-[11px] font-medium pl-4 leading-tight">{b.label}</div>
+            <div className="text-[10px] text-muted-foreground pl-4">{b.desc}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -953,10 +1012,10 @@ function StudentReportsView({
       </div>
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Metric icon={Users} label="Students" value={uniqueStudents} />
-        <Metric icon={BarChart3} label="Attempts" value={attemptRows.length} />
-        <Metric icon={Trophy} label="Submitted" value={completed} />
-        <Metric icon={Target} label={`Pass rate (≥${passMark}%)`} value={`${passRate}%`} />
+        <Metric icon={Users} label="Unique students" value={uniqueStudents} desc="Total distinct participants across all quizzes" />
+        <Metric icon={BarChart3} label="Total attempts" value={attemptRows.length} desc="How many times quizzes were started" />
+        <Metric icon={Trophy} label="Submitted" value={completed} desc="Attempts that were fully completed and submitted" />
+        <Metric icon={Target} label="Pass rate" value={`${passRate}%`} desc={`% of attempts scoring ≥ ${passMark}%`} color={passRate >= 60 ? "text-success" : "text-destructive"} />
       </div>
 
       {mode === "students" ? (
@@ -1051,14 +1110,12 @@ function StudentAttemptsTable({
   return (
     <>
       <div className="grid gap-3 md:grid-cols-3">
-        <Metric icon={BarChart3} label="Average %" value={`${average}%`} />
-        <Metric icon={Trophy} label="High score" value={`${rows[0]?.percent ?? 0}%`} />
+        <Metric icon={BarChart3} label="Average score" value={`${average}%`} desc="Mean score across all filtered attempts" color={average >= passMark ? "text-success" : "text-destructive"} />
+        <Metric icon={Trophy} label="Highest score" value={`${rows[0]?.percent ?? 0}%`} desc="Best individual score in the filtered set" color="text-success" />
         <Metric
-          icon={Timer}
-          label="Avg time"
+          icon={Timer} label="Average time" desc="Mean time to finish a quiz attempt"
           value={
-            rows.length === 0
-              ? "—"
+            rows.length === 0 ? "—"
               : formatDuration(
                   rows.reduce((sum, r) => sum + (r.durationSeconds ?? 0), 0) /
                     Math.max(1, rows.filter((r) => r.durationSeconds).length),
@@ -1135,39 +1192,48 @@ function Metric({
   icon: Icon,
   label,
   value,
+  desc,
+  color = "text-foreground",
 }: {
   icon: typeof Users;
   label: string;
   value: string | number;
+  desc?: string;
+  color?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/50 p-4">
-      <Icon className="h-4 w-4 text-primary" />
-      <div className="mt-3 font-display text-2xl font-bold">{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+    <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-2 hover:border-primary/30 hover:shadow-glow transition-all duration-200">
+      <div className="flex items-center justify-between">
+        <Icon className="h-4 w-4 text-primary/70" />
+      </div>
+      <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        {desc && <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{desc}</div>}
+      </div>
     </div>
   );
 }
 
-function ScoreMetric({
+function AnswerMetric({
   label,
   value,
   tone,
+  desc,
 }: {
   label: string;
   value: number;
   tone: "success" | "danger" | "muted";
+  desc?: string;
 }) {
-  const color =
-    tone === "success"
-      ? "text-success"
-      : tone === "danger"
-        ? "text-destructive"
-        : "text-muted-foreground";
+  const color = tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : "text-muted-foreground";
+  const border = tone === "success" ? "border-success/20" : tone === "danger" ? "border-destructive/20" : "border-border";
+  const bg = tone === "success" ? "bg-success/5" : tone === "danger" ? "bg-destructive/5" : "bg-card/50";
   return (
-    <div className="rounded-2xl border border-border bg-card/50 p-4">
+    <div className={`rounded-2xl border ${border} ${bg} p-4 space-y-1`}>
       <div className={`font-display text-3xl font-bold ${color}`}>{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-sm font-medium">{label}</div>
+      {desc && <div className="text-[11px] text-muted-foreground leading-snug">{desc}</div>}
     </div>
   );
 }

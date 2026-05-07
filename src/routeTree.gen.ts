@@ -13,12 +13,14 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as QCodeRouteImport } from './routes/q.$code'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppSessionsRouteImport } from './routes/_app/sessions'
+import { Route as AppReviewsRouteImport } from './routes/_app/reviews'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppQuizHistoryRouteImport } from './routes/_app/quiz-history'
 import { Route as AppParticipantTypesRouteImport } from './routes/_app/participant-types'
@@ -51,6 +53,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
@@ -78,6 +85,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
 const AppSessionsRoute = AppSessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReviewsRoute = AppReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
   getParentRoute: () => AppRoute,
 } as any)
 const AppReportsRoute = AppReportsRouteImport.update({
@@ -141,6 +153,7 @@ const AppCategoriesCategoryIdSubIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -150,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/participant-types': typeof AppParticipantTypesRouteWithChildren
   '/quiz-history': typeof AppQuizHistoryRoute
   '/reports': typeof AppReportsRoute
+  '/reviews': typeof AppReviewsRoute
   '/sessions': typeof AppSessionsRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -163,6 +177,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -172,6 +187,7 @@ export interface FileRoutesByTo {
   '/participant-types': typeof AppParticipantTypesRouteWithChildren
   '/quiz-history': typeof AppQuizHistoryRoute
   '/reports': typeof AppReportsRoute
+  '/reviews': typeof AppReviewsRoute
   '/sessions': typeof AppSessionsRouteWithChildren
   '/settings': typeof AppSettingsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -187,6 +203,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -196,6 +213,7 @@ export interface FileRoutesById {
   '/_app/participant-types': typeof AppParticipantTypesRouteWithChildren
   '/_app/quiz-history': typeof AppQuizHistoryRoute
   '/_app/reports': typeof AppReportsRoute
+  '/_app/reviews': typeof AppReviewsRoute
   '/_app/sessions': typeof AppSessionsRouteWithChildren
   '/_app/settings': typeof AppSettingsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -211,6 +229,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
@@ -220,6 +239,7 @@ export interface FileRouteTypes {
     | '/participant-types'
     | '/quiz-history'
     | '/reports'
+    | '/reviews'
     | '/sessions'
     | '/settings'
     | '/invite/$token'
@@ -233,6 +253,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
@@ -242,6 +263,7 @@ export interface FileRouteTypes {
     | '/participant-types'
     | '/quiz-history'
     | '/reports'
+    | '/reviews'
     | '/sessions'
     | '/settings'
     | '/invite/$token'
@@ -256,6 +278,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/admin'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
@@ -265,6 +288,7 @@ export interface FileRouteTypes {
     | '/_app/participant-types'
     | '/_app/quiz-history'
     | '/_app/reports'
+    | '/_app/reviews'
     | '/_app/sessions'
     | '/_app/settings'
     | '/invite/$token'
@@ -280,6 +304,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  AdminRoute: typeof AdminRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -316,6 +341,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -358,6 +390,13 @@ declare module '@tanstack/react-router' {
       path: '/sessions'
       fullPath: '/sessions'
       preLoaderRoute: typeof AppSessionsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reviews': {
+      id: '/_app/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof AppReviewsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/reports': {
@@ -511,6 +550,7 @@ interface AppRouteChildren {
   AppParticipantTypesRoute: typeof AppParticipantTypesRouteWithChildren
   AppQuizHistoryRoute: typeof AppQuizHistoryRoute
   AppReportsRoute: typeof AppReportsRoute
+  AppReviewsRoute: typeof AppReviewsRoute
   AppSessionsRoute: typeof AppSessionsRouteWithChildren
   AppSettingsRoute: typeof AppSettingsRoute
 }
@@ -521,6 +561,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppParticipantTypesRoute: AppParticipantTypesRouteWithChildren,
   AppQuizHistoryRoute: AppQuizHistoryRoute,
   AppReportsRoute: AppReportsRoute,
+  AppReviewsRoute: AppReviewsRoute,
   AppSessionsRoute: AppSessionsRouteWithChildren,
   AppSettingsRoute: AppSettingsRoute,
 }
@@ -530,6 +571,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  AdminRoute: AdminRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,

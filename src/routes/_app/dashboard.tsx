@@ -9,11 +9,17 @@ import {
   Sparkles,
   ArrowRight,
   Activity,
+  Zap,
+  Star,
+  Check,
+  X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import { usePlan } from "@/contexts/PlanContext";
+import { UpgradeModal } from "@/components/UpgradeModal";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -29,6 +35,13 @@ type Stats = {
 function DashboardPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const { plan } = usePlan();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeBannerDismissed, setUpgradeBannerDismissed] = useState(
+    () => sessionStorage.getItem("upgrade_banner_dismissed") === "1"
+  );
+
+  const isFreeTier = !plan || plan.slug === "free";
   const [stats, setStats] = useState<Stats>({
     sessions: 0,
     active: 0,
@@ -95,14 +108,13 @@ function DashboardPage() {
     })();
   }, [user]);
 
-  // Each card is a link to the relevant management page.
   const cards = [
     {
-      label: "Total Sessions",
+      label: "Total Quiz",
       value: stats.sessions,
       icon: PlayCircle,
       color: "text-primary",
-      to: "/sessions" as const,
+      to: "/quiz-history" as const,
     },
     {
       label: "Active Sessions",
@@ -142,24 +154,57 @@ function DashboardPage() {
         </p>
       </div>
 
+      {/* Upgrade banner — free tier only */}
+      {isFreeTier && !upgradeBannerDismissed && (
+        <div className="relative rounded-2xl overflow-hidden border border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-purple-500/10 p-5 flex items-center gap-5 shadow-glow">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
+          <div className="relative rounded-2xl bg-gradient-primary p-3 shadow-glow shrink-0">
+            <Zap className="h-6 w-6 text-primary-foreground" />
+          </div>
+          <div className="relative flex-1 min-w-0">
+            <div className="font-display font-bold text-base">You're on the Free plan</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              Unlock unlimited quizzes, AI features, and more participants by upgrading to Pro.
+            </div>
+          </div>
+          <div className="relative flex items-center gap-2 shrink-0">
+            <Button
+              onClick={() => setUpgradeOpen(true)}
+              className="bg-gradient-primary text-primary-foreground shadow-glow gap-1.5 cursor-pointer"
+            >
+              <Star className="h-4 w-4" /> Upgrade to Pro
+            </Button>
+            <button
+              type="button"
+              onClick={() => { setUpgradeBannerDismissed(true); sessionStorage.setItem("upgrade_banner_dismissed", "1"); }}
+              className="rounded-xl p-1.5 hover:bg-muted/40 transition-colors cursor-pointer text-muted-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stat cards with glow */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {cards.map((c) => (
           <Link
             key={c.label}
             to={c.to}
-            className="rounded-2xl border border-border bg-card/60 backdrop-blur p-5 shadow-card hover:border-primary/40 hover:shadow-glow transition-all"
+            className="group rounded-2xl border border-border bg-card/60 backdrop-blur p-5 shadow-card hover:border-primary/50 hover:shadow-glow hover:bg-card/90 transition-all duration-300 hover:scale-[1.02]"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary/80 transition-colors">
                 {c.label}
               </span>
-              <c.icon className={`h-4 w-4 ${c.color}`} />
+              <c.icon className={`h-4 w-4 ${c.color} group-hover:scale-110 transition-transform`} />
             </div>
-            <div className="mt-3 font-display text-3xl font-bold">{c.value}</div>
+            <div className="mt-3 font-display text-3xl font-bold group-hover:text-primary transition-colors">{c.value}</div>
           </Link>
         ))}
       </div>
 
+      {/* Quick actions with glow */}
       <div>
         <h2 className="font-display text-lg font-semibold mb-3">{t("dash.quickActions")}</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -167,9 +212,9 @@ function DashboardPage() {
             <Link
               key={a.label}
               to={a.to}
-              className="group rounded-2xl border border-border bg-card/40 hover:bg-card hover:border-primary/40 p-4 transition-all"
+              className="group rounded-2xl border border-border bg-card/40 hover:bg-card hover:border-primary/50 hover:shadow-glow p-4 transition-all duration-300 hover:scale-[1.02]"
             >
-              <a.icon className="h-5 w-5 text-primary mb-3" />
+              <a.icon className="h-5 w-5 text-primary mb-3 group-hover:scale-110 transition-transform" />
               <div className="text-sm font-semibold leading-snug">{a.label}</div>
               <ArrowRight className="h-4 w-4 mt-2 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
             </Link>
@@ -177,8 +222,46 @@ function DashboardPage() {
         </div>
       </div>
 
+      {/* Pro pitch card — free tier only */}
+      {isFreeTier && (
+        <div className="rounded-2xl border border-primary/30 bg-card/60 p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Star className="h-5 w-5 text-primary" />
+            <span className="font-display font-bold text-lg">Go Pro and unlock everything</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { icon: "🚀", title: "Unlimited Quizzes", desc: "Create as many quiz sessions as you need, every day." },
+              { icon: "🤖", title: "AI Question Builder", desc: "Auto-generate questions with AI in seconds." },
+              { icon: "👥", title: "500+ Participants", desc: "Host large groups without hitting a cap." },
+            ].map((f) => (
+              <div key={f.title} className="rounded-xl border border-border bg-muted/20 p-4 space-y-1.5">
+                <div className="text-2xl">{f.icon}</div>
+                <div className="font-semibold text-sm">{f.title}</div>
+                <div className="text-xs text-muted-foreground">{f.desc}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <Button
+              onClick={() => setUpgradeOpen(true)}
+              className="bg-gradient-primary text-primary-foreground shadow-glow gap-2 cursor-pointer"
+            >
+              <Sparkles className="h-4 w-4" /> See Plans &amp; Pricing
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Check className="h-3.5 w-3.5 text-success" /> Cancel anytime
+              <span className="mx-1">·</span>
+              <Check className="h-3.5 w-3.5 text-success" /> No hidden fees
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recent & Upcoming with glow */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-border bg-card/60 p-5">
+        <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/30 hover:shadow-glow transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">{t("dash.recentSessions")}</h3>
             <Link to="/sessions" className="text-xs text-primary hover:underline">
@@ -194,7 +277,7 @@ function DashboardPage() {
                   <Link
                     to="/sessions"
                     search={r.status === "active" || r.status === "scheduled" ? { lobby: r.id } : {}}
-                    className="flex items-center justify-between rounded-xl bg-secondary/40 hover:bg-secondary/70 px-3 py-2.5 transition-colors"
+                    className="flex items-center justify-between rounded-xl bg-secondary/40 hover:bg-secondary/70 hover:shadow-glow px-3 py-2.5 transition-all duration-200"
                   >
                     <div>
                       <div className="text-sm font-medium">{r.title}</div>
@@ -211,7 +294,8 @@ function DashboardPage() {
             </ul>
           )}
         </div>
-        <div className="rounded-2xl border border-border bg-card/60 p-5">
+
+        <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/30 hover:shadow-glow transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">{t("dash.upcoming")}</h3>
             <Button size="sm" variant="ghost" className="text-primary text-xs" asChild>
@@ -227,7 +311,7 @@ function DashboardPage() {
                   <Link
                     to="/sessions"
                     search={{ lobby: u.id }}
-                    className="flex items-center justify-between rounded-xl bg-secondary/40 hover:bg-secondary/70 px-3 py-2.5 transition-colors"
+                    className="flex items-center justify-between rounded-xl bg-secondary/40 hover:bg-secondary/70 hover:shadow-glow px-3 py-2.5 transition-all duration-200"
                   >
                     <div>
                       <div className="text-sm font-medium">{u.title}</div>
@@ -243,6 +327,7 @@ function DashboardPage() {
           )}
         </div>
       </div>
+      <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} targetSlug="pro" />
     </div>
   );
 }

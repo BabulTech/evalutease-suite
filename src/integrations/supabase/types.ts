@@ -14,6 +14,271 @@ export type Database = {
   }
   public: {
     Tables: {
+      promo_codes: {
+        Row: {
+          id: string
+          code: string
+          description: string | null
+          discount_percent: number | null
+          discount_fixed_cents: number | null
+          applies_to_slugs: string[]
+          max_uses: number | null
+          uses_count: number
+          expires_at: string | null
+          is_active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          description?: string | null
+          discount_percent?: number | null
+          discount_fixed_cents?: number | null
+          applies_to_slugs?: string[]
+          max_uses?: number | null
+          uses_count?: number
+          expires_at?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          description?: string | null
+          discount_percent?: number | null
+          discount_fixed_cents?: number | null
+          applies_to_slugs?: string[]
+          max_uses?: number | null
+          uses_count?: number
+          expires_at?: string | null
+          is_active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      app_feedback: {
+        Row: {
+          id: string
+          user_id: string
+          type: string
+          title: string
+          body: string
+          status: string
+          priority: string
+          admin_reply: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type?: string
+          title: string
+          body: string
+          status?: string
+          priority?: string
+          admin_reply?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          type?: string
+          title?: string
+          body?: string
+          status?: string
+          priority?: string
+          admin_reply?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      quiz_feedback: {
+        Row: {
+          id: string
+          session_id: string
+          participant_name: string
+          participant_email: string | null
+          rating: number
+          comment: string | null
+          submitted_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          participant_name?: string
+          participant_email?: string | null
+          rating: number
+          comment?: string | null
+          submitted_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          participant_name?: string
+          participant_email?: string | null
+          rating?: number
+          comment?: string | null
+          submitted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_feedback_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plans: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          price_monthly: number
+          price_yearly: number
+          limits: Json
+          features: Json
+          is_active: boolean
+          sort_order: number
+          stripe_price_id_monthly: string | null
+          stripe_price_id_yearly: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          price_monthly?: number
+          price_yearly?: number
+          limits?: Json
+          features?: Json
+          is_active?: boolean
+          sort_order?: number
+          stripe_price_id_monthly?: string | null
+          stripe_price_id_yearly?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          price_monthly?: number
+          price_yearly?: number
+          limits?: Json
+          features?: Json
+          is_active?: boolean
+          sort_order?: number
+          stripe_price_id_monthly?: string | null
+          stripe_price_id_yearly?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          plan_id: string
+          status: string
+          billing_cycle: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          current_period_start: string | null
+          current_period_end: string | null
+          cancel_at_period_end: boolean
+          trial_end: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan_id: string
+          status?: string
+          billing_cycle?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          current_period_start?: string | null
+          current_period_end?: string | null
+          cancel_at_period_end?: boolean
+          trial_end?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          plan_id?: string
+          status?: string
+          billing_cycle?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          current_period_start?: string | null
+          current_period_end?: string | null
+          cancel_at_period_end?: boolean
+          trial_end?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_history: {
+        Row: {
+          id: string
+          user_id: string
+          subscription_id: string | null
+          plan_id: string | null
+          amount_cents: number
+          currency: string
+          status: string
+          stripe_payment_intent_id: string | null
+          description: string | null
+          paid_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subscription_id?: string | null
+          plan_id?: string | null
+          amount_cents: number
+          currency?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+          description?: string | null
+          paid_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subscription_id?: string | null
+          plan_id?: string | null
+          amount_cents?: number
+          currency?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+          description?: string | null
+          paid_at?: string
+        }
+        Relationships: []
+      }
       host_settings: {
         Row: {
           created_at: string

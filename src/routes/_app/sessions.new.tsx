@@ -9,7 +9,6 @@ import {
   ChevronsUpDown,
   Globe,
   Lock,
-  Save,
   Search,
   X,
   Zap,
@@ -29,7 +28,16 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { generateAccessCode } from "@/components/sessions/types";
+import { usePlan } from "@/contexts/PlanContext";
+import { UpgradeModal } from "@/components/UpgradeModal";
 
 export const Route = createFileRoute("/_app/sessions/new")({ component: NewSessionPage });
 
@@ -38,9 +46,64 @@ type SubcategoryRow = { id: string; category_id: string; name: string };
 type TypeRow = { id: string; name: string };
 type SubtypeRow = { id: string; type_id: string; name: string };
 
+const QUIZ_TYPES = [
+  { value: "mcq", label: "MCQ (Multiple Choice)" },
+  { value: "true_false", label: "True / False" },
+  { value: "mixed", label: "Mixed" },
+  { value: "short_answer", label: "Short Answer" },
+  { value: "descriptive", label: "Descriptive" },
+];
+
+type FieldErrors = {
+  title?: string;
+  category?: string;
+  quizType?: string;
+  time?: string;
+  schedule?: string;
+  subtypes?: string;
+};
+
 function NewSessionPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isLocked, remaining, plan, loading: planLoading } = usePlan();
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  // Show locked screen when daily quiz limit is exhausted
+  if (!planLoading && isLocked("quizzes_per_day")) {
+    return (
+      <>
+        <div className="max-w-md mx-auto mt-20 text-center space-y-5">
+          <div className="mx-auto h-16 w-16 rounded-2xl bg-destructive/15 flex items-center justify-center">
+            <Lock className="h-8 w-8 text-destructive" />
+          </div>
+          <div>
+            <h2 className="font-display text-2xl font-bold">Daily Quiz Limit Reached</h2>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span> plan
+              allows {plan?.limits.quizzes_per_day ?? 5} quizzes per day. Upgrade to create more.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Button
+              className="bg-gradient-primary text-primary-foreground shadow-glow gap-2"
+              onClick={() => setShowUpgrade(true)}
+            >
+              <Zap className="h-4 w-4" /> Upgrade Plan
+            </Button>
+            <Button variant="ghost" onClick={() => void navigate({ to: "/sessions" })}>
+              Back to Sessions
+            </Button>
+          </div>
+        </div>
+        <UpgradeModal
+          open={showUpgrade}
+          onClose={() => setShowUpgrade(false)}
+          lockedFeature="Daily quiz creation"
+        />
+      </>
+    );
+  }
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [subcategories, setSubcategories] = useState<SubcategoryRow[]>([]);
   const [types, setTypes] = useState<TypeRow[]>([]);
@@ -49,12 +112,14 @@ function NewSessionPage() {
 
   const [title, setTitle] = useState("");
   const [subcategoryId, setSubcategoryId] = useState<string>("");
+  const [quizType, setQuizType] = useState<string>("");
   const [isPublic, setIsPublic] = useState(true);
   const [selectedSubtypeIds, setSelectedSubtypeIds] = useState<Set<string>>(new Set());
   const [timeText, setTimeText] = useState("10");
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledAtLocal, setScheduledAtLocal] = useState("");
   const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -96,7 +161,6 @@ function NewSessionPage() {
     void load();
   }, [load]);
 
-  // Map: category_id → category name (for display in combobox).
   const categoryNameById = useMemo(() => {
     const m = new Map<string, string>();
     for (const c of categories) m.set(c.id, c.name);
@@ -121,47 +185,44 @@ function NewSessionPage() {
       else next.add(id);
       return next;
     });
+    setErrors((prev) => ({ ...prev, subtypes: undefined }));
   };
 
-  const submit = async (mode: "draft" | "open" | "schedule") => {
-    if (!user) return;
+  const validate = (mode: "open" | "schedule"): FieldErrors => {
+    const errs: FieldErrors = {};
     const t = title.trim();
-    if (!t) {
-      toast.error("Title is required");
-      return;
-    }
-    if (t.length > 200) {
-      toast.error("Title must be ≤ 200 characters");
-      return;
-    }
-    if (!subcategoryId) {
-      toast.error("Pick a category — quiz questions come from the chosen sub-category");
-      return;
-    }
+    if (!t) errs.title = "Title is required";
+    else if (t.length > 200) errs.title = "Title must be ≤ 200 characters";
+    if (!subcategoryId) errs.category = "Pick a category — quiz questions come from the chosen sub-category";
+    if (!quizType) errs.quizType = "Select a quiz type";
     const timeNum = Number(timeText);
-    if (!Number.isFinite(timeNum) || timeNum < 5 || timeNum > 3600) {
-      toast.error("Time per question must be a number between 5 and 3600");
-      return;
-    }
+    if (!Number.isFinite(timeNum) || timeNum < 5 || timeNum > 3600)
+      errs.time = "Time per question must be between 5 and 3600 seconds";
     if (mode === "schedule") {
-      if (!scheduledAtLocal) {
-        toast.error("Pick a date and time to schedule the session");
-        return;
-      }
-      const ts = new Date(scheduledAtLocal);
-      if (Number.isNaN(ts.getTime())) {
-        toast.error("That schedule time is invalid");
-        return;
-      }
-      if (ts.getTime() < Date.now() - 60_000) {
-        toast.error("Schedule must be in the future");
-        return;
+      if (!scheduledAtLocal) errs.schedule = "Pick a date and time to schedule";
+      else {
+        const ts = new Date(scheduledAtLocal);
+        if (Number.isNaN(ts.getTime())) errs.schedule = "Invalid schedule time";
+        else if (ts.getTime() < Date.now() - 60_000) errs.schedule = "Schedule must be in the future";
       }
     }
-    if (!isPublic && selectedSubtypeIds.size === 0) {
-      toast.error("Pick at least one participant sub-type, or switch to Public");
+    if (!isPublic && selectedSubtypeIds.size === 0)
+      errs.subtypes = "Pick at least one participant sub-type, or switch to Public";
+    return errs;
+  };
+
+  const submit = async (mode: "open" | "schedule") => {
+    if (!user) return;
+    const errs = validate(mode);
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      toast.error("Please fix the highlighted fields");
       return;
     }
+    setErrors({});
+
+    const titleVal = title.trim();
+    const timeNum = Number(timeText);
 
     const [{ data: qs, error: qErr }, partsResult] = await Promise.all([
       supabase
@@ -177,42 +238,34 @@ function NewSessionPage() {
             .in("subtype_id", Array.from(selectedSubtypeIds))
         : Promise.resolve({ data: [] as { id: string; subtype_id: string | null }[], error: null }),
     ]);
-    if (qErr) {
-      toast.error(qErr.message);
-      return;
-    }
-    if (partsResult.error) {
-      toast.error(partsResult.error.message);
-      return;
-    }
+    if (qErr) { toast.error(qErr.message); return; }
+    if (partsResult.error) { toast.error(partsResult.error.message); return; }
     const questionIds = (qs ?? []).map((q) => q.id);
     if (questionIds.length === 0) {
-      toast.error("That sub-category has no questions yet — add some before creating a session");
+      setErrors((prev) => ({ ...prev, category: "That sub-category has no questions yet — add some first" }));
+      toast.error("No questions in that sub-category");
       return;
     }
     const participantIds = (partsResult.data ?? []).map((p) => p.id);
 
     setBusy(true);
     const isScheduled = mode === "schedule";
-    const isDraft = mode === "draft";
     const subcat = subcategories.find((s) => s.id === subcategoryId);
-    // Both modes start as 'scheduled' — that's what tells the lobby to show "Start Quiz".
-    // Immediate (Save & Open) just leaves scheduled_at NULL, so the cron won't auto-start
-    // it. The host transitions to 'active' by clicking Start Quiz in the lobby.
     const { data: inserted, error: insErr } = await supabase
       .from("quiz_sessions")
       .insert({
         owner_id: user.id,
-        title: t,
+        title: titleVal,
         category_id: subcat?.category_id ?? null,
         subcategory_id: subcategoryId,
         mode: "qr_link",
-        status: isDraft ? "draft" : "scheduled",
+        status: "scheduled",
         is_open: true,
         default_time_per_question: timeNum,
         access_code: generateAccessCode(),
         scheduled_at: isScheduled ? new Date(scheduledAtLocal).toISOString() : null,
         started_at: null,
+        topic: quizType,
       })
       .select("id")
       .single();
@@ -243,29 +296,21 @@ function NewSessionPage() {
         session_id: sessionId,
         subtype_id: id,
       }));
-      const { error: subErr } = await supabase
-        .from("quiz_session_subtypes")
-        .insert(subtypeRows);
-      if (subErr) {
-        toast.error(`Saved session but failed to record sub-types: ${subErr.message}`);
-      }
+      const { error: subErr } = await supabase.from("quiz_session_subtypes").insert(subtypeRows);
+      if (subErr) toast.error(`Saved session but failed to record sub-types: ${subErr.message}`);
     }
     if (participantIds.length > 0) {
       const participantRows = participantIds.map((pid) => ({
         session_id: sessionId,
         participant_id: pid,
       }));
-      const { error: pErr } = await supabase
-        .from("quiz_session_participants")
-        .insert(participantRows);
-      if (pErr) {
-        toast.error(`Saved session but failed to attach participants: ${pErr.message}`);
-      }
+      const { error: pErr } = await supabase.from("quiz_session_participants").insert(participantRows);
+      if (pErr) toast.error(`Saved session but failed to attach participants: ${pErr.message}`);
     }
 
     setBusy(false);
-    toast.success(isDraft ? "Draft saved" : isScheduled ? "Session scheduled" : "Lobby is open");
-    if (isDraft || isScheduled) {
+    toast.success(isScheduled ? "Session scheduled" : "Lobby is open");
+    if (isScheduled) {
       void navigate({ to: "/sessions" });
     } else {
       void navigate({ to: "/sessions/$sessionId", params: { sessionId } });
@@ -286,8 +331,8 @@ function NewSessionPage() {
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight">New Quiz Session</h1>
         <p className="text-muted-foreground mt-1">
-          Pick a category and decide who can join, then save and open the lobby — or schedule it for
-          later.
+          Pick a category, quiz type, and decide who can join, then save and open the lobby — or
+          schedule it for later.
         </p>
       </div>
 
@@ -297,20 +342,24 @@ function NewSessionPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-border bg-card/60 p-5 md:p-6 space-y-5">
+          {/* Title */}
           <div>
             <Label className="mb-1.5">
               Title <span className="text-destructive">*</span>
             </Label>
             <Input
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: undefined })); }}
               placeholder="e.g. Class 9 — Science quiz, Friday review"
               maxLength={200}
               autoFocus
+              className={errors.title ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.title && <p className="mt-1 text-xs text-destructive">{errors.title}</p>}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            {/* Category */}
             <div>
               <Label className="mb-1.5">
                 Select Category <span className="text-destructive">*</span>
@@ -320,14 +369,43 @@ function NewSessionPage() {
                 label={selectedSubcategoryLabel}
                 categories={categories}
                 subcategories={subcategories}
-                onChange={(id) => setSubcategoryId(id)}
+                onChange={(id) => { setSubcategoryId(id); setErrors((p) => ({ ...p, category: undefined })); }}
                 disabled={noSubcategories}
+                hasError={!!errors.category}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Type to search across categories — questions come from the sub-category you pick.
-              </p>
+              {errors.category ? (
+                <p className="mt-1 text-xs text-destructive">{errors.category}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Questions come from the sub-category you pick.
+                </p>
+              )}
             </div>
 
+            {/* Quiz Type */}
+            <div>
+              <Label className="mb-1.5">
+                Quiz Type <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={quizType}
+                onValueChange={(v) => { setQuizType(v); setErrors((p) => ({ ...p, quizType: undefined })); }}
+              >
+                <SelectTrigger className={errors.quizType ? "border-destructive focus:ring-destructive" : ""}>
+                  <SelectValue placeholder="Select a quiz type…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUIZ_TYPES.map((qt) => (
+                    <SelectItem key={qt.value} value={qt.value}>
+                      {qt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
+            </div>
+
+            {/* Time per question */}
             <div>
               <Label className="mb-1.5">Time per question (seconds)</Label>
               <Input
@@ -335,14 +413,20 @@ function NewSessionPage() {
                 min={5}
                 max={3600}
                 value={timeText}
-                onChange={(e) => setTimeText(e.target.value)}
+                onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
+                className={errors.time ? "border-destructive focus-visible:ring-destructive" : ""}
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Overrides each question's individual time for this session only.
-              </p>
+              {errors.time ? (
+                <p className="mt-1 text-xs text-destructive">{errors.time}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Overrides each question's individual time for this session only.
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Public / Private */}
           <div className="rounded-2xl border border-border bg-card/40 p-4 space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -366,6 +450,7 @@ function NewSessionPage() {
                 onCheckedChange={(v) => {
                   setIsPublic(v);
                   if (v) setSelectedSubtypeIds(new Set());
+                  setErrors((p) => ({ ...p, subtypes: undefined }));
                 }}
               />
             </div>
@@ -379,7 +464,9 @@ function NewSessionPage() {
                   selectedIds={selectedSubtypeIds}
                   onToggle={toggleSubtype}
                   typeNameById={typeNameById}
+                  hasError={!!errors.subtypes}
                 />
+                {errors.subtypes && <p className="text-xs text-destructive">{errors.subtypes}</p>}
                 {selectedSubtypeIds.size > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {Array.from(selectedSubtypeIds).map((id) => {
@@ -403,13 +490,16 @@ function NewSessionPage() {
                     })}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Type to search — only participants in the selected sub-types can join.
-                </p>
+                {!errors.subtypes && (
+                  <p className="text-xs text-muted-foreground">
+                    Only participants in the selected sub-types can join.
+                  </p>
+                )}
               </div>
             )}
           </div>
 
+          {/* Schedule */}
           <div className="rounded-2xl border border-border bg-card/40 p-4 space-y-3">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
@@ -433,7 +523,7 @@ function NewSessionPage() {
                     next.setSeconds(0, 0);
                     setScheduledAtLocal(next.toISOString().slice(0, 16));
                   }
-                  if (!v) setScheduledAtLocal("");
+                  if (!v) { setScheduledAtLocal(""); setErrors((p) => ({ ...p, schedule: undefined })); }
                 }}
               />
             </div>
@@ -444,25 +534,22 @@ function NewSessionPage() {
                 <Input
                   type="datetime-local"
                   value={scheduledAtLocal}
-                  onChange={(e) => setScheduledAtLocal(e.target.value)}
+                  onChange={(e) => { setScheduledAtLocal(e.target.value); setErrors((p) => ({ ...p, schedule: undefined })); }}
                   min={new Date(Date.now() + 5 * 60_000).toISOString().slice(0, 16)}
+                  className={errors.schedule ? "border-destructive focus-visible:ring-destructive" : ""}
                 />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  The session will appear in your list and auto-start when this time arrives.
-                </p>
+                {errors.schedule ? (
+                  <p className="mt-1 text-xs text-destructive">{errors.schedule}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    The session will appear in your list and auto-start when this time arrives.
+                  </p>
+                )}
               </div>
             )}
           </div>
 
           <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-border">
-            <Button
-              variant="outline"
-              onClick={() => void submit("draft")}
-              disabled={busy || noSubcategories}
-              className="gap-1.5"
-            >
-              <Save className="h-4 w-4" /> {busy ? "Saving..." : "Save Draft"}
-            </Button>
             <Button
               onClick={() => void submit(scheduleEnabled ? "schedule" : "open")}
               disabled={busy || noSubcategories}
@@ -489,6 +576,7 @@ function CategoryCombobox({
   subcategories,
   onChange,
   disabled,
+  hasError,
 }: {
   value: string;
   label: string;
@@ -496,6 +584,7 @@ function CategoryCombobox({
   subcategories: SubcategoryRow[];
   onChange: (id: string) => void;
   disabled?: boolean;
+  hasError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -506,7 +595,7 @@ function CategoryCombobox({
           type="button"
           variant="outline"
           disabled={disabled}
-          className="w-full justify-between font-normal"
+          className={`w-full justify-between font-normal ${hasError ? "border-destructive" : ""}`}
         >
           <span className={value ? "" : "text-muted-foreground"}>
             {label || (disabled ? "Create a sub-category first" : "Search categories…")}
@@ -527,18 +616,10 @@ function CategoryCombobox({
                   {subs.map((s) => (
                     <CommandItem
                       key={s.id}
-                      // Build a searchable string so cmdk filters across both names
                       value={`${cat.name} ${s.name}`}
-                      onSelect={() => {
-                        onChange(s.id);
-                        setOpen(false);
-                      }}
+                      onSelect={() => { onChange(s.id); setOpen(false); }}
                     >
-                      <Check
-                        className={`mr-2 h-4 w-4 ${
-                          value === s.id ? "opacity-100" : "opacity-0"
-                        }`}
-                      />
+                      <Check className={`mr-2 h-4 w-4 ${value === s.id ? "opacity-100" : "opacity-0"}`} />
                       {s.name}
                     </CommandItem>
                   ))}
@@ -558,12 +639,14 @@ function SubtypeCombobox({
   selectedIds,
   onToggle,
   typeNameById,
+  hasError,
 }: {
   types: TypeRow[];
   subtypes: SubtypeRow[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   typeNameById: Map<string, string>;
+  hasError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const placeholder = selectedIds.size === 0
@@ -573,12 +656,14 @@ function SubtypeCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" className="w-full justify-between font-normal">
+        <Button
+          type="button"
+          variant="outline"
+          className={`w-full justify-between font-normal ${hasError ? "border-destructive" : ""}`}
+        >
           <span className="flex items-center gap-2">
             <Search className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className={selectedIds.size === 0 ? "text-muted-foreground" : ""}>
-              {placeholder}
-            </span>
+            <span className={selectedIds.size === 0 ? "text-muted-foreground" : ""}>{placeholder}</span>
           </span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -599,11 +684,7 @@ function SubtypeCombobox({
                       value={`${typeNameById.get(s.type_id) ?? ""} ${s.name}`}
                       onSelect={() => onToggle(s.id)}
                     >
-                      <Check
-                        className={`mr-2 h-4 w-4 ${
-                          selectedIds.has(s.id) ? "opacity-100" : "opacity-0"
-                        }`}
-                      />
+                      <Check className={`mr-2 h-4 w-4 ${selectedIds.has(s.id) ? "opacity-100" : "opacity-0"}`} />
                       {s.name}
                     </CommandItem>
                   ))}

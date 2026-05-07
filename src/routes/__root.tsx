@@ -69,7 +69,7 @@ function RootComponent() {
     <I18nProvider>
       <AuthProvider>
         <Outlet />
-        <Toaster />
+        <Toaster position="top-right" />
       </AuthProvider>
     </I18nProvider>
   );
