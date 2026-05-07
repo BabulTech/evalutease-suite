@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  X, Check, Zap, Star, Building2, Tag, ArrowRight, Sparkles, Lock,
+  X, Check, Zap, Star, Building2, Tag, ArrowRight, Sparkles, Lock, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { usePlan } from "@/contexts/PlanContext";
+import { useAuth } from "@/lib/auth";
+import { createCheckoutSession, createPortalSession } from "@/integrations/stripe/stripe.server";
 
 type DbPlan = {
   id: string; slug: string; name: string; description: string | null;
@@ -50,6 +52,7 @@ function finalPrice(plan: DbPlan, billing: "monthly" | "yearly", promo: PromoRes
 
 export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props) {
   const { plan: currentPlan } = usePlan();
+  const { user } = useAuth();
   const [plans, setPlans]   = useState<DbPlan[]>([]);
   const [selected, setSelected] = useState<string>(targetSlug ?? "pro");
   const [billing, setBilling]   = useState<"monthly" | "yearly">("monthly");
@@ -57,6 +60,7 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
   const [promo, setPromo]         = useState<PromoResult | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
   const [upgrading, setUpgrading]       = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -91,15 +95,51 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
 
   const handleUpgrade = async () => {
     const plan = plans.find((p) => p.slug === selected);
-    if (!plan) return;
+    if (!plan || !user) return;
     if (plan.price_monthly === 0) { toast.info("You're already on the Free plan"); return; }
+
+    const priceId = (billing === "yearly" ? plan.stripe_price_id_yearly : plan.stripe_price_id_monthly)?.trim();
+    if (!priceId) {
+      toast.error(`No Stripe price set for ${plan.name} (${billing}).`, {
+        description: "Admin: go to Admin → Plans → Edit the plan and save it to auto-generate Stripe prices.",
+      });
+      return;
+    }
+
     setUpgrading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setUpgrading(false);
-    toast.info("Stripe checkout coming soon — Stripe price IDs must be configured.", {
-      description: `Selected: ${plan.name} · ${billing} · ${promo ? "Promo applied" : "No promo"}`,
-    });
-    onClose();
+    try {
+      const origin = window.location.origin;
+      const result = await createCheckoutSession({
+        data: {
+          userId: user.id,
+          priceId,
+          planSlug: plan.slug,
+          promoCode: promo?.code,
+          successUrl: `${origin}/settings?tab=plan&upgraded=1`,
+          cancelUrl: `${origin}/settings?tab=plan`,
+        },
+      });
+      if (result.url) window.location.href = result.url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start checkout");
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
+  const handlePortal = async () => {
+    if (!user) return;
+    setPortalLoading(true);
+    try {
+      const result = await createPortalSession({
+        data: { userId: user.id, returnUrl: window.location.href },
+      });
+      if (result.url) window.location.href = result.url;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to open billing portal");
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   if (!open) return null;
@@ -270,6 +310,16 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
               ) : (
                 <Badge className="bg-success/15 text-success border-0">You're on this plan</Badge>
               )}
+            </div>
+          )}
+
+          {currentPlan && currentPlan.slug !== "free" && (
+            <div className="flex justify-center">
+              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground text-xs"
+                onClick={() => void handlePortal()} disabled={portalLoading}>
+                <ExternalLink className="h-3.5 w-3.5" />
+                {portalLoading ? "Opening portal…" : "Manage billing & invoices"}
+              </Button>
             </div>
           )}
 
