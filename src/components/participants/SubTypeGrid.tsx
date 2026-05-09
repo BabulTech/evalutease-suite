@@ -96,7 +96,7 @@ function SubTypeRowMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <SubTypeDialog
-          title="Edit sub-type"
+          title="Edit group"
           submitLabel="Save changes"
           initial={{ name: sub.name, description: sub.description ?? "" }}
           onSubmit={(draft) => onEdit(sub.id, draft)}
@@ -119,7 +119,7 @@ function SubTypeRowMenu({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete "{sub.name}"?</AlertDialogTitle>
               <AlertDialogDescription>
-                Participants in this sub-type are kept but lose this assignment.
+                Participants in this group are kept but lose this assignment.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

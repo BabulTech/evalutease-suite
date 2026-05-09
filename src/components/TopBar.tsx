@@ -13,7 +13,7 @@ export function TopBar({ onMenuClick }: Props) {
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null; logo_url?: string | null } | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -21,10 +21,10 @@ export function TopBar({ onMenuClick }: Props) {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("full_name, avatar_url")
+      .select("full_name, avatar_url, logo_url")
       .eq("id", user.id)
       .maybeSingle()
-      .then(({ data }) => setProfile(data));
+      .then(({ data }) => setProfile(data as typeof profile));
   }, [user]);
 
   useEffect(() => {

@@ -35,13 +35,15 @@ type Stats = {
 function DashboardPage() {
   const { user } = useAuth();
   const { t } = useI18n();
-  const { plan } = usePlan();
+  const { plan, loading: planLoading } = usePlan();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [upgradeBannerDismissed, setUpgradeBannerDismissed] = useState(
     () => sessionStorage.getItem("upgrade_banner_dismissed") === "1"
   );
 
-  const isFreeTier = !plan || plan.slug === "free";
+  // Only treat as free once the plan has actually loaded
+  const isFreeTier = !planLoading && (!plan || plan.slug === "free");
+  const isPaidTier = !planLoading && plan && plan.slug !== "free";
   const [stats, setStats] = useState<Stats>({
     sessions: 0,
     active: 0,
@@ -108,6 +110,13 @@ function DashboardPage() {
     })();
   }, [user]);
 
+  const sessionLimit = plan?.limits.sessions_total ?? 20;
+  const questionLimit = plan?.limits.question_bank ?? 100;
+  const participantLimit = plan?.limits.participants_per_session ?? 30;
+  const sessionLeft = sessionLimit === -1 ? null : Math.max(0, sessionLimit - stats.sessions);
+  const questionLeft = questionLimit === -1 ? null : Math.max(0, questionLimit - stats.questions);
+  const participantLeft = participantLimit === -1 ? null : Math.max(0, participantLimit - stats.participants);
+
   const cards = [
     {
       label: "Total Quiz",
@@ -115,6 +124,8 @@ function DashboardPage() {
       icon: PlayCircle,
       color: "text-primary",
       to: "/quiz-history" as const,
+      left: sessionLeft,
+      limit: sessionLimit,
     },
     {
       label: "Active Sessions",
@@ -122,6 +133,8 @@ function DashboardPage() {
       icon: Activity,
       color: "text-success",
       to: "/sessions" as const,
+      left: null,
+      limit: null,
     },
     {
       label: t("dash.participants"),
@@ -129,6 +142,8 @@ function DashboardPage() {
       icon: Users,
       color: "text-warning",
       to: "/participant-types" as const,
+      left: participantLeft,
+      limit: participantLimit,
     },
     {
       label: t("dash.questions"),
@@ -136,6 +151,8 @@ function DashboardPage() {
       icon: HelpCircle,
       color: "text-primary-glow",
       to: "/categories" as const,
+      left: questionLeft,
+      limit: questionLimit,
     },
   ];
 
@@ -147,11 +164,38 @@ function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">{t("nav.dashboard")}</h1>
-        <p className="text-muted-foreground mt-1">
-          A clear view of your quizzes, sessions, and participants.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight">{t("nav.dashboard")}</h1>
+          <p className="text-muted-foreground mt-1">
+            A clear view of your quizzes, sessions, and participants.
+          </p>
+        </div>
+        {/* Plan badge — visible once plan has loaded */}
+        {!planLoading && plan && (
+          <div
+            className={`flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold cursor-pointer transition-all hover:shadow-glow ${
+              plan.slug === "enterprise"
+                ? "border-warning/40 bg-warning/10 text-warning"
+                : plan.slug === "pro"
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border bg-muted/40 text-muted-foreground"
+            }`}
+            onClick={() => setUpgradeOpen(true)}
+          >
+            {plan.slug === "enterprise" ? (
+              <Star className="h-4 w-4" />
+            ) : plan.slug === "pro" ? (
+              <Zap className="h-4 w-4" />
+            ) : (
+              <Zap className="h-4 w-4 opacity-50" />
+            )}
+            <span className="capitalize">{plan.name} Plan</span>
+            {plan.slug === "free" && (
+              <span className="text-xs font-normal text-muted-foreground ml-1">· Upgrade</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Upgrade banner — free tier only */}
@@ -187,21 +231,40 @@ function DashboardPage() {
 
       {/* Stat cards with glow */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {cards.map((c) => (
-          <Link
-            key={c.label}
-            to={c.to}
-            className="group rounded-2xl border border-border bg-card/60 backdrop-blur p-5 shadow-card hover:border-primary/50 hover:shadow-glow hover:bg-card/90 transition-all duration-300 hover:scale-[1.02]"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary/80 transition-colors">
-                {c.label}
-              </span>
-              <c.icon className={`h-4 w-4 ${c.color} group-hover:scale-110 transition-transform`} />
-            </div>
-            <div className="mt-3 font-display text-3xl font-bold group-hover:text-primary transition-colors">{c.value}</div>
-          </Link>
-        ))}
+        {cards.map((c) => {
+          const usedPct = c.limit && c.limit !== -1 ? Math.min(100, Math.round((c.value / c.limit) * 100)) : 0;
+          const danger = usedPct >= 80 && c.limit !== null && c.limit !== -1;
+          return (
+            <Link
+              key={c.label}
+              to={c.to}
+              className="group rounded-2xl border border-border bg-card/60 backdrop-blur p-5 shadow-card hover:border-primary/50 hover:shadow-glow hover:bg-card/90 transition-all duration-300 hover:scale-[1.02]"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground group-hover:text-primary/80 transition-colors">
+                  {c.label}
+                </span>
+                <c.icon className={`h-4 w-4 ${c.color} group-hover:scale-110 transition-transform`} />
+              </div>
+              <div className="mt-3 font-display text-3xl font-bold group-hover:text-primary transition-colors">{c.value}</div>
+              {c.left !== null && c.limit !== null && (
+                <div className="mt-2 space-y-1">
+                  <div className={`text-[10px] font-medium ${danger ? "text-destructive" : "text-muted-foreground"}`}>
+                    {c.limit === -1 ? "Unlimited" : `${c.left} left of ${c.limit}`}
+                  </div>
+                  {c.limit !== -1 && (
+                    <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${danger ? "bg-destructive" : "bg-primary/60"}`}
+                        style={{ width: `${usedPct}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </Link>
+          );
+        })}
       </div>
 
       {/* Quick actions with glow */}

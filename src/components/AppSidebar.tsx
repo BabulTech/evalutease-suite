@@ -27,11 +27,14 @@ export function AppSidebar({ open, onToggle }: Props) {
   const { user } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [isAdmin, setIsAdmin] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
       .then(({ data }) => setIsAdmin(!!data));
+    supabase.from("profiles").select("logo_url").eq("id", user.id).maybeSingle()
+      .then(({ data }) => setLogoUrl((data as Record<string, unknown> | null)?.logo_url as string | null ?? null));
   }, [user]);
 
   const items = [
@@ -56,7 +59,7 @@ export function AppSidebar({ open, onToggle }: Props) {
         <div className="flex items-center justify-between px-3 py-5 border-b border-sidebar-border">
           {open && (
             <div className="px-2">
-              <Logo />
+              <Logo customLogoUrl={logoUrl} />
             </div>
           )}
           <button
@@ -103,7 +106,7 @@ export function AppSidebar({ open, onToggle }: Props) {
           />
           <aside className="relative z-10 w-64 h-full flex flex-col border-e border-sidebar-border bg-sidebar">
             <div className="flex items-center justify-between px-5 py-5 border-b border-sidebar-border">
-              <Logo />
+              <Logo customLogoUrl={logoUrl} />
               <button
                 type="button"
                 onClick={onToggle}

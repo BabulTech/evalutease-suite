@@ -29,7 +29,7 @@ export function SubTypeDialog({
   trigger,
   initial,
   title,
-  description = "Sub-types break down a type — e.g. 'Class 9' / 'Class 10' under Student.",
+  description = "Groups break down a type — e.g. 'Class 9' / 'Class 10' under Student.",
   submitLabel = "Save",
   onSubmit,
 }: Props) {

@@ -61,7 +61,7 @@ export function CategoryGrid({ categories, onEdit, onDelete, emptyState }: Props
             >
               <div className="font-display text-lg font-semibold">{c.name}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {c.subcategoryCount} sub-categor{c.subcategoryCount === 1 ? "y" : "ies"} ·{" "}
+                {c.subcategoryCount} topic{c.subcategoryCount === 1 ? "" : "s"} ·{" "}
                 {c.questionCount} question{c.questionCount === 1 ? "" : "s"}
               </div>
               <div className="mt-3 flex items-center gap-1 text-sm text-primary opacity-0 group-hover:opacity-100 transition-opacity">

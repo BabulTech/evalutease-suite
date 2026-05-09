@@ -29,7 +29,7 @@ export function SubCategoryDialog({
   trigger,
   initial,
   title,
-  description = "Sub-categories let you break a subject down further — e.g. 'World War II' inside 'History', or 'ICS Lecture 1' inside 'Programming'.",
+  description = "Topics let you break a subject down further — e.g. 'World War II' inside 'History', or 'ICS Lecture 1' inside 'Programming'.",
   submitLabel = "Save",
   onSubmit,
 }: Props) {

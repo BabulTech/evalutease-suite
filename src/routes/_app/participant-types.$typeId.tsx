@@ -96,7 +96,7 @@ function TypeDetailPage() {
       toast.error(error.message);
       throw error;
     }
-    toast.success("Sub-type updated");
+    toast.success("Group updated");
     await load();
   };
 
@@ -107,7 +107,7 @@ function TypeDetailPage() {
       return;
     }
     setCards((prev) => prev.filter((c) => c.id !== id));
-    toast.success("Sub-type deleted");
+    toast.success("Group deleted");
   };
 
   const Icon = iconFor((type?.icon ?? null) as IconKey | null);
@@ -132,17 +132,17 @@ function TypeDetailPage() {
               {type?.name ?? "Type"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Sub-types let you split this type — e.g. Class 9, Class 10 inside Student.
+              Groups let you split this type — e.g. Class 9, Class 10 inside Student.
             </p>
           </div>
         </div>
         <SubTypeDialog
-          title="Add sub-type"
+          title="Add group"
           submitLabel="Create"
           onSubmit={create}
           trigger={
             <Button className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              <Plus className="h-4 w-4" /> Add sub-type
+              <Plus className="h-4 w-4" /> Add group
             </Button>
           }
         />
@@ -150,7 +150,7 @@ function TypeDetailPage() {
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-          Loading sub-types…
+          Loading groups…
         </div>
       ) : (
         <SubTypeGrid
@@ -160,7 +160,7 @@ function TypeDetailPage() {
           emptyState={
             <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
               <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/60" />
-              <p className="mt-3 text-sm font-medium">No sub-types yet</p>
+              <p className="mt-3 text-sm font-medium">No groups yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Add one — e.g. <span className="text-foreground">Class 9</span>,{" "}
                 <span className="text-foreground">Engineering Team</span>.

@@ -248,7 +248,7 @@ function SubTypeParticipantsPage() {
           {type?.name ?? "Type"}
         </Link>
         <ChevronLeft className="h-3 w-3 rotate-180" />
-        <span className="text-foreground">{sub?.name ?? "Sub-type"}</span>
+        <span className="text-foreground">{sub?.name ?? "Group"}</span>
       </div>
 
       {/* Header */}
@@ -258,7 +258,7 @@ function SubTypeParticipantsPage() {
             <UsersRound className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight">{sub?.name ?? "Sub-type"}</h1>
+            <h1 className="font-display text-2xl font-bold tracking-tight">{sub?.name ?? "Group"}</h1>
             <p className="text-muted-foreground text-sm mt-1">
               Click any row to view that participant's quiz summary.
             </p>
@@ -276,7 +276,7 @@ function SubTypeParticipantsPage() {
           } />
           <ParticipantDialog
             title="Add participant"
-            description={`They'll be added under ${type?.name ?? "this type"} → ${sub?.name ?? "this sub-type"}.`}
+            description={`They'll be added under ${type?.name ?? "this type"} → ${sub?.name ?? "this group"}.`}
             submitLabel="Add"
             onSubmit={create}
             trigger={
@@ -317,7 +317,7 @@ function SubTypeParticipantsPage() {
               <Users className="mx-auto h-10 w-10 text-muted-foreground/60" />
               {participants.length === 0 ? (
                 <>
-                  <p className="mt-3 text-sm font-medium">No participants in this sub-type yet</p>
+                  <p className="mt-3 text-sm font-medium">No participants in this group yet</p>
                   <p className="mt-1 text-xs text-muted-foreground">Add them manually or generate invite links.</p>
                 </>
               ) : (

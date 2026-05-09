@@ -106,7 +106,7 @@ function CategoryDetailPage() {
       toast.error(error.message);
       throw error;
     }
-    toast.success("Sub-category updated");
+    toast.success("Topic updated");
     await load();
   };
 
@@ -117,7 +117,7 @@ function CategoryDetailPage() {
       return;
     }
     setCards((prev) => prev.filter((c) => c.id !== id));
-    toast.success("Sub-category deleted");
+    toast.success("Topic deleted");
   };
 
   const Icon = iconFor((category?.icon ?? null) as IconKey | null);
@@ -142,18 +142,18 @@ function CategoryDetailPage() {
               {category?.name ?? "Category"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Sub-categories let you organise questions further — pick one to add or edit
+              Topics let you organise questions further — pick one to add or edit
               questions.
             </p>
           </div>
         </div>
         <SubCategoryDialog
-          title="Add sub-category"
+          title="Add topic"
           submitLabel="Create"
           onSubmit={create}
           trigger={
             <Button className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              <Plus className="h-4 w-4" /> Add sub-category
+              <Plus className="h-4 w-4" /> Add topic
             </Button>
           }
         />
@@ -161,7 +161,7 @@ function CategoryDetailPage() {
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-          Loading sub-categories…
+          Loading topics…
         </div>
       ) : (
         <SubCategoryGrid
@@ -171,7 +171,7 @@ function CategoryDetailPage() {
           emptyState={
             <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
               <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/60" />
-              <p className="mt-3 text-sm font-medium">No sub-categories yet</p>
+              <p className="mt-3 text-sm font-medium">No topics yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Create one — e.g. <span className="text-foreground">World War II</span>,{" "}
                 <span className="text-foreground">Class 9</span>, or{" "}

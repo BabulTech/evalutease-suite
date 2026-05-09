@@ -1,3 +1,4 @@
+import React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
@@ -232,7 +233,7 @@ function AdminPage() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-5">
-          {section === "overview"     && <OverviewSection />}
+          {section === "overview"     && <OverviewSection onNavigate={setSection} />}
           {section === "users"        && <UsersSection />}
           {section === "participants" && <ParticipantsSection />}
           {section === "quizzes"      && <QuizzesSection />}
@@ -251,16 +252,28 @@ function AdminPage() {
 // ═══════════════════════════════════════════════════════════════
 // OVERVIEW
 // ═══════════════════════════════════════════════════════════════
-function OverviewSection() {
+function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void }) {
   const [stats, setStats] = useState<Record<string, number>>({});
   const [recentUsers, setRecentUsers] = useState<{ name: string; email: string; plan: string; joined: string }[]>([]);
   const [recentQuizzes, setRecentQuizzes] = useState<{ title: string; owner: string; status: string; created: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateFilter, setDateFilter] = useState("all");
+  const [planFilter, setPlanFilter] = useState("all");
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
-      const thisMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const now = new Date();
+      const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const thisWeek = new Date(now.getTime() - 7 * 86400000).toISOString();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const since = dateFilter === "today" ? today : dateFilter === "week" ? thisWeek : dateFilter === "month" ? thisMonth : null;
+
+      let sessQ = supabase.from("quiz_sessions").select("id", { count: "exact", head: true });
+      let partsQ = supabase.from("participants").select("id", { count: "exact", head: true });
+      let qsQ = supabase.from("questions").select("id", { count: "exact", head: true });
+      if (since) { sessQ = sessQ.gte("created_at", since); partsQ = partsQ.gte("created_at", since); qsQ = qsQ.gte("created_at", since); }
+
       const [
         { count: c_users }, { count: c_sessions }, { count: c_questions },
         { count: c_participants }, { count: c_categories }, { count: c_feedback },
@@ -268,9 +281,9 @@ function OverviewSection() {
         { data: payments }, { data: profiles }, { data: sessions },
       ] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }),
-        supabase.from("quiz_sessions").select("id", { count: "exact", head: true }),
-        supabase.from("questions").select("id", { count: "exact", head: true }),
-        supabase.from("participants").select("id", { count: "exact", head: true }),
+        sessQ,
+        qsQ,
+        partsQ,
         supabase.from("question_categories").select("id", { count: "exact", head: true }),
         supabase.from("quiz_feedback").select("id", { count: "exact", head: true }),
         supabase.from("user_subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -310,23 +323,66 @@ function OverviewSection() {
 
       setLoading(false);
     })();
-  }, []);
+  }, [dateFilter]);
+
+  // filter recentUsers by plan
+  const filteredRecentUsers = planFilter === "all" ? recentUsers : recentUsers.filter((u) => u.plan === planFilter);
 
   if (loading) return <div className="grid grid-cols-3 gap-4">{Array.from({length:9}).map((_,i)=><div key={i} className="h-28 rounded-2xl bg-muted/30 animate-pulse" />)}</div>;
 
   return (
     <div className="space-y-6">
-      <SectionHead title="Platform Overview" sub="Real-time snapshot of the entire platform." />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionHead title="Platform Overview" sub="Real-time snapshot of the entire platform." />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="w-36 h-8 text-xs"><Calendar className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All time</SelectItem>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="week">Last 7 days</SelectItem>
+              <SelectItem value="month">This month</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={planFilter} onValueChange={setPlanFilter}>
+            <SelectTrigger className="w-32 h-8 text-xs"><Filter className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All plans</SelectItem>
+              <SelectItem value="free">Free</SelectItem>
+              <SelectItem value="pro">Pro</SelectItem>
+              <SelectItem value="enterprise">Enterprise</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Hosts" value={stats.users} icon={Users} trend={12} />
-        <StatCard label="Total Participants" value={stats.participants} icon={UsersRound} color="text-success" />
-        <StatCard label="Quiz Sessions" value={stats.sessions} icon={PlayCircle} />
-        <StatCard label="Questions" value={stats.questions} icon={BookOpen} />
-        <StatCard label="Categories" value={stats.categories} icon={FolderTree} />
-        <StatCard label="Student Reviews" value={stats.feedback} icon={Star} color="text-warning" />
-        <StatCard label="Active Subscriptions" value={stats.active_subs} icon={CreditCard} color="text-primary" trend={8} />
-        <StatCard label="Revenue" value={fmt$(stats.revenue)} icon={DollarSign} color="text-warning" />
-        <StatCard label="New Hosts (Month)" value={stats.new_users} icon={TrendingUp} color="text-success" trend={stats.new_users > 0 ? 15 : 0} />
+        <button type="button" onClick={() => onNavigate("users")} className="text-left">
+          <StatCard label="Total Hosts" value={stats.users} icon={Users} trend={12} />
+        </button>
+        <button type="button" onClick={() => onNavigate("participants")} className="text-left">
+          <StatCard label="Total Participants" value={stats.participants} icon={UsersRound} color="text-success" />
+        </button>
+        <button type="button" onClick={() => onNavigate("quizzes")} className="text-left">
+          <StatCard label="Quiz Sessions" value={stats.sessions} icon={PlayCircle} />
+        </button>
+        <button type="button" onClick={() => onNavigate("categories")} className="text-left">
+          <StatCard label="Questions" value={stats.questions} icon={BookOpen} />
+        </button>
+        <button type="button" onClick={() => onNavigate("categories")} className="text-left">
+          <StatCard label="Categories" value={stats.categories} icon={FolderTree} />
+        </button>
+        <button type="button" onClick={() => onNavigate("reviews")} className="text-left">
+          <StatCard label="Student Reviews" value={stats.feedback} icon={Star} color="text-warning" />
+        </button>
+        <button type="button" onClick={() => onNavigate("plans")} className="text-left">
+          <StatCard label="Active Subscriptions" value={stats.active_subs} icon={CreditCard} color="text-primary" trend={8} />
+        </button>
+        <button type="button" onClick={() => onNavigate("finance")} className="text-left">
+          <StatCard label="Revenue" value={fmt$(stats.revenue)} icon={DollarSign} color="text-warning" />
+        </button>
+        <button type="button" onClick={() => onNavigate("users")} className="text-left">
+          <StatCard label="New Hosts (Month)" value={stats.new_users} icon={TrendingUp} color="text-success" trend={stats.new_users > 0 ? 15 : 0} />
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -334,9 +390,10 @@ function OverviewSection() {
         <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
           <div className="px-5 py-3 border-b border-border/60 bg-muted/20 flex items-center justify-between">
             <span className="font-semibold text-sm">Recent Host Signups</span>
+            <button type="button" onClick={() => onNavigate("users")} className="text-[11px] text-primary hover:underline">View all</button>
           </div>
           <div className="divide-y divide-border/40">
-            {recentUsers.map((u, i) => (
+            {filteredRecentUsers.map((u, i) => (
               <div key={i} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/10">
                 <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                   {u.name.charAt(0).toUpperCase()}
@@ -354,8 +411,9 @@ function OverviewSection() {
 
         {/* Recent quizzes */}
         <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/60 bg-muted/20">
+          <div className="px-5 py-3 border-b border-border/60 bg-muted/20 flex items-center justify-between">
             <span className="font-semibold text-sm">Recent Quiz Sessions</span>
+            <button type="button" onClick={() => onNavigate("quizzes")} className="text-[11px] text-primary hover:underline">View all</button>
           </div>
           <div className="divide-y divide-border/40">
             {recentQuizzes.map((q, i) => (
@@ -379,20 +437,219 @@ function OverviewSection() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// USER DETAIL PANEL
+// ═══════════════════════════════════════════════════════════════
+type UserRow = {
+  id: string; full_name: string | null; email: string | null;
+  organization: string | null; country: string | null; mobile: string | null;
+  created_at: string; plan_slug: string; sub_status: string;
+  session_count: number; question_count: number; participant_count: number;
+};
+
+function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: (userId: string, slug: string) => void }) {
+  const [subDetails, setSubDetails] = useState<{
+    plan_name: string; status: string; started_at: string | null;
+    expires_at: string | null; stripe_customer_id: string | null;
+    plan_limits: Record<string, number>;
+    plan_features: string[];
+  } | null>(null);
+  const [payments, setPayments] = useState<{ amount_cents: number; status: string; created_at: string; description: string | null }[]>([]);
+  const [recentSessions, setRecentSessions] = useState<{ id: string; title: string; status: string; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      const [subRes, payRes, sessRes] = await Promise.all([
+        supabase.from("user_subscriptions").select("*, plans(name, limits, features)").eq("user_id", user.id).maybeSingle(),
+        supabase.from("payment_history").select("amount_cents, status, paid_at, description").eq("user_id", user.id).order("paid_at", { ascending: false }).limit(5),
+        supabase.from("quiz_sessions").select("id, title, status, created_at").eq("owner_id", user.id).order("created_at", { ascending: false }).limit(5),
+      ]);
+      if (subRes.data) {
+        const raw = subRes.data as unknown as Record<string, unknown>;
+        const plan = (raw.plans ?? null) as Record<string, unknown> | null;
+        setSubDetails({
+          plan_name: (plan?.name as string) ?? user.plan_slug,
+          status: (raw.status as string) ?? "—",
+          started_at: (raw.current_period_start as string | null) ?? null,
+          expires_at: (raw.current_period_end as string | null) ?? null,
+          stripe_customer_id: (raw.stripe_customer_id as string | null) ?? null,
+          plan_limits: (plan?.limits as Record<string, number>) ?? {},
+          plan_features: (plan?.features as string[]) ?? [],
+        });
+      }
+      const pays = (payRes.data ?? []) as unknown as { amount_cents: number; status: string; created_at: string; description: string | null }[];
+      setPayments(pays);
+      setRecentSessions(sessRes.data ?? []);
+      setLoading(false);
+    })();
+  }, [user.id]);
+
+  const limitLabels: Record<string, string> = {
+    quizzes_per_day: "Quizzes / day",
+    ai_calls_per_day: "AI calls / day",
+    participants_per_session: "Participants / session",
+    question_bank: "Question bank",
+    sessions_total: "Total sessions",
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <div className="h-16 w-16 rounded-2xl bg-primary/15 flex items-center justify-center text-primary font-bold text-2xl shrink-0">
+          {(user.full_name ?? user.email ?? "?").charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-display font-bold text-lg">{user.full_name ?? "—"}</div>
+          <div className="text-sm text-muted-foreground">{user.email ?? "—"}</div>
+          <div className="flex items-center gap-2 mt-1">
+            {planBadge(user.plan_slug)}
+            {statusBadge(user.sub_status)}
+          </div>
+        </div>
+      </div>
+
+      {/* Consumer / Profile details */}
+      <div className="rounded-xl border border-border bg-card/40 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Profile Details</div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            ["Organization", user.organization],
+            ["Country", user.country],
+            ["Mobile", user.mobile],
+            ["Joined", fmtDate(user.created_at)],
+          ].map(([l, v]) => (
+            <div key={l} className="space-y-0.5">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{l}</div>
+              <div className="text-xs font-medium">{v ?? "—"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Usage stats */}
+      <div className="grid grid-cols-3 gap-3">
+        {([["Sessions", user.session_count, PlayCircle], ["Questions", user.question_count, BookOpen], ["Participants", user.participant_count, UsersRound]] as [string, number, React.ElementType][]).map(([l, v, Icon]) => (
+          <div key={l} className="rounded-xl border border-border bg-card/40 p-3 text-center">
+            <Icon className="h-4 w-4 text-primary mx-auto mb-1" />
+            <div className="font-display text-xl font-bold text-primary">{v}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">{l}</div>
+          </div>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">{[1,2].map((i) => <div key={i} className="h-20 rounded-xl bg-muted/30 animate-pulse" />)}</div>
+      ) : (
+        <>
+          {/* Subscription details */}
+          {subDetails && (
+            <div className="rounded-xl border border-primary/30 bg-card/40 p-4 space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Subscription</div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["Plan", subDetails.plan_name],
+                  ["Status", subDetails.status],
+                  ["Started", subDetails.started_at ? fmtDate(subDetails.started_at) : "—"],
+                  ["Expires", subDetails.expires_at ? fmtDate(subDetails.expires_at) : "—"],
+                ].map(([l, v]) => (
+                  <div key={l} className="space-y-0.5">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{l}</div>
+                    <div className="text-xs font-medium capitalize">{v ?? "—"}</div>
+                  </div>
+                ))}
+              </div>
+              {subDetails.stripe_customer_id && (
+                <div className="pt-1 border-t border-border/40">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Stripe Customer ID</div>
+                  <div className="text-xs font-mono text-muted-foreground">{subDetails.stripe_customer_id}</div>
+                </div>
+              )}
+              {/* Plan limits */}
+              {Object.keys(subDetails.plan_limits).length > 0 && (
+                <div className="pt-1 border-t border-border/40 space-y-2">
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Plan Limits</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(subDetails.plan_limits).map(([k, v]) => (
+                      <div key={k} className="flex items-center justify-between text-[11px]">
+                        <span className="text-muted-foreground">{limitLabels[k] ?? k}</span>
+                        <span className="font-semibold">{v === -1 ? "∞" : v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payment history */}
+          {payments.length > 0 && (
+            <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-border/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Payment History</div>
+              <div className="divide-y divide-border/40">
+                {payments.map((p, i) => (
+                  <div key={i} className="px-4 py-2.5 flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-medium">{p.description ?? "Payment"}</div>
+                      <div className="text-muted-foreground">{fmtDate(p.created_at)}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{fmt$(p.amount_cents)}</span>
+                      {statusBadge(p.status)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent sessions */}
+          {recentSessions.length > 0 && (
+            <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-border/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent Quiz Sessions</div>
+              <div className="divide-y divide-border/40">
+                {recentSessions.map((s) => (
+                  <div key={s.id} className="px-4 py-2.5 flex items-center justify-between text-xs">
+                    <div className="font-medium truncate max-w-48">{s.title}</div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {statusBadge(s.status)}
+                      <span className="text-muted-foreground">{fmtDateShort(s.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Change plan */}
+      <div className="rounded-xl border border-border bg-card/40 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Change Plan</div>
+        <div className="flex gap-2">
+          {["free","pro","enterprise"].map((s) => (
+            <button key={s} type="button"
+              onClick={() => onChangePlan(user.id, s)}
+              className={`flex-1 text-xs py-2 rounded-xl border font-medium transition-colors capitalize ${user.plan_slug === s ? "bg-primary/20 border-primary/40 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // USERS (HOSTS)
 // ═══════════════════════════════════════════════════════════════
 function UsersSection() {
-  type Row = {
-    id: string; full_name: string | null; email: string | null;
-    organization: string | null; country: string | null; mobile: string | null;
-    created_at: string; plan_slug: string; sub_status: string;
-    session_count: number; question_count: number; participant_count: number;
-  };
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("all");
-  const [detail, setDetail] = useState<Row | null>(null);
+  const [detail, setDetail] = useState<UserRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -440,6 +697,30 @@ function UsersSection() {
     return r;
   }, [rows, search, planFilter]);
 
+  // ── Detail page view ──────────────────────────────────────────
+  if (detail) {
+    return (
+      <div className="space-y-5">
+        {/* Back bar */}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setDetail(null)}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-xl px-3 py-1.5 hover:bg-muted/40"
+          >
+            <ChevronRight className="h-4 w-4 rotate-180" />
+            Back to Users
+          </button>
+          <span className="text-muted-foreground/40">/</span>
+          <span className="text-sm font-medium truncate">{detail.full_name ?? detail.email ?? "User"}</span>
+        </div>
+
+        <UserDetailPanel user={detail} onChangePlan={changePlan} />
+      </div>
+    );
+  }
+
+  // ── List view ─────────────────────────────────────────────────
   return (
     <div className="space-y-4">
       <SectionHead title="Hosts & Teachers" sub={`${rows.length} registered hosts on the platform.`} />
@@ -499,52 +780,6 @@ function UsersSection() {
           ))}
         </tbody>
       </TableShell>
-
-      {/* Detail dialog */}
-      <Dialog open={!!detail} onOpenChange={() => setDetail(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Host Details</DialogTitle></DialogHeader>
-          {detail && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="h-14 w-14 rounded-2xl bg-primary/15 flex items-center justify-center text-primary font-bold text-xl">
-                  {(detail.full_name ?? "?").charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div className="font-semibold">{detail.full_name ?? "—"}</div>
-                  <div className="text-sm text-muted-foreground">{detail.email ?? "—"}</div>
-                  <div className="mt-1">{planBadge(detail.plan_slug)}</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {[
-                  ["Organization", detail.organization],
-                  ["Country", detail.country],
-                  ["Mobile", detail.mobile],
-                  ["Joined", fmtDate(detail.created_at)],
-                ].map(([l, v]) => (
-                  <div key={l} className="rounded-xl border border-border bg-card/30 p-3">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">{l}</div>
-                    <div className="font-medium text-xs">{v ?? "—"}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  ["Sessions", detail.session_count, PlayCircle],
-                  ["Questions", detail.question_count, BookOpen],
-                  ["Participants", detail.participant_count, UsersRound],
-                ].map(([l, v, Icon]) => (
-                  <div key={l as string} className="rounded-xl border border-border bg-card/30 p-3 text-center">
-                    <div className="font-display text-xl font-bold text-primary">{v as number}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">{l as string}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

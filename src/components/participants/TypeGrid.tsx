@@ -60,7 +60,7 @@ export function TypeGrid({ types, onEdit, onDelete, emptyState }: Props) {
             >
               <div className="font-display text-lg font-semibold">{c.name}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {c.subtypeCount} sub-type{c.subtypeCount === 1 ? "" : "s"} ·{" "}
+                {c.subtypeCount} group{c.subtypeCount === 1 ? "" : "s"} ·{" "}
                 {c.participantCount} participant{c.participantCount === 1 ? "" : "s"}
               </div>
               <div className="mt-3 flex items-center gap-1 text-sm text-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -119,7 +119,7 @@ function TypeRowMenu({
             <AlertDialogHeader>
               <AlertDialogTitle>Delete "{type.name}"?</AlertDialogTitle>
               <AlertDialogDescription>
-                All sub-types under this type will be deleted too. Participants are kept but lose
+                All groups under this type will be deleted too. Participants are kept but lose
                 their group assignment.
               </AlertDialogDescription>
             </AlertDialogHeader>

@@ -438,7 +438,7 @@ function ParticipantsIndex() {
     if (!user || selectedTypeId === "__all__") return;
     const { data, error } = await supabase.from("participant_subtypes").insert({ owner_id: user.id, type_id: selectedTypeId, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Sub-type "${name}" created`);
+    toast.success(`Group "${name}" created`);
     await loadWithRaw();
     if (data) setSelectedSubId(data.id);
   };
@@ -491,7 +491,7 @@ function ParticipantsIndex() {
   const generateInvites = async (emails: string[]): Promise<InviteRow[]> => {
     if (!user) return [];
     const subtypeId = selectedSubId !== "__all__" ? selectedSubId : null;
-    if (!subtypeId) { toast.error("Select a sub-type first to generate invite links."); return []; }
+    if (!subtypeId) { toast.error("Select a group first to generate invite links."); return []; }
     const inputs = (emails.length > 0
       ? emails.map((e) => ({ owner_id: user.id, subtype_id: subtypeId, email: e as string | null }))
       : [{ owner_id: user.id, subtype_id: subtypeId, email: null as string | null }]);
@@ -514,7 +514,7 @@ function ParticipantsIndex() {
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">Manage Participants</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Organise your roster by type and sub-type. Select a group below to view and manage participants.
+            Organise your roster by type and group. Select a group below to view and manage participants.
           </p>
         </div>
         <Button
@@ -546,20 +546,20 @@ function ParticipantsIndex() {
           </div>
         </div>
 
-        {/* Sub-type select */}
+        {/* Group select */}
         <div className="flex-1 min-w-[180px] max-w-[240px]">
-          <Label className="text-xs text-muted-foreground mb-1 block">Sub-type</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">Group</Label>
           <div className="flex gap-1">
             <Select value={selectedSubId} onValueChange={(v) => { setSelectedSubId(v); setSelectedId(null); }} disabled={selectedTypeId === "__all__"}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder={selectedTypeId === "__all__" ? "Pick a type first" : "All sub-types"} />
+                <SelectValue placeholder={selectedTypeId === "__all__" ? "Pick a type first" : "All groups"} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All sub-types</SelectItem>
+                <SelectItem value="__all__">All groups</SelectItem>
                 {visibleSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="New sub-type" disabled={!canAddSub} onClick={() => setCreateSubOpen(true)}>
+            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="New group" disabled={!canAddSub} onClick={() => setCreateSubOpen(true)}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -584,7 +584,7 @@ function ParticipantsIndex() {
       <div className="flex flex-wrap gap-3">
         {[
           { label: "Types", value: typeCount, color: "bg-primary/10 text-primary" },
-          { label: "Sub-types", value: subCount, color: "bg-secondary/60 text-muted-foreground" },
+          { label: "Groups", value: subCount, color: "bg-secondary/60 text-muted-foreground" },
           { label: "Total participants", value: totalCount, color: "bg-secondary/60 text-muted-foreground" },
           { label: "Showing", value: filteredParticipants.length, color: "bg-success/10 text-success" },
         ].map((s) => (
@@ -666,7 +666,7 @@ function ParticipantsIndex() {
       <QuickCreateDialog
         open={createSubOpen}
         onClose={() => setCreateSubOpen(false)}
-        title="New sub-type"
+        title="New group"
         placeholder="e.g. Class 9, Engineering Team"
         onConfirm={createSub}
       />

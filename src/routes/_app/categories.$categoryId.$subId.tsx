@@ -190,7 +190,7 @@ function SubCategoryQuestionsPage() {
           {category?.name ?? "Category"}
         </Link>
         <ChevronLeft className="h-3 w-3 rotate-180" />
-        <span className="text-foreground">{sub?.name ?? "Sub-category"}</span>
+        <span className="text-foreground">{sub?.name ?? "Topic"}</span>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -200,7 +200,7 @@ function SubCategoryQuestionsPage() {
           </div>
           <div>
             <h1 className="font-display text-2xl font-bold tracking-tight">
-              {sub?.name ?? "Sub-category"}
+              {sub?.name ?? "Topic"}
             </h1>
             {sub?.description && (
               <p className="text-muted-foreground mt-1 text-sm">{sub.description}</p>
@@ -244,7 +244,7 @@ function SubCategoryQuestionsPage() {
 
       <div>
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          Questions in this sub-category
+          Questions in this topic
         </h3>
         <QuestionList
           questions={questions}

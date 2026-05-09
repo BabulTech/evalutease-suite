@@ -413,8 +413,10 @@ function ProfileForm({ userId }: { userId: string }) {
     mobile: "",
     country: "",
     avatar_url: "",
+    logo_url: "",
   });
   const [uploading, setUploading] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -432,6 +434,7 @@ function ProfileForm({ userId }: { userId: string }) {
             mobile: data.mobile ?? "",
             country: data.country ?? "",
             avatar_url: data.avatar_url ?? "",
+            logo_url: (data as Record<string, unknown>).logo_url as string ?? "",
           });
       });
   }, [userId]);
@@ -476,11 +479,30 @@ function ProfileForm({ userId }: { userId: string }) {
     toast.success("Profile picture updated");
   };
 
+  const uploadLogo = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Choose an image file"); return; }
+    if (file.size > 3 * 1024 * 1024) { toast.error("Logo must be under 3 MB"); return; }
+    setUploadingLogo(true);
+    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+    const path = `${userId}/logo-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { cacheControl: "3600", upsert: true });
+    if (error) { setUploadingLogo(false); toast.error(error.message); return; }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    const logo_url = data.publicUrl;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase.from("profiles") as any).update({ logo_url }).eq("id", userId);
+    setUploadingLogo(false);
+    if (updateError) { toast.error(updateError.message); return; }
+    setProfile((prev) => ({ ...prev, logo_url }));
+    toast.success("Logo updated — refresh to see it in the navbar");
+  };
+
   const save = async () => {
     setSaving(true);
     const full_name = `${profile.first_name} ${profile.last_name}`.trim();
-    const { error } = await supabase
-      .from("profiles")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("profiles") as any)
       .update({ ...profile, full_name })
       .eq("id", userId);
     setSaving(false);
@@ -558,6 +580,55 @@ function ProfileForm({ userId }: { userId: string }) {
           />
         </div>
       </div>
+      {/* Custom logo section */}
+      <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
+        <div>
+          <Label className="text-sm font-semibold">Custom Logo (Branding)</Label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Upload your organisation logo. It will appear in the navigation bar instead of the default logo.
+          </p>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap">
+          {profile.logo_url ? (
+            <div className="h-12 w-auto rounded-xl border border-border bg-card/60 overflow-hidden flex items-center px-3">
+              <img src={profile.logo_url} alt="Custom logo" className="h-8 w-auto object-contain max-w-[120px]" />
+            </div>
+          ) : (
+            <div className="h-12 w-24 rounded-xl border border-dashed border-border bg-card/30 flex items-center justify-center text-[10px] text-muted-foreground">
+              No logo
+            </div>
+          )}
+          <div>
+            <Input
+              id="logo-upload"
+              type="file"
+              accept="image/*"
+              className="max-w-xs"
+              disabled={uploadingLogo}
+              onChange={(e) => void uploadLogo(e.target.files?.[0])}
+            />
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Upload className="h-3.5 w-3.5" />
+              {uploadingLogo ? "Uploading…" : "PNG, SVG, WebP up to 3 MB"}
+            </div>
+          </div>
+          {profile.logo_url && (
+            <button
+              type="button"
+              onClick={async () => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (supabase.from("profiles") as any).update({ logo_url: "" }).eq("id", userId);
+                setProfile((prev) => ({ ...prev, logo_url: "" }));
+                toast.success("Logo removed");
+              }}
+              className="text-xs text-destructive hover:underline"
+            >
+              Remove logo
+            </button>
+          )}
+        </div>
+      </div>
+
       <Button
         onClick={save}
         disabled={saving}

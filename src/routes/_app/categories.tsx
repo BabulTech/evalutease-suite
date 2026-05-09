@@ -59,7 +59,7 @@ function QuickCreateDialog({
         .select("id").single();
       setSaving(false);
       if (error) { toast.error(error.message); return; }
-      toast.success(`Sub-category "${name.trim()}" created`);
+      toast.success(`Topic "${name.trim()}" created`);
       onCreated(data.id, name.trim());
     }
     setName(""); setDesc("");
@@ -72,7 +72,7 @@ function QuickCreateDialog({
       <div className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-elegant space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display font-bold text-base">
-            {mode === "category" ? "New Category" : "New Sub-category"}
+            {mode === "category" ? "New Category" : "New Topic"}
           </h3>
           <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-muted/40 cursor-pointer">
             <X className="h-4 w-4" />
@@ -81,7 +81,7 @@ function QuickCreateDialog({
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
-              {mode === "category" ? "Category name" : "Sub-category name"} *
+              {mode === "category" ? "Category name" : "Topic name"} *
             </label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Science"
               onKeyDown={(e) => e.key === "Enter" && void submit()} autoFocus />
@@ -222,7 +222,7 @@ function QuestionsPage() {
             <BookOpen className="h-7 w-7 text-primary" /> Manage Questions
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Select a category and sub-category to view, add, edit, or delete questions.
+            Select a category and topic to view, add, edit, or delete questions.
           </p>
         </div>
         <Button
@@ -261,18 +261,18 @@ function QuestionsPage() {
 
           {/* Subcategory select */}
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Sub-category</label>
+            <label className="text-xs text-muted-foreground">Topic</label>
             <p className="text-[10px] text-muted-foreground/70">Topic within the category</p>
             <div className="flex gap-2">
               <Select value={selectedSub} onValueChange={setSelectedSub} disabled={!selectedCat}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={selectedCat ? "Select sub-category…" : "Pick a category first"} />
+                  <SelectValue placeholder={selectedCat ? "Select topic…" : "Pick a category first"} />
                 </SelectTrigger>
                 <SelectContent>
                   {filteredSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" title="New sub-category"
+              <Button variant="outline" size="icon" title="New topic"
                 disabled={!selectedCat}
                 onClick={() => setSubDialog(true)} className="shrink-0 cursor-pointer">
                 <Plus className="h-4 w-4" />
@@ -281,7 +281,7 @@ function QuestionsPage() {
           </div>
         </div>
 
-        {/* Search within subcategory */}
+        {/* Search within topic */}
         {selectedSub && (
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -295,11 +295,11 @@ function QuestionsPage() {
       {!selectedCat ? (
         <EmptyPrompt icon={FolderOpen} title="Select a category" desc="Choose a category above to see its questions, or click Add Question to start." />
       ) : !selectedSub ? (
-        <EmptyPrompt icon={Layers} title="Select a sub-category"
-          desc={`Pick a sub-category under "${selectedCatName}" to view its questions.`} />
+        <EmptyPrompt icon={Layers} title="Select a topic"
+          desc={`Pick a topic under "${selectedCatName}" to view its questions.`} />
       ) : (
         <div className="space-y-4">
-          {/* Sub-category header */}
+          {/* Topic header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <div className="flex items-center gap-2">
@@ -314,7 +314,7 @@ function QuestionsPage() {
             </div>
             <Button size="sm" onClick={() => navigate({ to: "/categories/add" })}
               className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer">
-              <Plus className="h-3.5 w-3.5" /> Add to this sub-category
+              <Plus className="h-3.5 w-3.5" /> Add to this topic
             </Button>
           </div>
 
