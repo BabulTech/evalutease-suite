@@ -20,6 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
+import { PaginationControls } from "@/components/PaginationControls";
+import { usePaginationState } from "@/hooks/use-pagination";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
@@ -796,73 +799,110 @@ function ParticipantsSection() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [total, setTotal] = useState(0);
+  const [sort, setSort] = useState<"created_at" | "name">("created_at");
+  const { page, pageSize, setPage, setPageSize } = usePaginationState(25);
+  const debouncedSearch = useDebouncedValue(search, 250);
+
+  const loadParticipants = useCallback(async () => {
+    setLoading(true);
+    const offset = page * pageSize;
+    const searchTerm = debouncedSearch.trim();
+    let query = supabase
+      .from("participants")
+      .select("id,name,email,mobile,owner_id,subtype_id,created_at", { count: "exact" });
+    if (searchTerm) {
+      query = query.or(
+        `name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,mobile.ilike.%${searchTerm}%`,
+      );
+    }
+    query = sort === "name"
+      ? query.order("name", { ascending: true })
+      : query.order("created_at", { ascending: false });
+
+    const { data: parts, count } = await query.range(offset, offset + pageSize - 1);
+    setTotal(count ?? 0);
+    if (!parts?.length) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
+    const ownerIds = [...new Set(parts.map((p) => p.owner_id))];
+    const subtypeIds = [...new Set(parts.map((p) => p.subtype_id).filter(Boolean))] as string[];
+    const partIds = parts.map((p) => p.id);
+
+    const [{ data: owners }, { data: subtypes }, { data: attempts }] = await Promise.all([
+      supabase.from("profiles").select("id,full_name").in("id", ownerIds),
+      subtypeIds.length
+        ? supabase.from("participant_subtypes").select("id,name").in("id", subtypeIds)
+        : Promise.resolve({ data: [] }),
+      supabase.from("quiz_attempts")
+        .select("participant_id,score,total_questions,completed_at")
+        .in("participant_id", partIds)
+        .not("completed_at", "is", null),
+    ]);
+
+    const ownerMap: Record<string, string> = {};
+    (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "—"; });
+    const subMap: Record<string, string> = {};
+    (subtypes ?? []).forEach((s) => { subMap[s.id] = s.name; });
+
+    const attemptMap: Record<string, { count: number; totalPct: number }> = {};
+    (attempts ?? []).forEach((a) => {
+      if (!a.participant_id) return;
+      const pct = a.total_questions > 0 ? Math.round((a.score / a.total_questions) * 100) : 0;
+      if (!attemptMap[a.participant_id]) attemptMap[a.participant_id] = { count: 0, totalPct: 0 };
+      attemptMap[a.participant_id].count++;
+      attemptMap[a.participant_id].totalPct += pct;
+    });
+
+    setRows(parts.map((p) => ({
+      id: p.id, name: p.name, email: p.email, mobile: p.mobile,
+      owner_name: ownerMap[p.owner_id] ?? "—",
+      subtype: p.subtype_id ? (subMap[p.subtype_id] ?? "—") : "—",
+      created_at: p.created_at,
+      attempt_count: attemptMap[p.id]?.count ?? 0,
+      avg_score: attemptMap[p.id]
+        ? Math.round(attemptMap[p.id].totalPct / attemptMap[p.id].count)
+        : 0,
+    })));
+    setLoading(false);
+  }, [debouncedSearch, page, pageSize, sort]);
 
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      const { data: parts } = await supabase.from("participants")
-        .select("id,name,email,mobile,owner_id,subtype_id,created_at")
-        .order("created_at", { ascending: false }).limit(200);
-      if (!parts?.length) { setLoading(false); return; }
-
-      const ownerIds = [...new Set(parts.map((p) => p.owner_id))];
-      const subtypeIds = [...new Set(parts.map((p) => p.subtype_id).filter(Boolean))] as string[];
-      const partIds = parts.map((p) => p.id);
-
-      const [{ data: owners }, { data: subtypes }, { data: attempts }] = await Promise.all([
-        supabase.from("profiles").select("id,full_name").in("id", ownerIds),
-        supabase.from("participant_subtypes").select("id,name").in("id", subtypeIds),
-        supabase.from("quiz_attempts").select("participant_id,score,total_questions,completed_at")
-          .in("participant_id", partIds).not("completed_at", "is", null),
-      ]);
-
-      const ownerMap: Record<string, string> = {};
-      (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "—"; });
-      const subMap: Record<string, string> = {};
-      (subtypes ?? []).forEach((s) => { subMap[s.id] = s.name; });
-
-      const attemptMap: Record<string, { count: number; totalPct: number }> = {};
-      (attempts ?? []).forEach((a) => {
-        if (!a.participant_id) return;
-        const pct = a.total_questions > 0 ? Math.round((a.score / a.total_questions) * 100) : 0;
-        if (!attemptMap[a.participant_id]) attemptMap[a.participant_id] = { count: 0, totalPct: 0 };
-        attemptMap[a.participant_id].count++;
-        attemptMap[a.participant_id].totalPct += pct;
-      });
-
-      setRows(parts.map((p) => ({
-        id: p.id, name: p.name, email: p.email, mobile: p.mobile,
-        owner_name: ownerMap[p.owner_id] ?? "—",
-        subtype: p.subtype_id ? (subMap[p.subtype_id] ?? "—") : "—",
-        created_at: p.created_at,
-        attempt_count: attemptMap[p.id]?.count ?? 0,
-        avg_score: attemptMap[p.id]
-          ? Math.round(attemptMap[p.id].totalPct / attemptMap[p.id].count)
-          : 0,
-      })));
-      setLoading(false);
-    })();
-  }, []);
-
-  const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = search.toLowerCase();
-    return rows.filter((r) => [r.name, r.email, r.owner_name, r.subtype].some((v) => v?.toLowerCase().includes(q)));
-  }, [rows, search]);
+    void loadParticipants();
+  }, [loadParticipants]);
 
   return (
     <div className="space-y-4">
-      <SectionHead title="Participants" sub={`${rows.length} participants across all hosts.`} />
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search name, email, host…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      <SectionHead title="Participants" sub={`${total} participants across all hosts.`} />
+      <div className="flex flex-wrap gap-3">
+        <div className="relative flex-1 min-w-56">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search name, email, mobile…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={sort} onValueChange={(value) => setSort(value as "created_at" | "name")}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_at">Newest added</SelectItem>
+            <SelectItem value="name">Name (A-Z)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <TableShell footer={`${filtered.length} of ${rows.length} participants`}>
+      <TableShell>
         <THead cols={["Participant", "Host", "Group", "Quizzes Taken", "Avg Score", "Added"]} />
         <tbody className="divide-y divide-border/40">
-          {loading ? <SkeletonRows cols={6} /> : filtered.length === 0 ? (
+          {loading ? <SkeletonRows cols={6} /> : rows.length === 0 ? (
             <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No participants found.</td></tr>
-          ) : filtered.map((r) => (
+          ) : rows.map((r) => (
             <tr key={r.id} className="hover:bg-muted/10 transition-colors">
               <td className="px-4 py-3">
                 <div className="text-xs font-medium">{r.name}</div>
@@ -884,6 +924,15 @@ function ParticipantsSection() {
           ))}
         </tbody>
       </TableShell>
+      <PaginationControls
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        label="participants"
+        onPageChange={setPage}
+        pageSizeOptions={[25, 50, 100]}
+        onPageSizeChange={setPageSize}
+      />
     </div>
   );
 }

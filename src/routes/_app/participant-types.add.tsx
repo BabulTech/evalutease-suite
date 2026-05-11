@@ -40,7 +40,6 @@ import {
 import { copyText } from "@/lib/copy-text";
 import { ParticipantDraftReview } from "@/components/participants/ParticipantDraftReview";
 import { parseParticipantsCsv } from "@/components/participants/parser";
-import { extractParticipantsFromImage } from "@/components/participants/ai.server";
 import {
   emptyDraft,
   validateDraft,
@@ -621,7 +620,10 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
     if (!imageBase64 || !mediaType) { toast.error("Load an image first"); return; }
     setExtracting(true);
     try {
-      const out = await extractParticipantsFromImage({ data: { imageBase64, mediaType, hint: hint || undefined } });
+      const { extractParticipantsFromImage } = await import("@/components/participants/ai.server");
+      const out = await extractParticipantsFromImage({
+        data: { imageBase64, mediaType, hint: hint || undefined },
+      });
       if (!out.length) { toast.error("No participants found in the image"); return; }
       setDrafts(out);
       toast.success(`${out.length} participant${out.length === 1 ? "" : "s"} extracted`);

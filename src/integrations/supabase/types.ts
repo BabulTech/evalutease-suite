@@ -1024,6 +1024,10 @@ export type Database = {
         Args: { p_access_code: string }
         Returns: Json
       }
+      get_session_for_play: {
+        Args: { p_access_code: string; p_attempt_id: string }
+        Returns: Json
+      }
       join_quiz_session: {
         Args: {
           p_access_code: string
@@ -1041,6 +1045,10 @@ export type Database = {
           p_answer: string | null
           p_time_taken_seconds: number
         }
+        Returns: Json
+      }
+      submit_quiz_answers_batch: {
+        Args: { p_answers: Json }
         Returns: Json
       }
       complete_quiz_attempt: {
@@ -1070,6 +1078,10 @@ export type Database = {
         Returns: Json
       }
       close_quiz_session: {
+        Args: { p_session_id: string }
+        Returns: Json
+      }
+      get_session_leaderboard: {
         Args: { p_session_id: string }
         Returns: Json
       }

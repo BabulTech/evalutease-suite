@@ -2,6 +2,7 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { AuthProvider } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
 import { Toaster } from "@/components/ui/sonner";
+import { ProfileProvider } from "@/contexts/ProfileContext";
 
 import appCss from "../styles.css?url";
 
@@ -68,8 +69,10 @@ function RootComponent() {
   return (
     <I18nProvider>
       <AuthProvider>
-        <Outlet />
-        <Toaster position="top-right" />
+        <ProfileProvider>
+          <Outlet />
+          <Toaster position="top-right" />
+        </ProfileProvider>
       </AuthProvider>
     </I18nProvider>
   );

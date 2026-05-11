@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Archive,
@@ -18,10 +18,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { downloadQuizReportCsv, getQuizReportRows, type QuizReportAttempt } from "@/lib/quiz-reports";
+import { PaginationControls } from "@/components/PaginationControls";
+import { paginate } from "@/lib/pagination";
+import type { HistoryTrends } from "@/components/history/HistoryTrendCharts";
 
 export const Route = createFileRoute("/_app/quiz-history")({
   component: QuizHistoryPage,
 });
+
+const HISTORY_PAGE_SIZE = 25;
+const LazyHistoryTrendCharts = lazy(() => import("@/components/history/HistoryTrendCharts"));
 
 type SessionRow = {
   id: string;
@@ -45,7 +51,6 @@ type AttemptRow = {
   total_questions: number;
   completed: boolean;
   completed_at: string | null;
-  quiz_answers: { id: string; is_correct: boolean | null }[] | null;
   participants: { metadata: unknown } | null;
 };
 
@@ -74,6 +79,7 @@ const QUIZ_TYPE_LABELS: Record<string, string> = {
 function QuizHistoryPage() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<SessionWithStats[]>([]);
+  const [sessionTotal, setSessionTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -84,6 +90,14 @@ function QuizHistoryPage() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState(0);
+  const [attemptPages, setAttemptPages] = useState<Record<string, number>>({});
+  // Full attempts (with participants.metadata) fetched lazily when a session is expanded
+  const [expandedAttempts, setExpandedAttempts] = useState<Record<string, AttemptRow[]>>({});
+  const [expandingIds, setExpandingIds] = useState<Set<string>>(new Set());
+  const [attemptAnswerStats, setAttemptAnswerStats] = useState<
+    Record<string, Record<string, { correct: number; wrong: number; attempted: number }>>
+  >({});
 
   // Download dropdown per session
   const [downloadOpenId, setDownloadOpenId] = useState<string | null>(null);
@@ -102,20 +116,37 @@ function QuizHistoryPage() {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data: ss, error } = await supabase
+    const offset = page * HISTORY_PAGE_SIZE;
+    let sessionQuery = supabase
       .from("quiz_sessions")
       .select(
         "id, title, created_at, category_id, subcategory_id, default_time_per_question, subject, topic, description",
+        { count: "exact" },
       )
       .eq("owner_id", user.id)
       .eq("status", "completed")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(offset, offset + HISTORY_PAGE_SIZE - 1);
+    if (filterTitle.trim()) {
+      sessionQuery = sessionQuery.ilike("title", `%${filterTitle.trim()}%`);
+    }
+    if (filterType) {
+      sessionQuery = sessionQuery.eq("topic", filterType);
+    }
+    if (filterDateFrom) {
+      sessionQuery = sessionQuery.gte("created_at", `${filterDateFrom}T00:00:00`);
+    }
+    if (filterDateTo) {
+      sessionQuery = sessionQuery.lte("created_at", `${filterDateTo}T23:59:59`);
+    }
+    const { data: ss, error, count } = await sessionQuery;
     if (error) {
       setLoading(false);
       toast.error(error.message);
       return;
     }
     const rows = (ss ?? []) as SessionRow[];
+    setSessionTotal(count ?? 0);
     if (rows.length === 0) {
       setSessions([]);
       setLoading(false);
@@ -132,8 +163,10 @@ function QuizHistoryPage() {
     const [attemptsRes, subRes, catRes, profileRes] = await Promise.all([
       supabase
         .from("quiz_attempts")
+        // No participants join here — lightweight for stats only.
+        // Full data (with metadata for roll/seat) is fetched lazily on expand.
         .select(
-          "id, session_id, participant_id, participant_name, participant_email, score, total_questions, completed, completed_at, quiz_answers ( id, is_correct ), participants ( metadata )",
+          "id, session_id, participant_id, participant_name, participant_email, score, total_questions, completed, completed_at",
         )
         .in("session_id", sessionIds)
         .order("score", { ascending: false }),
@@ -187,7 +220,7 @@ function QuizHistoryPage() {
         };
       }),
     );
-  }, [user]);
+  }, [filterDateFrom, filterDateTo, filterTitle, filterType, page, user]);
 
   useEffect(() => {
     void load();
@@ -196,15 +229,57 @@ function QuizHistoryPage() {
   const toggle = (id: string) => {
     setOpenIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // Lazy-load full attempts (with participants.metadata for roll/seat) on first open
+        if (!expandedAttempts[id] && !expandingIds.has(id)) {
+          setExpandingIds((s) => new Set(s).add(id));
+          supabase
+            .from("quiz_attempts")
+            .select(
+              "id, session_id, participant_id, participant_name, participant_email, score, total_questions, completed, completed_at, participants ( metadata )",
+            )
+            .eq("session_id", id)
+            .order("score", { ascending: false })
+            .then(({ data, error }) => {
+              setExpandingIds((s) => { const n = new Set(s); n.delete(id); return n; });
+              if (!error && data) {
+                setExpandedAttempts((cur) => ({ ...cur, [id]: data as AttemptRow[] }));
+              }
+            });
+        }
+      }
       return next;
     });
   };
 
-  // Print only the specific quiz section
-  const printQuiz = (s: SessionWithStats) => {
-    const reportRows = getQuizReportRows(s.attempts.map(toReportAttempt));
+  const loadVisibleAnswerStats = useCallback(
+    async (sessionId: string, attemptIds: string[]) => {
+      if (attemptIds.length === 0) return;
+      const { data, error } = await supabase
+        .from("quiz_answers")
+        .select("attempt_id, is_correct")
+        .in("attempt_id", attemptIds);
+      if (error) return;
+      const next: Record<string, { correct: number; wrong: number; attempted: number }> = {};
+      for (const id of attemptIds) next[id] = { correct: 0, wrong: 0, attempted: 0 };
+      for (const row of data ?? []) {
+        const bucket = next[row.attempt_id];
+        if (!bucket) continue;
+        bucket.attempted += 1;
+        if (row.is_correct === true) bucket.correct += 1;
+        if (row.is_correct === false) bucket.wrong += 1;
+      }
+      setAttemptAnswerStats((current) => ({ ...current, [sessionId]: next }));
+    },
+    [],
+  );
+
+  // Print only the specific quiz section. Caller must pass the full attempts (with metadata).
+  const printQuiz = (s: SessionWithStats, attempts: AttemptRow[]) => {
+    const reportRows = getQuizReportRows(attempts.map(toReportAttempt));
     const submitted = reportRows.filter((a) => a.completed);
     const teacherName = getTeacherName(profile, user?.email);
     const schoolName = profile?.organization ?? "";
@@ -264,18 +339,12 @@ function QuizHistoryPage() {
     window.print();
   };
 
-  // Filtered sessions
-  const filtered = useMemo(() => {
-    return sessions.filter((s) => {
-      if (filterTitle && !s.title.toLowerCase().includes(filterTitle.toLowerCase())) return false;
-      if (filterType && s.topic !== filterType) return false;
-      if (filterDateFrom && new Date(s.created_at) < new Date(filterDateFrom)) return false;
-      if (filterDateTo && new Date(s.created_at) > new Date(filterDateTo + "T23:59:59")) return false;
-      return true;
-    });
-  }, [sessions, filterTitle, filterType, filterDateFrom, filterDateTo]);
-
   const hasFilters = filterTitle || filterType || filterDateFrom || filterDateTo;
+  const trendData = useMemo(() => buildHistoryTrends(sessions), [sessions]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterTitle, filterType, filterDateFrom, filterDateTo]);
 
   const clearFilters = () => {
     setFilterTitle("");
@@ -283,6 +352,23 @@ function QuizHistoryPage() {
     setFilterDateFrom("");
     setFilterDateTo("");
   };
+
+  useEffect(() => {
+    const openSessionRows = sessions.filter((session) => openIds.has(session.id));
+    for (const session of openSessionRows) {
+      const attempts = expandedAttempts[session.id] ?? session.attempts;
+      const reportRows = getQuizReportRows(attempts.map(toReportAttempt));
+      const submitted = reportRows.filter((row) => row.completed);
+      const attemptPage = attemptPages[session.id] ?? 0;
+      const visibleSubmitted = paginate(submitted, attemptPage, HISTORY_PAGE_SIZE);
+      const visibleIds = visibleSubmitted.map((row) => row.id);
+      const existing = attemptAnswerStats[session.id];
+      const needsLoad = visibleIds.some((id) => !existing?.[id]);
+      if (needsLoad) {
+        void loadVisibleAnswerStats(session.id, visibleIds);
+      }
+    }
+  }, [sessions, openIds, attemptPages, attemptAnswerStats, loadVisibleAnswerStats, expandedAttempts]);
 
   return (
     <div className="space-y-6">
@@ -369,17 +455,23 @@ function QuizHistoryPage() {
           </div>
           {hasFilters && (
             <p className="text-xs text-muted-foreground">
-              Showing {filtered.length} of {sessions.length} sessions
+              Showing {sessions.length} of {sessionTotal} sessions
             </p>
           )}
         </div>
+      )}
+
+      {sessions.length > 0 && (
+        <Suspense fallback={<div className="rounded-2xl border border-border bg-card/40 p-4 text-xs text-muted-foreground">Loading charts...</div>}>
+          <LazyHistoryTrendCharts trends={trendData} />
+        </Suspense>
       )}
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
           Loading…
         </div>
-      ) : sessions.length === 0 ? (
+      ) : sessions.length === 0 && !hasFilters ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
           <Archive className="mx-auto h-10 w-10 text-muted-foreground/60" />
           <p className="mt-3 text-sm font-medium">No completed sessions yet</p>
@@ -387,7 +479,7 @@ function QuizHistoryPage() {
             Once you close a live quiz session, it'll move here with the leaderboard.
           </p>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : sessions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
           <Filter className="mx-auto h-10 w-10 text-muted-foreground/60" />
           <p className="mt-3 text-sm font-medium">No sessions match your filters</p>
@@ -397,10 +489,14 @@ function QuizHistoryPage() {
         </div>
       ) : (
         <ul className="space-y-3">
-          {filtered.map((s) => {
+          {sessions.map((s) => {
             const isOpen = openIds.has(s.id);
-            const reportRows = getQuizReportRows(s.attempts.map(toReportAttempt));
+            const fullAttempts = expandedAttempts[s.id] ?? s.attempts;
+            const reportRows = getQuizReportRows(fullAttempts.map(toReportAttempt));
             const submitted = reportRows.filter((a) => a.completed);
+            const attemptPage = attemptPages[s.id] ?? 0;
+            const visibleSubmitted = paginate(submitted, attemptPage, HISTORY_PAGE_SIZE);
+            const isLoadingExpand = expandingIds.has(s.id);
             const top = submitted[0];
             const teacherName = getTeacherName(profile, user?.email);
             const schoolName = profile?.organization ?? "";
@@ -457,6 +553,9 @@ function QuizHistoryPage() {
 
                 {isOpen && (
                   <div className="border-t border-border p-4" id={`history-report-${s.id}`}>
+                    {isLoadingExpand && (
+                      <p className="mb-3 text-xs text-muted-foreground">Loading full report…</p>
+                    )}
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
                       <div>
                         <div className="text-xs font-semibold">Final report</div>
@@ -473,7 +572,7 @@ function QuizHistoryPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => printQuiz(s)}
+                          onClick={() => printQuiz(s, fullAttempts)}
                           className="gap-1.5"
                         >
                           <Printer className="h-3.5 w-3.5" /> Print
@@ -508,8 +607,8 @@ function QuizHistoryPage() {
                                     subjectLabel: subjectLabel(s),
                                     topicLabel: quizTypeLabel,
                                     createdAt: s.created_at,
-                                    questionCount: s.attempts[0]?.total_questions ?? 0,
-                                    attempts: s.attempts.map(toReportAttempt),
+                                    questionCount: fullAttempts[0]?.total_questions ?? 0,
+                                    attempts: fullAttempts.map(toReportAttempt),
                                   });
                                 }}
                               >
@@ -536,8 +635,15 @@ function QuizHistoryPage() {
                         No participants completed this quiz.
                       </p>
                     ) : (
+                      <>
                       <ol className="space-y-1.5">
-                        {submitted.map((a) => (
+                        {visibleSubmitted.map((a) => {
+                          const stats = attemptAnswerStats[s.id]?.[a.id];
+                          const correct = stats?.correct ?? a.correctAnswers;
+                          const wrong = stats?.wrong ?? a.wrongAnswers;
+                          const attempted = stats?.attempted ?? a.attemptedQuestions;
+                          const skipped = Math.max(0, a.totalQuestions - attempted);
+                          return (
                           <li
                             key={a.id}
                             className="flex items-center gap-3 rounded-lg bg-secondary/40 hover:bg-secondary/60 hover:shadow-glow px-3 py-2 transition-all"
@@ -552,9 +658,9 @@ function QuizHistoryPage() {
                                   a.email || "No email",
                                   a.rollNumber ? `Roll ${a.rollNumber}` : "",
                                   a.seatNumber ? `Seat ${a.seatNumber}` : "",
-                                  `${a.correctAnswers} correct`,
-                                  `${a.wrongAnswers} wrong`,
-                                  `${a.unattemptedQuestions} unattempted`,
+                                  `${correct} correct`,
+                                  `${wrong} wrong`,
+                                  `${skipped} unattempted`,
                                 ]
                                   .filter(Boolean)
                                   .join(" · ")}
@@ -563,7 +669,7 @@ function QuizHistoryPage() {
                             <div className="text-right">
                               <div className="text-sm font-bold text-success">{a.score} pts</div>
                               <div className="text-[10px] text-muted-foreground">
-                                {a.attemptedQuestions}/{a.totalQuestions} attempted
+                                {attempted}/{a.totalQuestions} attempted
                               </div>
                               {a.completedAt && (
                                 <div className="text-[10px] text-muted-foreground">
@@ -572,18 +678,91 @@ function QuizHistoryPage() {
                               )}
                             </div>
                           </li>
-                        ))}
+                        )})}
                       </ol>
+                      <PaginationControls
+                        page={attemptPage}
+                        pageSize={HISTORY_PAGE_SIZE}
+                        total={submitted.length}
+                        label="participants"
+                        onPageChange={(nextPage) =>
+                          setAttemptPages((current) => ({ ...current, [s.id]: nextPage }))
+                        }
+                      />
+                      </>
                     )}
                   </div>
                 )}
               </li>
             );
           })}
+          <PaginationControls
+            page={page}
+            pageSize={HISTORY_PAGE_SIZE}
+            total={sessionTotal}
+            label="sessions"
+            onPageChange={setPage}
+          />
         </ul>
       )}
     </div>
   );
+}
+
+function buildHistoryTrends(sessions: SessionWithStats[]): HistoryTrends {
+  const weekly = new Map<string, { scoreSum: number; count: number; participants: number }>();
+  const monthly = new Map<string, { completed: number; total: number; quizzes: number }>();
+
+  for (const session of sessions) {
+    const createdAt = new Date(session.created_at);
+    const weekLabel = `${createdAt.getFullYear()}-W${getWeekOfYear(createdAt)}`;
+    const monthLabel = `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, "0")}`;
+    const completedAttempts = session.attempts.filter((attempt) => attempt.completed);
+    const participantCount = session.attempts.length;
+
+    const week = weekly.get(weekLabel) ?? { scoreSum: 0, count: 0, participants: 0 };
+    week.scoreSum += session.avgPercent;
+    week.count += 1;
+    week.participants += participantCount;
+    weekly.set(weekLabel, week);
+
+    const month = monthly.get(monthLabel) ?? { completed: 0, total: 0, quizzes: 0 };
+    month.completed += completedAttempts.length;
+    month.total += participantCount;
+    month.quizzes += 1;
+    monthly.set(monthLabel, month);
+  }
+
+  const weeklyKeys = Array.from(weekly.keys()).sort().slice(-12);
+  const monthlyKeys = Array.from(monthly.keys()).sort().slice(-12);
+
+  return {
+    weeklyAverage: weeklyKeys.map((label) => {
+      const row = weekly.get(label)!;
+      return { label, avgScore: Math.round(row.scoreSum / Math.max(1, row.count)) };
+    }),
+    weeklyParticipants: weeklyKeys.map((label) => ({
+      label,
+      participants: weekly.get(label)!.participants,
+    })),
+    monthlyCompletion: monthlyKeys.map((label) => {
+      const row = monthly.get(label)!;
+      return {
+        label,
+        completionRate: Math.round((row.completed / Math.max(1, row.total)) * 100),
+      };
+    }),
+    monthlyQuizCount: monthlyKeys.map((label) => ({
+      label,
+      quizzes: monthly.get(label)!.quizzes,
+    })),
+  };
+}
+
+function getWeekOfYear(date: Date) {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const diffDays = Math.floor((date.getTime() - start.getTime()) / 86400000);
+  return Math.ceil((diffDays + start.getDay() + 1) / 7);
 }
 
 function toReportAttempt(a: AttemptRow): QuizReportAttempt {
@@ -591,11 +770,11 @@ function toReportAttempt(a: AttemptRow): QuizReportAttempt {
     a.participants?.metadata && typeof a.participants.metadata === "object"
       ? (a.participants.metadata as Record<string, unknown>)
       : {};
-  const answers = a.quiz_answers ?? [];
-  const correctAnswers = answers.filter((answer) => answer.is_correct === true).length;
-  const wrongAnswers = answers.filter((answer) => answer.is_correct === false).length;
-  const attemptedQuestions = answers.length;
-  const unattemptedQuestions = Math.max(0, a.total_questions - attemptedQuestions);
+  const assumedCorrect = Math.max(0, Math.min(a.score, a.total_questions));
+  const attemptedQuestions = a.completed ? a.total_questions : 0;
+  const correctAnswers = a.completed ? assumedCorrect : 0;
+  const wrongAnswers = a.completed ? Math.max(0, a.total_questions - assumedCorrect) : 0;
+  const unattemptedQuestions = a.completed ? 0 : a.total_questions;
   return {
     id: a.id,
     name: a.participant_name ?? "Anonymous",

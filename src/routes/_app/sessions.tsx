@@ -17,6 +17,7 @@ import {
 export const Route = createFileRoute("/_app/sessions")({
   component: SessionsPage,
 });
+const SESSION_PAGE_SIZE = 5;
 
 function SessionsPage() {
   const { user } = useAuth();
@@ -26,6 +27,8 @@ function SessionsPage() {
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(SESSION_PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(false);
 
   const loadSessions = useCallback(async () => {
     if (!user) return;
@@ -42,14 +45,17 @@ function SessionsPage() {
       )
       .eq("owner_id", user.id)
       .neq("status", "completed")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(0, visibleLimit);
     if (error) {
       setLoading(false);
       toast.error(error.message);
       return;
     }
 
-    const rows = (data ?? []) as Omit<SessionRow, "subcat_name" | "cat_name">[];
+    const all = (data ?? []) as Omit<SessionRow, "subcat_name" | "cat_name">[];
+    setHasMore(all.length > visibleLimit);
+    const rows = all.slice(0, visibleLimit);
     const subIds = Array.from(
       new Set(rows.map((r) => r.subcategory_id).filter((v): v is string => !!v)),
     );
@@ -83,7 +89,7 @@ function SessionsPage() {
         ),
       ),
     );
-  }, [user]);
+  }, [user, visibleLimit]);
 
   useEffect(() => {
     if (onIndex) void loadSessions();
@@ -138,11 +144,20 @@ function SessionsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {sessions.map((s) => (
-            <SessionCard key={s.id} session={s} onDelete={remove} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {sessions.map((s) => (
+              <SessionCard key={s.id} session={s} onDelete={remove} />
+            ))}
+          </div>
+          {hasMore && (
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={() => setVisibleLimit((v) => v + SESSION_PAGE_SIZE)}>
+                Load more sessions
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -6,7 +6,7 @@
 import { useState, type ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { usePlan, type PlanLimitKey } from "@/contexts/PlanContext";
-import { UpgradeModal } from "@/components/UpgradeModal";
+import { LazyUpgradeModal } from "@/components/LazyUpgradeModal";
 
 const FEATURE_LABELS: Record<PlanLimitKey, string> = {
   quizzes_per_day:        "Daily quiz creation",
@@ -45,7 +45,7 @@ export function PlanGate({ feature, children, showBadge = false }: Props) {
           </div>
         )}
       </div>
-      <UpgradeModal
+      <LazyUpgradeModal
         open={showModal}
         onClose={() => setShowModal(false)}
         lockedFeature={FEATURE_LABELS[feature]}
@@ -71,7 +71,7 @@ export function usePlanGate() {
   };
 
   const modal = (
-    <UpgradeModal
+    <LazyUpgradeModal
       open={!!modalFeature}
       onClose={() => setModalFeature(null)}
       lockedFeature={modalFeature ? FEATURE_LABELS[modalFeature] : undefined}

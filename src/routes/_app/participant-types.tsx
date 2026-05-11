@@ -67,6 +67,7 @@ import { ParticipantDialog } from "@/components/participants/ParticipantDialog";
 import { InviteDialog, type InviteRow } from "@/components/participants/InviteDialog";
 import { UploadParticipantsDialog } from "@/components/participants/UploadParticipantsDialog";
 import { ScanParticipantsDialog } from "@/components/participants/ScanParticipantsDialog";
+import { PaginationControls } from "@/components/PaginationControls";
 import {
   draftFromParticipant,
   draftToRow,
@@ -76,6 +77,7 @@ import {
 } from "@/components/participants/types";
 
 export const Route = createFileRoute("/_app/participant-types")({ component: ParticipantsPage });
+const PARTICIPANT_PAGE_SIZE = 25;
 
 /* ── DB row shapes ── */
 type TypeRow = { id: string; name: string; icon: string | null };
@@ -313,28 +315,11 @@ function ParticipantsIndex() {
   const [selectedSubId, setSelectedSubId] = useState<string>("__all__");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [participantTotal, setParticipantTotal] = useState(0);
 
   const [createTypeOpen, setCreateTypeOpen] = useState(false);
   const [createSubOpen, setCreateSubOpen] = useState(false);
-
-  /* load all types + subtypes + participants */
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    const [tRes, sRes, pRes] = await Promise.all([
-      supabase.from("participant_types").select("id, name, icon").eq("owner_id", user.id).order("created_at"),
-      supabase.from("participant_subtypes").select("id, type_id, name, description").eq("owner_id", user.id).order("created_at"),
-      supabase.from("participants").select("id, name, email, mobile, metadata, subtype_id, created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
-    ]);
-    setLoading(false);
-    if (tRes.error) { toast.error(tRes.error.message); return; }
-    if (pRes.error) { toast.error(pRes.error.message); return; }
-    setTypes(tRes.data ?? []);
-    setSubs(sRes.data ?? []);
-    setParticipants(((pRes.data ?? []) as ParticipantRow[]).map(rowToParticipant));
-  }, [user]);
-
-  useEffect(() => { void load(); }, [load]);
 
   /* reset subtype when type changes */
   const handleTypeChange = (v: string) => {
@@ -348,80 +333,81 @@ function ParticipantsIndex() {
     selectedTypeId === "__all__" ? subs : subs.filter((s) => s.type_id === selectedTypeId),
     [subs, selectedTypeId]);
 
-  /* subtype→type map for resolving participant's type */
-  const subToType = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of subs) m.set(s.id, s.type_id);
-    return m;
-  }, [subs]);
-
-  /* filtered participants */
-  const filtered = useMemo(() => {
-    let list = participants;
-    if (selectedSubId !== "__all__") {
-      list = list.filter((p) => p.metadata ? true : false);
-      list = participants.filter((p) => {
-        /* We need to match subtype_id — store it on metadata won't work; we need subtype_id field */
-        return true; // placeholder — actual filter below via raw data
-      });
-    }
-    /* For type filter we need subtype_id from raw rows — we'll keep raw rows in state */
-    const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((p) => {
-      const haystack = [p.name, p.email, p.mobile, p.metadata.roll_number, p.metadata.organization, p.metadata.class, p.metadata.grade, p.metadata.employee_id, p.metadata.department].filter(Boolean).join(" ").toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [participants, selectedSubId, search]);
-
   /* Keep raw rows so we can filter by subtype_id */
   const [rawRows, setRawRows] = useState<(ParticipantRow & { meta: ParticipantMeta })[]>([]);
 
   const loadWithRaw = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [tRes, sRes, pRes] = await Promise.all([
+    const from = page * PARTICIPANT_PAGE_SIZE;
+    const to = from + PARTICIPANT_PAGE_SIZE - 1;
+    const searchTerm = search.trim();
+    const subtypeRes = await supabase
+      .from("participant_subtypes")
+      .select("id, type_id, name, description")
+      .eq("owner_id", user.id)
+      .order("created_at");
+    const subRows = subtypeRes.data ?? [];
+
+    let pQuery = supabase
+      .from("participants")
+      .select("id, name, email, mobile, metadata, subtype_id, created_at", { count: "exact" })
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+
+    if (selectedSubId !== "__all__") {
+      pQuery = pQuery.eq("subtype_id", selectedSubId);
+    } else if (selectedTypeId !== "__all__") {
+      const subtypeIds = subRows
+        .filter((sub) => sub.type_id === selectedTypeId)
+        .map((sub) => sub.id);
+      if (subtypeIds.length === 0) {
+        setTypes([]);
+        setSubs(subRows);
+        setRawRows([]);
+        setParticipants([]);
+        setParticipantTotal(0);
+        setLoading(false);
+        return;
+      }
+      pQuery = pQuery.in("subtype_id", subtypeIds);
+    }
+
+    if (searchTerm) {
+      pQuery = pQuery.or(
+        `name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,mobile.ilike.%${searchTerm}%`,
+      );
+    }
+
+    const [tRes, pRes] = await Promise.all([
       supabase.from("participant_types").select("id, name, icon").eq("owner_id", user.id).order("created_at"),
-      supabase.from("participant_subtypes").select("id, type_id, name, description").eq("owner_id", user.id).order("created_at"),
-      supabase.from("participants").select("id, name, email, mobile, metadata, subtype_id, created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
+      pQuery,
     ]);
     setLoading(false);
     if (tRes.error) { toast.error(tRes.error.message); return; }
+    if (subtypeRes.error) { toast.error(subtypeRes.error.message); return; }
     if (pRes.error) { toast.error(pRes.error.message); return; }
     setTypes(tRes.data ?? []);
-    setSubs(sRes.data ?? []);
+    setSubs(subRows);
     const rows = (pRes.data ?? []) as ParticipantRow[];
+    setParticipantTotal(pRes.count ?? 0);
     setRawRows(rows.map((r) => ({ ...r, meta: (r.metadata && typeof r.metadata === "object" ? r.metadata : {}) as ParticipantMeta })));
     setParticipants(rows.map(rowToParticipant));
-  }, [user]);
+  }, [user, page, search, selectedTypeId, selectedSubId]);
 
   useEffect(() => { void loadWithRaw(); }, [loadWithRaw]);
 
   /* Filtered list using raw rows for subtype_id */
-  const filteredParticipants = useMemo(() => {
-    let list = rawRows;
-    if (selectedTypeId !== "__all__") {
-      list = list.filter((r) => {
-        if (!r.subtype_id) return false;
-        return subToType.get(r.subtype_id) === selectedTypeId;
-      });
-    }
-    if (selectedSubId !== "__all__") {
-      list = list.filter((r) => r.subtype_id === selectedSubId);
-    }
-    const q = search.trim().toLowerCase();
-    if (q) {
-      list = list.filter((r) => {
-        const meta = r.meta;
-        const haystack = [r.name, r.email, r.mobile, meta.roll_number, meta.organization, meta.class, meta.grade, meta.employee_id, meta.department].filter(Boolean).join(" ").toLowerCase();
-        return haystack.includes(q);
-      });
-    }
-    return list.map(rowToParticipant);
-  }, [rawRows, selectedTypeId, selectedSubId, search, subToType]);
+  const filteredParticipants = useMemo(() => rawRows.map(rowToParticipant), [rawRows]);
+  const visibleParticipants = filteredParticipants;
+
+  useEffect(() => {
+    setPage(0);
+  }, [selectedTypeId, selectedSubId, search]);
 
   /* Stats */
-  const totalCount = participants.length;
+  const totalCount = participantTotal;
   const typeCount = types.length;
   const subCount = subs.length;
 
@@ -450,10 +436,9 @@ function ParticipantsIndex() {
     const { data, error } = await supabase.from("participants").insert({ ...row, subtype_id: subtypeId }).select("id, name, email, mobile, metadata, subtype_id, created_at").single();
     if (error) { toast.error(error.message); throw error; }
     if (data) {
-      const prow = data as ParticipantRow;
-      setRawRows((prev) => [{ ...prow, meta: (prow.metadata && typeof prow.metadata === "object" ? prow.metadata : {}) as ParticipantMeta }, ...prev]);
-      setParticipants((prev) => [rowToParticipant(prow), ...prev]);
       toast.success(`Added ${data.name}`);
+      setPage(0);
+      await loadWithRaw();
     }
   };
 
@@ -463,10 +448,10 @@ function ParticipantsIndex() {
     const rows = drafts.map((d) => ({ ...draftToRow(d, user.id), subtype_id: subtypeId }));
     const { data, error } = await supabase.from("participants").insert(rows).select("id, name, email, mobile, metadata, subtype_id, created_at");
     if (error) { toast.error(error.message); throw error; }
-    const inserted = ((data ?? []) as ParticipantRow[]);
-    setRawRows((prev) => [...inserted.map((r) => ({ ...r, meta: (r.metadata && typeof r.metadata === "object" ? r.metadata : {}) as ParticipantMeta })), ...prev]);
-    setParticipants((prev) => [...inserted.map(rowToParticipant), ...prev]);
+    const inserted = (data ?? []) as ParticipantRow[];
     toast.success(`Added ${inserted.length} participant${inserted.length === 1 ? "" : "s"}`);
+    setPage(0);
+    await loadWithRaw();
   };
 
   const updateParticipant = async (id: string, draft: ParticipantDraft) => {
@@ -482,10 +467,9 @@ function ParticipantsIndex() {
   const removeParticipant = async (id: string) => {
     const { error } = await supabase.from("participants").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
-    setRawRows((prev) => prev.filter((r) => r.id !== id));
-    setParticipants((prev) => prev.filter((p) => p.id !== id));
     if (selectedId === id) setSelectedId(null);
     toast.success("Participant removed");
+    await loadWithRaw();
   };
 
   const generateInvites = async (emails: string[]): Promise<InviteRow[]> => {
@@ -632,7 +616,7 @@ function ParticipantsIndex() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredParticipants.map((p) => (
+                  {visibleParticipants.map((p) => (
                     <ParticipantTableRow
                       key={p.id}
                       p={p}
@@ -644,6 +628,13 @@ function ParticipantsIndex() {
                   ))}
                 </TableBody>
               </Table>
+              <PaginationControls
+                page={page}
+                pageSize={PARTICIPANT_PAGE_SIZE}
+                total={filteredParticipants.length}
+                label="participants"
+                onPageChange={setPage}
+              />
             </div>
           )}
         </div>

@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { usePlan } from "@/contexts/PlanContext";
 import { useAuth } from "@/lib/auth";
-import { createCheckoutSession, createPortalSession } from "@/integrations/stripe/stripe.server";
 
 type DbPlan = {
   id: string; slug: string; name: string; description: string | null;
@@ -108,6 +107,7 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
 
     setUpgrading(true);
     try {
+      const { createCheckoutSession } = await import("@/integrations/stripe/stripe.server");
       const origin = window.location.origin;
       const result = await createCheckoutSession({
         data: {
@@ -131,6 +131,7 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
     if (!user) return;
     setPortalLoading(true);
     try {
+      const { createPortalSession } = await import("@/integrations/stripe/stripe.server");
       const result = await createPortalSession({
         data: { userId: user.id, returnUrl: window.location.href },
       });

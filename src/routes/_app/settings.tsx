@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
+import { optimizeAvatar, optimizeLogo } from "@/lib/image-optimization";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { usePlan } from "@/contexts/PlanContext";
-import { UpgradeModal } from "@/components/UpgradeModal";
+import { LazyUpgradeModal } from "@/components/LazyUpgradeModal";
 import {
   defaultHostSettings,
   normalizeRegistrationFields,
@@ -323,7 +324,7 @@ function PlanSection({ userId }: { userId: string }) {
         </a>
       </p>
 
-      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} targetSlug={targetSlug} />
+      <LazyUpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} targetSlug={targetSlug} />
     </div>
   );
 }
@@ -453,9 +454,9 @@ function ProfileForm({ userId }: { userId: string }) {
       return;
     }
     setUploading(true);
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${userId}/avatar-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("avatars").upload(path, file, {
+    const optimized = await optimizeAvatar(file).catch(() => file);
+    const path = `${userId}/avatar-${Date.now()}.webp`;
+    const { error } = await supabase.storage.from("avatars").upload(path, optimized, {
       cacheControl: "3600",
       upsert: true,
     });
@@ -484,9 +485,9 @@ function ProfileForm({ userId }: { userId: string }) {
     if (!file.type.startsWith("image/")) { toast.error("Choose an image file"); return; }
     if (file.size > 3 * 1024 * 1024) { toast.error("Logo must be under 3 MB"); return; }
     setUploadingLogo(true);
-    const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-    const path = `${userId}/logo-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("avatars").upload(path, file, { cacheControl: "3600", upsert: true });
+    const optimized = await optimizeLogo(file).catch(() => file);
+    const path = `${userId}/logo-${Date.now()}.webp`;
+    const { error } = await supabase.storage.from("avatars").upload(path, optimized, { cacheControl: "3600", upsert: true });
     if (error) { setUploadingLogo(false); toast.error(error.message); return; }
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
     const logo_url = data.publicUrl;

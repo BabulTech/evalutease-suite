@@ -16,6 +16,7 @@ import { Logo } from "./Logo";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { useProfile } from "@/contexts/ProfileContext";
 
 type Props = {
   open: boolean;
@@ -25,16 +26,15 @@ type Props = {
 export function AppSidebar({ open, onToggle }: Props) {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { profile } = useProfile();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [isAdmin, setIsAdmin] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const logoUrl = profile?.logo_url ?? null;
 
   useEffect(() => {
     if (!user) return;
     supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
       .then(({ data }) => setIsAdmin(!!data));
-    supabase.from("profiles").select("logo_url").eq("id", user.id).maybeSingle()
-      .then(({ data }) => setLogoUrl((data as Record<string, unknown> | null)?.logo_url as string | null ?? null));
   }, [user]);
 
   const items = [

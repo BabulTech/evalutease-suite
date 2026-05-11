@@ -52,6 +52,7 @@ import { ParticipantDialog } from "@/components/participants/ParticipantDialog";
 import { InviteDialog, type InviteRow } from "@/components/participants/InviteDialog";
 import { UploadParticipantsDialog } from "@/components/participants/UploadParticipantsDialog";
 import { ScanParticipantsDialog } from "@/components/participants/ScanParticipantsDialog";
+import { PaginationControls } from "@/components/PaginationControls";
 import {
   draftFromParticipant,
   draftToRow,
@@ -63,6 +64,8 @@ import {
 export const Route = createFileRoute("/_app/participant-types/$typeId/$subId")({
   component: SubTypeParticipantsPage,
 });
+
+const PARTICIPANT_PAGE_SIZE = 25;
 
 type SubRow = { id: string; type_id: string; name: string };
 type TypeRow = { id: string; name: string };
@@ -112,10 +115,28 @@ function SubTypeParticipantsPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalParticipants, setTotalParticipants] = useState(0);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    const from = page * PARTICIPANT_PAGE_SIZE;
+    const to = from + PARTICIPANT_PAGE_SIZE - 1;
+    const searchTerm = search.trim();
+    let participantQuery = supabase
+      .from("participants")
+      .select("id, name, email, mobile, metadata, subtype_id, created_at", { count: "exact" })
+      .eq("owner_id", user.id)
+      .eq("subtype_id", subId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (searchTerm) {
+      participantQuery = participantQuery.or(
+        `name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,mobile.ilike.%${searchTerm}%`,
+      );
+    }
+
     const [t, s, p] = await Promise.all([
       supabase
         .from("participant_types")
@@ -129,12 +150,7 @@ function SubTypeParticipantsPage() {
         .eq("id", subId)
         .eq("owner_id", user.id)
         .maybeSingle(),
-      supabase
-        .from("participants")
-        .select("id, name, email, mobile, metadata, subtype_id, created_at")
-        .eq("owner_id", user.id)
-        .eq("subtype_id", subId)
-        .order("created_at", { ascending: false }),
+      participantQuery,
     ]);
     setLoading(false);
     if (t.error) toast.error(t.error.message);
@@ -142,12 +158,17 @@ function SubTypeParticipantsPage() {
     if (p.error) toast.error(p.error.message);
     setType(t.data ?? null);
     setSub(s.data ?? null);
+    setTotalParticipants(p.count ?? 0);
     setParticipants(((p.data ?? []) as ParticipantRow[]).map(rowToParticipant));
-  }, [user, typeId, subId]);
+  }, [user, typeId, subId, page, search]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
 
   const create = async (draft: ParticipantDraft) => {
     if (!user) return;
@@ -222,19 +243,7 @@ function SubTypeParticipantsPage() {
     }));
   };
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return participants;
-    return participants.filter((p) => {
-      const haystack = [
-        p.name, p.email, p.mobile,
-        p.metadata.roll_number, p.metadata.seat_number,
-        p.metadata.organization, p.metadata.class,
-        p.metadata.address, p.metadata.notes,
-      ].filter(Boolean).join(" ").toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [participants, search]);
+  const filtered = participants;
 
   const selectedParticipant = selectedId ? participants.find((p) => p.id === selectedId) ?? null : null;
 
@@ -300,7 +309,7 @@ function SubTypeParticipantsPage() {
           />
         </div>
         <span className="text-xs text-muted-foreground">
-          {participants.length} {participants.length === 1 ? "participant" : "participants"}
+          {totalParticipants} {totalParticipants === 1 ? "participant" : "participants"}
         </span>
       </div>
 
@@ -354,6 +363,13 @@ function SubTypeParticipantsPage() {
               </Table>
             </div>
           )}
+          <PaginationControls
+            page={page}
+            pageSize={PARTICIPANT_PAGE_SIZE}
+            total={totalParticipants}
+            label="participants"
+            onPageChange={setPage}
+          />
         </div>
 
         {/* Stats panel */}

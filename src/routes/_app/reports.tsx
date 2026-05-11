@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownAZ,
   BarChart3,
@@ -36,9 +36,15 @@ import {
   type QuizReportAttempt,
   type QuizReportRow,
 } from "@/lib/quiz-reports";
-import { ShareResultCard } from "@/components/ShareResultCard";
+import { PaginationControls } from "@/components/PaginationControls";
+import { paginate } from "@/lib/pagination";
 
 export const Route = createFileRoute("/_app/reports")({ component: ReportsPage });
+
+const REPORT_PAGE_SIZE = 25;
+const LazyQuizReportVisualization = lazy(
+  () => import("@/components/reports/QuizReportVisualization"),
+);
 
 type SessionRow = {
   id: string;
@@ -53,7 +59,6 @@ type SessionRow = {
 
 type AttemptRow = {
   id: string;
-  session_id: string;
   participant_name: string | null;
   participant_email: string | null;
   score: number;
@@ -61,14 +66,12 @@ type AttemptRow = {
   completed: boolean;
   started_at: string | null;
   completed_at: string | null;
-  quiz_answers: { id: string; is_correct: boolean | null }[] | null;
   participants: { metadata: unknown } | null;
 };
 
 type ReportSession = SessionRow & {
   categoryName: string;
   subcategoryName: string;
-  attempts: QuizReportAttempt[];
 };
 
 type ProfileRow = {
@@ -117,16 +120,30 @@ function ReportsPage() {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [passMark, setPassMark] = useState<number>(50);
   const [sort, setSort] = useState<SortOption>("rank");
+  const [quizListPage, setQuizListPage] = useState(0);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [selectedAttempts, setSelectedAttempts] = useState<QuizReportAttempt[]>([]);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [studentAttempts, setStudentAttempts] = useState<Record<string, QuizReportAttempt[]>>({});
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
+    const offset = quizListPage * REPORT_PAGE_SIZE;
+    let q = supabase
       .from("quiz_sessions")
-      .select("id, title, created_at, category_id, subcategory_id, subject, topic, description")
+      .select("id, title, created_at, category_id, subcategory_id, subject, topic, description", { count: "exact" })
       .eq("owner_id", user.id)
       .eq("status", "completed")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(offset, offset + REPORT_PAGE_SIZE - 1);
+    if (query.trim()) q = q.ilike("title", `%${query.trim()}%`);
+    if (dateRange !== "all") {
+      const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      q = q.gte("created_at", cutoff);
+    }
+    const { data, error, count } = await q;
     if (error) {
       setLoading(false);
       toast.error(error.message);
@@ -134,6 +151,7 @@ function ReportsPage() {
     }
 
     const rows = (data ?? []) as SessionRow[];
+    setSessionTotal(count ?? 0);
     if (rows.length === 0) {
       setSessions([]);
       setSelectedId(null);
@@ -141,17 +159,10 @@ function ReportsPage() {
       return;
     }
 
-    const sessionIds = rows.map((r) => r.id);
     const subIds = Array.from(new Set(rows.map((r) => r.subcategory_id).filter(Boolean))) as string[];
     const catIds = Array.from(new Set(rows.map((r) => r.category_id).filter(Boolean))) as string[];
 
-    const [attemptsRes, subRes, catRes, profileRes] = await Promise.all([
-      supabase
-        .from("quiz_attempts")
-        .select(
-          "id, session_id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, quiz_answers ( id, is_correct ), participants ( metadata )",
-        )
-        .in("session_id", sessionIds),
+    const [subRes, catRes, profileRes] = await Promise.all([
       subIds.length
         ? supabase.from("question_subcategories").select("id, name").in("id", subIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
@@ -166,30 +177,19 @@ function ReportsPage() {
     ]);
 
     setLoading(false);
-    if (attemptsRes.error) {
-      toast.error(attemptsRes.error.message);
-      return;
-    }
     if (profileRes.data) setProfile(profileRes.data as ProfileRow);
 
     const subNames = new Map((subRes.data ?? []).map((s) => [s.id, s.name]));
     const catNames = new Map((catRes.data ?? []).map((c) => [c.id, c.name]));
-    const attemptsBySession = new Map<string, QuizReportAttempt[]>();
-    for (const attempt of (attemptsRes.data ?? []) as AttemptRow[]) {
-      const list = attemptsBySession.get(attempt.session_id) ?? [];
-      list.push(toReportAttempt(attempt));
-      attemptsBySession.set(attempt.session_id, list);
-    }
 
     const next = rows.map((row) => ({
       ...row,
       categoryName: row.category_id ? catNames.get(row.category_id) ?? "" : "",
       subcategoryName: row.subcategory_id ? subNames.get(row.subcategory_id) ?? "" : "",
-      attempts: attemptsBySession.get(row.id) ?? [],
     }));
     setSessions(next);
     setSelectedId((current) => current ?? next[0]?.id ?? null);
-  }, [user]);
+  }, [user, quizListPage, query, dateRange]);
 
   useEffect(() => {
     void load();
@@ -204,23 +204,18 @@ function ReportsPage() {
     return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
   }, [sessions]);
 
-  const dateCutoff = useMemo(() => {
-    if (dateRange === "all") return null;
-    const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90;
-    return Date.now() - days * 24 * 60 * 60 * 1000;
-  }, [dateRange]);
-
+  // title + dateRange are filtered server-side in load(); only subjectFilter is client-side here
   const filteredSessions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return sessions.filter((s) => {
-      if (dateCutoff && new Date(s.created_at).getTime() < dateCutoff) return false;
-      if (subjectFilter !== "all" && subjectLabel(s) !== subjectFilter) return false;
-      if (!q) return true;
-      return [s.title, s.categoryName, s.subcategoryName, s.subject ?? "", s.topic ?? ""].some(
-        (value) => value.toLowerCase().includes(q),
-      );
-    });
-  }, [query, sessions, dateCutoff, subjectFilter]);
+    if (subjectFilter === "all") return sessions;
+    return sessions.filter((s) => subjectLabel(s) === subjectFilter);
+  }, [sessions, subjectFilter]);
+
+  // sessions is already the current server-side page — no further slicing needed
+  const visibleSessions = filteredSessions;
+
+  useEffect(() => {
+    setQuizListPage(0);
+  }, [query, dateRange, subjectFilter, reportMode]);
 
   const selected = useMemo(() => {
     if (!selectedId) return filteredSessions[0] ?? null;
@@ -232,9 +227,34 @@ function ReportsPage() {
     );
   }, [selectedId, filteredSessions, sessions]);
 
+  useEffect(() => {
+    const loadSelectedAttempts = async () => {
+      if (!selectedId) {
+        setSelectedAttempts([]);
+        return;
+      }
+      setAttemptsLoading(true);
+      const { data, error } = await supabase
+        .from("quiz_attempts")
+        .select(
+          "id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, participants ( metadata )",
+        )
+        .eq("session_id", selectedId)
+        .order("score", { ascending: false });
+      setAttemptsLoading(false);
+      if (error) {
+        toast.error(error.message);
+        setSelectedAttempts([]);
+        return;
+      }
+      setSelectedAttempts(((data ?? []) as AttemptRow[]).map(toReportAttempt));
+    };
+    void loadSelectedAttempts();
+  }, [selectedId]);
+
   const baseRows: QuizReportRow[] = useMemo(
-    () => (selected ? getQuizReportRows(selected.attempts) : []),
-    [selected],
+    () => getQuizReportRows(selectedAttempts),
+    [selectedAttempts],
   );
 
   const filteredRows = useMemo(() => {
@@ -257,7 +277,7 @@ function ReportsPage() {
   const studentAttemptRows = useMemo(() => {
     const q = studentQuery.trim().toLowerCase();
     const all = filteredSessions.flatMap((session) =>
-      getQuizReportRows(session.attempts).map((row) => ({
+      getQuizReportRows(studentAttempts[session.id] ?? []).map((row) => ({
         ...row,
         sessionId: session.id,
         sessionTitle: session.title,
@@ -285,7 +305,35 @@ function ReportsPage() {
         .includes(q);
     });
     return sortRows(filtered, sort);
-  }, [filteredSessions, statusFilter, studentQuery, sort]);
+  }, [filteredSessions, studentAttempts, statusFilter, studentQuery, sort]);
+
+  useEffect(() => {
+    const loadStudentModeAttempts = async () => {
+      if (reportMode !== "student") return;
+      const sessionIds = filteredSessions.map((session) => session.id);
+      if (sessionIds.length === 0) {
+        setStudentAttempts({});
+        return;
+      }
+      const { data, error } = await supabase
+        .from("quiz_attempts")
+        .select(
+          "id, session_id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, participants ( metadata )",
+        )
+        .in("session_id", sessionIds);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const grouped: Record<string, QuizReportAttempt[]> = {};
+      for (const sessionId of sessionIds) grouped[sessionId] = [];
+      for (const attempt of (data ?? []) as (AttemptRow & { session_id: string })[]) {
+        grouped[attempt.session_id].push(toReportAttempt(attempt));
+      }
+      setStudentAttempts(grouped);
+    };
+    void loadStudentModeAttempts();
+  }, [reportMode, filteredSessions]);
 
   const studentSummaryRows = useMemo(
     () => aggregateByStudent(studentAttemptRows),
@@ -327,8 +375,8 @@ function ReportsPage() {
         subjectLabel: subjectLabel(selected),
         topicLabel: selected.topic ?? "",
         createdAt: selected.created_at,
-        questionCount: selected.attempts[0]?.totalQuestions ?? 0,
-        attempts: selected.attempts,
+        questionCount: selectedAttempts[0]?.totalQuestions ?? 0,
+        attempts: selectedAttempts,
       },
       { rows: filteredRows, filterSummary },
     );
@@ -548,7 +596,7 @@ function ReportsPage() {
                   No quizzes match these filters.
                 </div>
               ) : (
-                filteredSessions.map((s) => {
+                visibleSessions.map((s) => {
                   const active = selected?.id === s.id;
                   return (
                     <button
@@ -564,13 +612,19 @@ function ReportsPage() {
                         {categoryLabel(s) || "Uncategorised"}
                       </div>
                       <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        {new Date(s.created_at).toLocaleDateString()} · {s.attempts.length}{" "}
-                        {s.attempts.length === 1 ? "participant" : "participants"}
+                        {new Date(s.created_at).toLocaleDateString()}
                       </div>
                     </button>
                   );
                 })
               )}
+              <PaginationControls
+                page={quizListPage}
+                pageSize={REPORT_PAGE_SIZE}
+                total={subjectFilter !== "all" ? filteredSessions.length : sessionTotal}
+                label="quizzes"
+                onPageChange={setQuizListPage}
+              />
             </div>
           </aside>
 
@@ -583,110 +637,28 @@ function ReportsPage() {
             />
           ) : selected ? (
             <main className="space-y-6" id="report-print-area">
-              <QuizReportHeader
-                session={selected}
-                top={filteredRows[0] ?? baseRows[0]}
-                teacherName={teacherName}
-                schoolName={schoolName}
-              />
-
-              {/* ── Section 1: Participation overview ── */}
-              <SectionLabel
-                title="Participation Overview"
-                desc="How many students joined and actually submitted their answers."
-              />
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-                <Metric icon={Users} label="Joined" value={stats.total}
-                  desc="Total participants who entered the quiz session" />
-                <Metric icon={Trophy} label="Submitted" value={stats.submitted}
-                  desc="Participants who completed and submitted answers" />
-                <Metric icon={Target} label="Pass rate" value={`${stats.passRate}%`}
-                  desc={`% who scored ≥ ${passMark}% (your current pass mark)`} color="text-primary" />
-                <Metric icon={Timer} label="Avg time" value={stats.avgDuration === null ? "—" : formatDuration(stats.avgDuration)}
-                  desc="Average time taken to finish the quiz" />
-              </div>
-
-              {/* ── Section 2: Score performance ── */}
-              <SectionLabel
-                title="Score Performance"
-                desc="How well participants scored — from the top to the lowest result."
-              />
-              <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-                <Metric icon={BarChart3} label="Class average" value={`${stats.avg}%`}
-                  desc="Mean score across all submitted attempts" color={stats.avg >= passMark ? "text-success" : "text-destructive"} />
-                <Metric icon={Trophy} label="Highest score" value={stats.best === null ? "—" : `${stats.best}%`}
-                  desc="Best individual score in this session" color="text-success" />
-                <Metric icon={BarChart3} label="Median score" value={stats.median === null ? "—" : `${stats.median}%`}
-                  desc="Middle value — half scored above this, half below" />
-                <Metric icon={Flame} label="Lowest score" value={stats.worst === null ? "—" : `${stats.worst}%`}
-                  desc="Lowest individual score — shows who may need extra help" color="text-destructive" />
-              </div>
-
-              {/* ── Section 3: Answer breakdown ── */}
-              <SectionLabel
-                title="Answer Breakdown"
-                desc="Total correct, wrong, and skipped answers across all participants combined."
-              />
-              <div className="grid gap-3 md:grid-cols-3">
-                <AnswerMetric label="Correct answers" value={stats.totals.correct} tone="success"
-                  desc="Questions answered correctly across all participants" />
-                <AnswerMetric label="Wrong answers" value={stats.totals.wrong} tone="danger"
-                  desc="Incorrect answers — useful for spotting tricky questions" />
-                <AnswerMetric label="Skipped / not attempted" value={stats.totals.unattempted} tone="muted"
-                  desc="Questions left blank — may indicate time pressure or confusion" />
-              </div>
-
-              {/* ── Section 4: Score distribution ── */}
-              <SectionLabel
-                title="Score Distribution"
-                desc="See how the class is spread across performance bands at a glance."
-              />
-              <DistributionBar buckets={stats.buckets} passMark={passMark} />
-
-              {/* ── Section 5: Top performers ── */}
-              {filteredRows.length > 0 && (
-                <>
-                  <SectionLabel
-                    title="Top Performers"
-                    desc="The three highest-scoring participants in this session."
-                  />
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {filteredRows.slice(0, 3).map((row, i) => {
-                      const medals = ["🥇", "🥈", "🥉"];
-                      const borders = ["border-warning/50 bg-warning/5", "border-muted-foreground/30 bg-muted/10", "border-orange-400/30 bg-orange-400/5"];
-                      return (
-                        <div key={row.id} className={`rounded-2xl border p-5 space-y-2 ${borders[i] ?? "border-border bg-card/50"}`}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-2xl">{medals[i]}</span>
-                            <span className="text-xs text-muted-foreground font-medium">#{row.rank} place</span>
-                          </div>
-                          <div className="font-display font-bold text-lg leading-tight">{row.name}</div>
-                          <div className="text-xs text-muted-foreground truncate">{row.email || "No email provided"}</div>
-                          <div className="flex items-baseline gap-2 pt-1">
-                            <span className="font-display text-2xl font-bold text-success">{row.score}</span>
-                            <span className="text-xs text-muted-foreground">pts · {row.percent}%</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-muted/30">
-                            <div className="h-full rounded-full bg-success transition-all" style={{ width: `${row.percent}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
+              {attemptsLoading && (
+                <div className="rounded-2xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
+                  Loading participant attempts...
+                </div>
               )}
-
-              {/* ── Share ── */}
-              <ShareResultCard
-                mode="host"
-                quizTitle={selected.title}
-                totalParticipants={stats.total}
-                submitted={stats.submitted}
-                avgPct={stats.avg}
-                bestPct={stats.best ?? 0}
-                passRate={stats.passRate}
-                topScorer={filteredRows[0]?.name}
-              />
+              <Suspense
+                fallback={
+                  <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+                    Loading report visualization…
+                  </div>
+                }
+              >
+                <LazyQuizReportVisualization
+                  session={selected}
+                  top={filteredRows[0] ?? baseRows[0]}
+                  filteredRows={filteredRows}
+                  stats={stats}
+                  passMark={passMark}
+                  teacherName={teacherName}
+                  schoolName={schoolName}
+                />
+              </Suspense>
 
               {/* ── Section 6: Full results table ── */}
               <SectionLabel
@@ -790,6 +762,39 @@ function QuizReportHeader({
 }
 
 function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: number }) {
+  const [page, setPage] = useState(0);
+  const [answerStats, setAnswerStats] = useState<
+    Record<string, { correct: number; wrong: number; attempted: number }>
+  >({});
+  const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [rows]);
+
+  useEffect(() => {
+    const attemptIds = visibleRows.map((row) => row.id);
+    if (attemptIds.length === 0) return;
+    const loadStats = async () => {
+      const { data, error } = await supabase
+        .from("quiz_answers")
+        .select("attempt_id, is_correct")
+        .in("attempt_id", attemptIds);
+      if (error) return;
+      const next: Record<string, { correct: number; wrong: number; attempted: number }> = {};
+      for (const id of attemptIds) next[id] = { correct: 0, wrong: 0, attempted: 0 };
+      for (const row of data ?? []) {
+        const bucket = next[row.attempt_id];
+        if (!bucket) continue;
+        bucket.attempted += 1;
+        if (row.is_correct === true) bucket.correct += 1;
+        if (row.is_correct === false) bucket.wrong += 1;
+      }
+      setAnswerStats(next);
+    };
+    void loadStats();
+  }, [visibleRows]);
+
   return (
     <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
       {rows.length === 0 ? (
@@ -815,7 +820,13 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
             </tr>
           </thead>
           <tbody className="divide-y divide-border/40">
-            {rows.map((row) => (
+            {visibleRows.map((row) => {
+              const stats = answerStats[row.id];
+              const correct = stats?.correct ?? row.correctAnswers;
+              const wrong = stats?.wrong ?? row.wrongAnswers;
+              const attempted = stats?.attempted ?? row.attemptedQuestions;
+              const skipped = Math.max(0, row.totalQuestions - attempted);
+              return (
               <tr key={row.id} className="hover:bg-muted/10 transition-colors">
                 <td className="px-4 py-3 font-bold text-muted-foreground">{row.rank}</td>
                 <td className="px-4 py-3">
@@ -839,18 +850,25 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
                   </div>
                 </td>
                 <td className="px-4 py-3"><ResultBadge row={row} passMark={passMark} /></td>
-                <td className="px-4 py-3 font-semibold text-success">{row.correctAnswers}</td>
-                <td className="px-4 py-3 font-semibold text-destructive">{row.wrongAnswers}</td>
-                <td className="px-4 py-3 text-muted-foreground">{row.unattemptedQuestions}</td>
+                <td className="px-4 py-3 font-semibold text-success">{correct}</td>
+                <td className="px-4 py-3 font-semibold text-destructive">{wrong}</td>
+                <td className="px-4 py-3 text-muted-foreground">{skipped}</td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">{formatDuration(row.durationSeconds ?? null)}</td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       )}
       <div className="px-4 py-2 border-t border-border/40 text-xs text-muted-foreground">
-        {rows.length} participant{rows.length !== 1 ? "s" : ""} shown
+        {rows.length} participant{rows.length !== 1 ? "s" : ""} matched
       </div>
+      <PaginationControls
+        page={page}
+        pageSize={REPORT_PAGE_SIZE}
+        total={rows.length}
+        label="participants"
+        onPageChange={setPage}
+      />
     </div>
   );
 }
@@ -1034,6 +1052,13 @@ function StudentSummaryTable({
   rows: StudentSummaryRow[];
   passMark: number;
 }) {
+  const [page, setPage] = useState(0);
+  const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [rows]);
+
   return (
     <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
       {rows.length === 0 ? (
@@ -1065,7 +1090,7 @@ function StudentSummaryTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const passing = row.avgPercent >= passMark;
               return (
                 <tr key={row.key} className="border-t border-border/50">
@@ -1094,6 +1119,13 @@ function StudentSummaryTable({
           </tbody>
         </table>
       )}
+      <PaginationControls
+        page={page}
+        pageSize={REPORT_PAGE_SIZE}
+        total={rows.length}
+        label="students"
+        onPageChange={setPage}
+      />
     </div>
   );
 }
@@ -1107,6 +1139,13 @@ function StudentAttemptsTable({
   passMark: number;
   average: number;
 }) {
+  const [page, setPage] = useState(0);
+  const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(0);
+  }, [rows]);
+
   return (
     <>
       <div className="grid gap-3 md:grid-cols-3">
@@ -1156,7 +1195,7 @@ function StudentAttemptsTable({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={`${row.sessionId}-${row.id}`} className="border-t border-border/50">
                   <td className="px-3 py-2 font-semibold">{row.name}</td>
                   <td className="px-3 py-2 text-muted-foreground">{row.email || "—"}</td>
@@ -1183,6 +1222,13 @@ function StudentAttemptsTable({
             </tbody>
           </table>
         )}
+        <PaginationControls
+          page={page}
+          pageSize={REPORT_PAGE_SIZE}
+          total={rows.length}
+          label="attempts"
+          onPageChange={setPage}
+        />
       </div>
     </>
   );
@@ -1251,11 +1297,11 @@ function toReportAttempt(a: AttemptRow): QuizReportAttempt {
     a.participants?.metadata && typeof a.participants.metadata === "object"
       ? (a.participants.metadata as Record<string, unknown>)
       : {};
-  const answers = a.quiz_answers ?? [];
-  const correctAnswers = answers.filter((answer) => answer.is_correct === true).length;
-  const wrongAnswers = answers.filter((answer) => answer.is_correct === false).length;
-  const attemptedQuestions = answers.length;
-  const unattemptedQuestions = Math.max(0, a.total_questions - attemptedQuestions);
+  const assumedCorrect = Math.max(0, Math.min(a.score, a.total_questions));
+  const attemptedQuestions = a.completed ? a.total_questions : 0;
+  const correctAnswers = a.completed ? assumedCorrect : 0;
+  const wrongAnswers = a.completed ? Math.max(0, a.total_questions - assumedCorrect) : 0;
+  const unattemptedQuestions = a.completed ? 0 : a.total_questions;
   const startedAt = a.started_at ?? null;
   const completedAt = a.completed_at ?? null;
   const durationSeconds =

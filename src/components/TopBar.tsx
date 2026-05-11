@@ -3,7 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { supabase } from "@/integrations/supabase/client";
+import { useProfile } from "@/contexts/ProfileContext";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Settings, LogOut, Menu } from "lucide-react";
 
@@ -13,19 +13,9 @@ export function TopBar({ onMenuClick }: Props) {
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<{ full_name: string | null; avatar_url: string | null; logo_url?: string | null } | null>(null);
+  const { profile } = useProfile();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase
-      .from("profiles")
-      .select("full_name, avatar_url, logo_url")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data }) => setProfile(data as typeof profile));
-  }, [user]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -37,7 +27,10 @@ export function TopBar({ onMenuClick }: Props) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const name = profile?.full_name || user?.email?.split("@")[0] || "User";
+  const name = profile?.full_name
+    || [profile?.first_name, profile?.last_name].filter(Boolean).join(" ")
+    || user?.email?.split("@")[0]
+    || "User";
   const email = user?.email ?? "";
   const initials = name.slice(0, 2).toUpperCase();
 

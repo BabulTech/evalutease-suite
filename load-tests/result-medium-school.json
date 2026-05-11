@@ -1,0 +1,344 @@
+{
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {
+            "participant full quiz": {
+                "path": "::participant full quiz",
+                "id": "17c16ad2cad2ee3d0183098bcb686acd",
+                "groups": {},
+                "checks": {
+                        "participant_quiz_page status is 200": {
+                            "name": "participant_quiz_page status is 200",
+                            "path": "::participant full quiz::participant_quiz_page status is 200",
+                            "id": "1356cbab18f204f48ccd73fbf1426a92",
+                            "passes": 1297,
+                            "fails": 0
+                        },
+                        "lobby load status is 200": {
+                            "name": "lobby load status is 200",
+                            "path": "::participant full quiz::lobby load status is 200",
+                            "id": "cb30d663863038d4e834e5a1ddd4b87e",
+                            "passes": 1297,
+                            "fails": 0
+                        },
+                        "quiz join success": {
+                            "name": "quiz join success",
+                            "path": "::participant full quiz::quiz join success",
+                            "id": "7ea51f2d7a9e157984626f4c67a884d1",
+                            "passes": 1297,
+                            "fails": 0
+                        },
+                        "questions received": {
+                            "name": "questions received",
+                            "path": "::participant full quiz::questions received",
+                            "id": "363b2d5064ab41413bb113cc24f677b6",
+                            "passes": 1297,
+                            "fails": 0
+                        },
+                        "answer submit success": {
+                            "name": "answer submit success",
+                            "path": "::participant full quiz::answer submit success",
+                            "id": "70ac54e09ab530a7aac1e3b304cda807",
+                            "passes": 5053,
+                            "fails": 0
+                        },
+                        "complete quiz success": {
+                            "id": "1d8a97c91aa32230028d56f36a37f067",
+                            "passes": 1216,
+                            "fails": 0,
+                            "name": "complete quiz success",
+                            "path": "::participant full quiz::complete quiz success"
+                        },
+                        "participant_result_page status is 200": {
+                            "name": "participant_result_page status is 200",
+                            "path": "::participant full quiz::participant_result_page status is 200",
+                            "id": "735298f5a7f34d5bce32d59852b88425",
+                            "passes": 1216,
+                            "fails": 0
+                        }
+                    },
+                "name": "participant full quiz"
+            },
+            "teacher login and dashboard": {
+                "name": "teacher login and dashboard",
+                "path": "::teacher login and dashboard",
+                "id": "7ee3fde0c3549b3c90c61726504ec640",
+                "groups": {},
+                "checks": {
+                        "login success": {
+                            "path": "::teacher login and dashboard::login success",
+                            "id": "20130191ba3c9d19678df5d5387f5998",
+                            "passes": 75,
+                            "fails": 0,
+                            "name": "login success"
+                        },
+                        "dashboard_page status is 200": {
+                            "path": "::teacher login and dashboard::dashboard_page status is 200",
+                            "id": "870fc78751dfab1ab3dd9ea69bc61a30",
+                            "passes": 75,
+                            "fails": 0,
+                            "name": "dashboard_page status is 200"
+                        },
+                        "teacher_session_page status is 200": {
+                            "name": "teacher_session_page status is 200",
+                            "path": "::teacher login and dashboard::teacher_session_page status is 200",
+                            "id": "cb36902e507a5dd932f181ecdad36640",
+                            "passes": 75,
+                            "fails": 0
+                        }
+                    }
+            }
+        },
+        "checks": {}
+    },
+    "metrics": {
+        "group_duration": {
+            "max": 79000.9134,
+            "avg": 60943.548406351685,
+            "min": 33178.1664,
+            "med": 62153.739,
+            "p(90)": 69378.0155,
+            "p(95)": 71017.3226,
+            "p(99)": 73558.43871999999
+        },
+        "vus_max": {
+            "max": 155,
+            "value": 155,
+            "min": 155
+        },
+        "iteration_duration": {
+            "max": 79000.9134,
+            "avg": 60943.584156158,
+            "min": 33178.1664,
+            "med": 62153.739,
+            "p(90)": 69378.0155,
+            "p(95)": 71017.3226,
+            "p(99)": 73558.43871999999
+        },
+        "supabase_api_bytes": {
+            "count": 5951182,
+            "rate": 10447.966443151061
+        },
+        "http_req_connecting": {
+            "p(95)": 1.0261599999999989,
+            "p(99)": 6.49138400000005,
+            "max": 199.134,
+            "avg": 0.2884011602501316,
+            "min": 0,
+            "med": 0,
+            "p(90)": 0.5473
+        },
+        "app_page_bytes": {
+            "count": 13854656,
+            "rate": 24323.400119405105
+        },
+        "http_req_sending": {
+            "p(90)": 0.7414600000000002,
+            "p(95)": 0.8319799999999999,
+            "p(99)": 1.3115840000000019,
+            "max": 9.3975,
+            "avg": 0.35990052738642275,
+            "min": 0,
+            "med": 0.4885
+        },
+        "http_req_duration": {
+            "p(95)": 243.85584,
+            "p(99)": 288.5923080000001,
+            "max": 784.4464,
+            "avg": 180.7842920666023,
+            "min": 0,
+            "med": 220.4625,
+            "p(90)": 237.21776000000003,
+            "thresholds": {
+                "p(99)<2000": false
+            }
+        },
+        "quiz_join_success_rate": {
+            "passes": 1297,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.95": false
+            },
+            "value": 1
+        },
+        "data_received": {
+            "count": 23489488,
+            "rate": 41238.42665050397
+        },
+        "teacher_dashboard_success_rate": {
+            "passes": 75,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.90": false
+            },
+            "value": 1
+        },
+        "answer_submit_success_rate": {
+            "passes": 5053,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.95": false
+            },
+            "value": 1
+        },
+        "vus": {
+            "max": 155,
+            "value": 3,
+            "min": 3
+        },
+        "iterations": {
+            "count": 1291,
+            "rate": 2.2664950724256157
+        },
+        "normal_request_duration": {
+            "med": 220.53230000000002,
+            "p(90)": 236.74448000000004,
+            "p(95)": 242.887905,
+            "p(99)": 265.07878200000005,
+            "max": 745.1031,
+            "avg": 180.58687217964524,
+            "min": 0
+        },
+        "heavy_request_duration": {
+            "p(90)": 687.1947000000001,
+            "p(95)": 783.90823,
+            "p(99)": 784.4464,
+            "max": 784.4464,
+            "avg": 568.0919973333331,
+            "min": 448.194,
+            "med": 555.4552
+        },
+        "http_req_duration{weight:heavy}": {
+            "med": 222.0592,
+            "p(90)": 238.08968,
+            "p(95)": 248.50946999999994,
+            "p(99)": 553.1048519999997,
+            "max": 784.4464,
+            "avg": 230.63228555142445,
+            "min": 202.2992,
+            "thresholds": {
+                "p(95)<2000": false
+            }
+        },
+        "http_req_tls_handshaking": {
+            "p(95)": 0,
+            "p(99)": 19.34544800000008,
+            "max": 116.8035,
+            "avg": 0.33503368492428237,
+            "min": 0,
+            "med": 0,
+            "p(90)": 0
+        },
+        "http_req_duration{weight:normal}": {
+            "avg": 159.01154323446664,
+            "min": 0,
+            "med": 219.37175000000002,
+            "p(90)": 236.66306,
+            "p(95)": 242.55705999999998,
+            "p(99)": 260.92245699999995,
+            "max": 745.1031,
+            "thresholds": {
+                "p(95)<1000": false
+            }
+        },
+        "login_success_rate": {
+            "passes": 75,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.90": false
+            },
+            "value": 1
+        },
+        "http_req_waiting": {
+            "p(99)": 287.3888000000002,
+            "max": 783.8965,
+            "avg": 179.7736740525882,
+            "min": 0,
+            "med": 219.4823,
+            "p(90)": 236.12004,
+            "p(95)": 242.91806
+        },
+        "session_load_success_rate": {
+            "passes": 1297,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.95": false
+            },
+            "value": 1
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 13273,
+            "thresholds": {
+                "rate<0.01": false
+            },
+            "value": 0
+        },
+        "http_req_duration{expected_response:true}": {
+            "avg": 180.7842920666023,
+            "min": 0,
+            "med": 220.4625,
+            "p(90)": 237.21776000000003,
+            "p(95)": 243.85584,
+            "p(99)": 288.5923080000001,
+            "max": 784.4464
+        },
+        "http_req_receiving": {
+            "max": 112.7462,
+            "avg": 0.6507174866269866,
+            "min": 0,
+            "med": 0,
+            "p(90)": 1.9765400000000009,
+            "p(95)": 2.73084,
+            "p(99)": 5.6363080000000005
+        },
+        "data_sent": {
+            "count": 5818948,
+            "rate": 10215.814847948019
+        },
+        "http_reqs": {
+            "count": 13273,
+            "rate": 23.302237874752283
+        },
+        "complete_quiz_success_rate": {
+            "passes": 1216,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.95": false
+            },
+            "value": 1
+        },
+        "participant_quiz_flow_bytes": {
+            "count": 297858,
+            "rate": 522.9230745798211
+        },
+        "http_req_blocked": {
+            "max": 279.2978,
+            "avg": 0.646167279439464,
+            "min": 0,
+            "med": 0,
+            "p(90)": 0.5509400000000003,
+            "p(95)": 1.10862,
+            "p(99)": 27.495480000000015
+        },
+        "checks": {
+            "fails": 0,
+            "passes": 12898,
+            "value": 1
+        }
+    },
+    "setup_data": {
+        "questionCount": 20,
+        "quizCode": "TEST",
+        "quizCodes": [
+            "CLASS-1",
+            "CLASS-2",
+            "CLASS-3",
+            "CLASS-4",
+            "CLASS-5"
+        ],
+        "appBaseUrl": "http://127.0.0.1:3000"
+    }
+}

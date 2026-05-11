@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft, FileEdit, FolderPlus, Plus, ScanLine, Sparkles, Upload, X,
@@ -17,12 +17,19 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { ManualTab } from "@/components/questions/ManualTab";
-import { ScanTab } from "@/components/questions/ScanTab";
-import { AiTab } from "@/components/questions/AiTab";
-import { UploadTab } from "@/components/questions/UploadTab";
 import { DEFAULT_TIME_SECONDS, type DraftQuestion, type QuestionSource } from "@/components/questions/types";
 
 export const Route = createFileRoute("/_app/categories/add")({ component: AddQuestionPage });
+
+const ScanTab = lazy(() =>
+  import("@/components/questions/ScanTab").then((module) => ({ default: module.ScanTab })),
+);
+const AiTab = lazy(() =>
+  import("@/components/questions/AiTab").then((module) => ({ default: module.AiTab })),
+);
+const UploadTab = lazy(() =>
+  import("@/components/questions/UploadTab").then((module) => ({ default: module.UploadTab })),
+);
 
 type Cat = { id: string; name: string; icon: string | null };
 type Sub = { id: string; category_id: string; name: string };
@@ -237,13 +244,19 @@ function AddQuestionPage() {
             <ManualTab disabled={saving || !ready} onSave={(d) => saveDrafts(d, "manual")} />
           </TabsContent>
           <TabsContent value="scan">
-            <ScanTab disabled={saving || !ready} saving={saving} onSave={(d) => saveDrafts(d, "ocr")} />
+            <Suspense fallback={<TabLoading />}>
+              <ScanTab disabled={saving || !ready} saving={saving} onSave={(d) => saveDrafts(d, "ocr")} />
+            </Suspense>
           </TabsContent>
           <TabsContent value="ai">
-            <AiTab disabled={saving || !ready} saving={saving} onSave={(d) => saveDrafts(d, "ai")} />
+            <Suspense fallback={<TabLoading />}>
+              <AiTab disabled={saving || !ready} saving={saving} onSave={(d) => saveDrafts(d, "ai")} />
+            </Suspense>
           </TabsContent>
           <TabsContent value="upload">
-            <UploadTab disabled={saving || !ready} saving={saving} onSave={(d) => saveDrafts(d, "import")} />
+            <Suspense fallback={<TabLoading />}>
+              <UploadTab disabled={saving || !ready} saving={saving} onSave={(d) => saveDrafts(d, "import")} />
+            </Suspense>
           </TabsContent>
         </Tabs>
       </div>
@@ -256,4 +269,8 @@ function AddQuestionPage() {
         onConfirm={createSub} />
     </div>
   );
+}
+
+function TabLoading() {
+  return <div className="rounded-xl border border-border bg-card/30 p-6 text-sm text-muted-foreground">Loading...</div>;
 }

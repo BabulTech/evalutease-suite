@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/select";
 import { generateAccessCode } from "@/components/sessions/types";
 import { usePlan } from "@/contexts/PlanContext";
-import { UpgradeModal } from "@/components/UpgradeModal";
+import { LazyUpgradeModal } from "@/components/LazyUpgradeModal";
 
 export const Route = createFileRoute("/_app/sessions/new")({ component: NewSessionPage });
 
@@ -112,7 +112,7 @@ function NewSessionPage() {
             </Button>
           </div>
         </div>
-        <UpgradeModal
+        <LazyUpgradeModal
           open={showUpgrade}
           onClose={() => setShowUpgrade(false)}
           lockedFeature="Daily quiz creation"

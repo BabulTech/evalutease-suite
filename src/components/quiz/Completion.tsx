@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Trophy, Sparkles, Star, Send, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
-import { ShareResultCard } from "@/components/ShareResultCard";
 import type { SessionPublic } from "./types";
+
+const ShareResultCard = lazy(() =>
+  import("@/components/ShareResultCard").then((module) => ({ default: module.ShareResultCard })),
+);
 
 type Props = {
   session: SessionPublic;
@@ -66,15 +69,17 @@ export function Completion({ session, score, total, speedBonus, participantName,
       </div>
 
       {/* Share result */}
-      <ShareResultCard
-        mode="participant"
-        quizTitle={session.title}
-        score={score}
-        total={total}
-        pct={pct}
-        speedBonus={speedBonus}
-        participantName={participantName}
-      />
+      <Suspense fallback={null}>
+        <ShareResultCard
+          mode="participant"
+          quizTitle={session.title}
+          score={score}
+          total={total}
+          pct={pct}
+          speedBonus={speedBonus}
+          participantName={participantName}
+        />
+      </Suspense>
 
       {/* Feedback section */}
       <div className="rounded-2xl border border-border bg-card/40 p-4 text-left">

@@ -1,0 +1,32 @@
+name: Nightly database cleanup
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 1 AM UTC every night
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run archive_old_sessions
+        run: |
+          curl -sf -X POST \
+            "$SUPABASE_URL/rest/v1/rpc/archive_old_sessions" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            | tee /tmp/cleanup-result.json
+
+          # Print result
+          cat /tmp/cleanup-result.json
+
+          # Fail the job if the response contains an error key
+          if grep -q '"error"' /tmp/cleanup-result.json; then
+            echo "Cleanup returned an error"
+            exit 1
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

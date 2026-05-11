@@ -19,7 +19,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { usePlan } from "@/contexts/PlanContext";
-import { UpgradeModal } from "@/components/UpgradeModal";
+import { LazyUpgradeModal } from "@/components/LazyUpgradeModal";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -390,7 +390,7 @@ function DashboardPage() {
           )}
         </div>
       </div>
-      <UpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} targetSlug="pro" />
+      <LazyUpgradeModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} targetSlug="pro" />
     </div>
   );
 }

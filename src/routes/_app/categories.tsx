@@ -11,8 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QuestionList } from "@/components/questions/QuestionList";
 import { DEFAULT_TIME_SECONDS, type DraftQuestion, type Question } from "@/components/questions/types";
+import { PaginationControls } from "@/components/PaginationControls";
 
 export const Route = createFileRoute("/_app/categories")({ component: CategoriesRoot });
+
+const QUESTION_PAGE_SIZE = 25;
 
 function CategoriesRoot() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -120,6 +123,8 @@ function QuestionsPage() {
   const [selectedSub, setSelectedSub] = useState<string>("");
   const [search, setSearch] = useState("");
   const [loadingQs, setLoadingQs] = useState(false);
+  const [questionPage, setQuestionPage] = useState(0);
+  const [questionTotal, setQuestionTotal] = useState(0);
 
   // dialog state
   const [catDialog, setCatDialog] = useState(false);
@@ -138,16 +143,23 @@ function QuestionsPage() {
 
   // load questions for selected subcategory
   const loadQuestions = useCallback(async () => {
-    if (!user || !selectedSub) { setQuestions([]); return; }
+    if (!user || !selectedSub) { setQuestions([]); setQuestionTotal(0); return; }
     setLoadingQs(true);
-    const { data, error } = await supabase
+    const from = questionPage * QUESTION_PAGE_SIZE;
+    const to = from + QUESTION_PAGE_SIZE - 1;
+    const searchTerm = search.trim();
+    let query = supabase
       .from("questions")
-      .select("id,category_id,subcategory_id,text,options,correct_answer,difficulty,explanation,source,time_seconds,created_at")
+      .select("id,category_id,subcategory_id,text,options,correct_answer,difficulty,explanation,source,time_seconds,created_at", { count: "exact" })
       .eq("owner_id", user.id)
       .eq("subcategory_id", selectedSub)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (searchTerm) query = query.ilike("text", `%${searchTerm}%`);
+    const { data, error, count } = await query;
     setLoadingQs(false);
     if (error) { toast.error(error.message); return; }
+    setQuestionTotal(count ?? 0);
     setQuestions((data ?? []).map((row) => ({
       id: row.id, category_id: row.category_id, subcategory_id: row.subcategory_id,
       text: row.text, options: Array.isArray(row.options) ? (row.options as string[]) : [],
@@ -155,7 +167,7 @@ function QuestionsPage() {
       explanation: row.explanation, source: row.source,
       time_seconds: row.time_seconds ?? DEFAULT_TIME_SECONDS, created_at: row.created_at,
     })));
-  }, [user, selectedSub]);
+  }, [user, selectedSub, questionPage, search]);
 
   // load usage stats
   const loadUsage = useCallback(async () => {
@@ -179,16 +191,13 @@ function QuestionsPage() {
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
   useEffect(() => { void loadQuestions(); void loadUsage(); }, [loadQuestions, loadUsage]);
+  useEffect(() => { setQuestionPage(0); }, [selectedSub, search]);
 
   const filteredSubs = useMemo(() =>
     subs.filter((s) => s.category_id === selectedCat),
     [subs, selectedCat]);
 
-  const filteredQuestions = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return questions;
-    return questions.filter((q_) => q_.text.toLowerCase().includes(q));
-  }, [questions, search]);
+  const filteredQuestions = questions;
 
   const updateQuestion = async (id: string, draft: DraftQuestion) => {
     const update = {
@@ -308,7 +317,7 @@ function QuestionsPage() {
                 <span className="font-semibold text-sm text-primary">{selectedSubName}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {filteredQuestions.length} question{filteredQuestions.length !== 1 ? "s" : ""}
+                {questionTotal} question{questionTotal !== 1 ? "s" : ""}
                 {search ? ` matching "${search}"` : ""}
               </p>
             </div>
@@ -319,10 +328,10 @@ function QuestionsPage() {
           </div>
 
           {/* Usage stats summary */}
-          {questions.length > 0 && (
+          {questionTotal > 0 && (
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
-                <div className="font-display text-xl font-bold">{questions.length}</div>
+                <div className="font-display text-xl font-bold">{questionTotal}</div>
                 <div className="text-xs text-muted-foreground">Total questions</div>
               </div>
               <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
@@ -347,6 +356,13 @@ function QuestionsPage() {
             onDelete={deleteQuestion}
             usageCounts={usageCounts}
             lastUsed={lastUsed}
+          />
+          <PaginationControls
+            page={questionPage}
+            pageSize={QUESTION_PAGE_SIZE}
+            total={questionTotal}
+            label="questions"
+            onPageChange={setQuestionPage}
           />
         </div>
       )}

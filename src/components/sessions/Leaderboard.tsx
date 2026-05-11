@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -11,11 +11,15 @@ import {
   YAxis,
 } from "recharts";
 import { Crown, Medal, Trophy } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { PaginationControls } from "@/components/PaginationControls";
+import { paginate } from "@/lib/pagination";
 
 export type LeaderboardEntry = {
   id: string;
   name: string;
   email: string | null;
+  rollNumber?: string | null;
   score: number;
   total: number;
   completed: boolean;
@@ -29,6 +33,8 @@ type Props = {
 };
 
 export function Leaderboard({ entries, mode, emptyHint }: Props) {
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
   const sorted = useMemo(
     () =>
       entries
@@ -41,6 +47,20 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
         }),
     [entries],
   );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter((entry) =>
+      [entry.name, entry.email ?? "", entry.rollNumber ?? ""].join(" ").toLowerCase().includes(q),
+    );
+  }, [query, sorted]);
+  const tablePageSize = 25;
+  const visibleRows = useMemo(
+    () => paginate(filtered, page, tablePageSize),
+    [filtered, page],
+  );
+  const chartLimit = 10;
+  const topChartRows = useMemo(() => sorted.slice(0, chartLimit), [sorted]);
 
   if (sorted.length === 0) {
     return (
@@ -55,7 +75,7 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
   }
 
   // Recharts data — keep names short so they fit on the y-axis.
-  const data = sorted.map((e, i) => ({
+  const data = topChartRows.map((e, i) => ({
     rank: i + 1,
     name: e.name.length > 18 ? e.name.slice(0, 16) + "…" : e.name,
     fullName: e.name,
@@ -63,10 +83,28 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
     completed: e.completed,
   }));
   const maxScore = Math.max(...data.map((d) => d.score), 1);
-  const chartHeight = Math.max(220, Math.min(640, sorted.length * 44));
+  const chartHeight = Math.max(220, Math.min(560, data.length * 44));
+  const completedCount = sorted.filter((entry) => entry.completed).length;
+  const averageScore =
+    sorted.length === 0
+      ? 0
+      : Math.round(sorted.reduce((sum, entry) => sum + entry.score, 0) / sorted.length);
+  const highestScore = sorted[0]?.score ?? 0;
+  const completionRate =
+    sorted.length === 0 ? 0 : Math.round((completedCount / sorted.length) * 100);
 
   return (
     <div className="space-y-4">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        <SummaryCard label="Total participants" value={sorted.length} />
+        <SummaryCard label="Average score" value={averageScore} />
+        <SummaryCard label="Highest score" value={highestScore} />
+        <SummaryCard label="Completion rate" value={`${completionRate}%`} />
+      </div>
+      <div className="rounded-2xl border border-border bg-card/40 p-3">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          Top {chartLimit} scores chart
+        </div>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart data={data} layout="vertical" margin={{ top: 8, right: 28, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
@@ -126,9 +164,21 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
 
       {/* Detailed table — also serves as the print-friendly view. */}
       <div className="rounded-2xl border border-border bg-card/40 overflow-hidden">
+        <div className="border-b border-border/50 p-3">
+          <Input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(0);
+            }}
+            placeholder="Search student name or email..."
+            className="h-9"
+          />
+        </div>
         <table className="w-full text-sm">
           <thead className="bg-secondary/40">
             <tr>
@@ -147,10 +197,10 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((e, i) => (
+            {visibleRows.map((e, i) => (
               <tr key={e.id} className="border-t border-border/50">
                 <td className="px-4 py-2.5 align-top">
-                  <RankBadge rank={i + 1} />
+                  <RankBadge rank={page * tablePageSize + i + 1} />
                 </td>
                 <td className="px-4 py-2.5 align-top">
                   <div className="font-semibold">{e.name}</div>
@@ -177,7 +227,23 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
             ))}
           </tbody>
         </table>
+        <PaginationControls
+          page={page}
+          pageSize={tablePageSize}
+          total={filtered.length}
+          label="participants"
+          onPageChange={setPage}
+        />
       </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card/50 p-3">
+      <div className="font-display text-2xl font-bold">{value}</div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
     </div>
   );
 }

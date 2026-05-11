@@ -1,15 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, FileEdit, FolderOpen, ScanLine, Sparkles, Upload } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { ManualTab } from "@/components/questions/ManualTab";
-import { ScanTab } from "@/components/questions/ScanTab";
-import { AiTab } from "@/components/questions/AiTab";
-import { UploadTab } from "@/components/questions/UploadTab";
 import { QuestionList } from "@/components/questions/QuestionList";
+import { PaginationControls } from "@/components/PaginationControls";
 import {
   DEFAULT_TIME_SECONDS,
   type DraftQuestion,
@@ -20,6 +18,18 @@ import {
 export const Route = createFileRoute("/_app/categories/$categoryId/$subId")({
   component: SubCategoryQuestionsPage,
 });
+
+const QUESTION_PAGE_SIZE = 25;
+
+const ScanTab = lazy(() =>
+  import("@/components/questions/ScanTab").then((module) => ({ default: module.ScanTab })),
+);
+const AiTab = lazy(() =>
+  import("@/components/questions/AiTab").then((module) => ({ default: module.AiTab })),
+);
+const UploadTab = lazy(() =>
+  import("@/components/questions/UploadTab").then((module) => ({ default: module.UploadTab })),
+);
 
 type SubRow = {
   id: string;
@@ -39,10 +49,14 @@ function SubCategoryQuestionsPage() {
   const [loadingQs, setLoadingQs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("manual");
+  const [page, setPage] = useState(0);
+  const [questionTotal, setQuestionTotal] = useState(0);
 
   const load = useCallback(async () => {
     if (!user) return;
     setLoadingQs(true);
+    const from = page * QUESTION_PAGE_SIZE;
+    const to = from + QUESTION_PAGE_SIZE - 1;
     const [cat, s, qs] = await Promise.all([
       supabase
         .from("question_categories")
@@ -60,10 +74,12 @@ function SubCategoryQuestionsPage() {
         .from("questions")
         .select(
           "id, category_id, subcategory_id, text, options, correct_answer, difficulty, explanation, source, time_seconds, created_at",
+          { count: "exact" },
         )
         .eq("owner_id", user.id)
         .eq("subcategory_id", subId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .range(from, to),
     ]);
     setLoadingQs(false);
     if (cat.error) toast.error(cat.error.message);
@@ -71,6 +87,7 @@ function SubCategoryQuestionsPage() {
     if (qs.error) toast.error(qs.error.message);
     setCategory(cat.data ?? null);
     setSub(s.data ?? null);
+    setQuestionTotal(qs.count ?? 0);
     setQuestions(
       (qs.data ?? []).map((row) => ({
         id: row.id,
@@ -86,7 +103,7 @@ function SubCategoryQuestionsPage() {
         created_at: row.created_at,
       })),
     );
-  }, [user, categoryId, subId]);
+  }, [user, categoryId, subId, page]);
 
   useEffect(() => {
     void load();
@@ -208,7 +225,7 @@ function SubCategoryQuestionsPage() {
           </div>
         </div>
         <div className="text-xs text-muted-foreground">
-          {questions.length} question{questions.length === 1 ? "" : "s"}
+          {questionTotal} question{questionTotal === 1 ? "" : "s"}
         </div>
       </div>
 
@@ -232,13 +249,19 @@ function SubCategoryQuestionsPage() {
           <ManualTab disabled={saving} onSave={(d) => saveDrafts(d, "manual")} />
         </TabsContent>
         <TabsContent value="scan">
-          <ScanTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "ocr")} />
+          <Suspense fallback={<TabLoading />}>
+            <ScanTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "ocr")} />
+          </Suspense>
         </TabsContent>
         <TabsContent value="ai">
-          <AiTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "ai")} />
+          <Suspense fallback={<TabLoading />}>
+            <AiTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "ai")} />
+          </Suspense>
         </TabsContent>
         <TabsContent value="upload">
-          <UploadTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "import")} />
+          <Suspense fallback={<TabLoading />}>
+            <UploadTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "import")} />
+          </Suspense>
         </TabsContent>
       </Tabs>
 
@@ -252,7 +275,18 @@ function SubCategoryQuestionsPage() {
           onUpdate={updateQuestion}
           onDelete={deleteQuestion}
         />
+        <PaginationControls
+          page={page}
+          pageSize={QUESTION_PAGE_SIZE}
+          total={questionTotal}
+          label="questions"
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );
+}
+
+function TabLoading() {
+  return <div className="rounded-xl border border-border bg-card/30 p-6 text-sm text-muted-foreground">Loading...</div>;
 }

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 import {
@@ -22,7 +22,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaginationControls } from "@/components/PaginationControls";
+import { paginate } from "@/lib/pagination";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog,
   DialogContent,
@@ -43,17 +53,25 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatTimePerQuestion, statusBadge } from "@/components/sessions/types";
 import type { Session as SessionLite, SessionStatus } from "@/components/sessions/types";
-import { Leaderboard, type LeaderboardEntry } from "@/components/sessions/Leaderboard";
+import type { LeaderboardEntry } from "@/components/sessions/Leaderboard";
 import {
   downloadQuizReportCsv,
   getQuizReportRows,
   type QuizReportAttempt,
 } from "@/lib/quiz-reports";
 import { copyText } from "@/lib/copy-text";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 
 export const Route = createFileRoute("/_app/sessions/$sessionId")({
   component: SessionLobbyPage,
 });
+
+const PARTICIPANT_PAGE_SIZES = [10, 25, 50];
+const RESULT_PAGE_SIZE = 25;
+
+const Leaderboard = lazy(() =>
+  import("@/components/sessions/Leaderboard").then((module) => ({ default: module.Leaderboard })),
+);
 
 type SessionRow = {
   id: string;
@@ -103,6 +121,18 @@ type AttemptWithDetails = {
   participants: { metadata: unknown } | null;
 };
 
+type AttemptLive = {
+  id: string;
+  participant_name: string | null;
+  participant_email: string | null;
+  participant_id: string | null;
+  completed: boolean;
+  completed_at: string | null;
+  score: number;
+  total_questions: number;
+  metadata: unknown;
+};
+
 type ProfileRow = {
   full_name: string | null;
   first_name: string | null;
@@ -110,21 +140,47 @@ type ProfileRow = {
   organization: string | null;
 };
 
+type ParticipantStatusBroadcast = {
+  status?: SessionStatus;
+  started_at?: string | null;
+  scheduled_at?: string | null;
+  paused_at?: string | null;
+  pause_offset_seconds?: number;
+  is_open?: boolean;
+};
+
 function SessionLobbyPage() {
   const { sessionId } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [session, setSession] = useState<SessionRow | null>(null);
+  const isMobile = useIsMobile();
   const [categoryName, setCategoryName] = useState<string>("");
   const [subcategoryName, setSubcategoryName] = useState<string>("");
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [rosterEmails, setRosterEmails] = useState<string[]>([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [attendeeTotal, setAttendeeTotal] = useState(0);
+  const [waitingAttendees, setWaitingAttendees] = useState<Attendee[]>([]);
+  const [submittedAttendees, setSubmittedAttendees] = useState<Attendee[]>([]);
+  const [waitingTotal, setWaitingTotal] = useState(0);
+  const [submittedTotal, setSubmittedTotal] = useState(0);
+  const [livePage, setLivePage] = useState(0);
+  const [waitingPage, setWaitingPage] = useState(0);
+  const [submittedPage, setSubmittedPage] = useState(0);
+  const [attendeePageSize, setAttendeePageSize] = useState(isMobile ? 10 : 25);
+  const [participantQuery, setParticipantQuery] = useState("");
+  const debouncedParticipantQuery = useDebouncedValue(participantQuery, 300);
+  const [liveSort, setLiveSort] = useState<"score" | "completed_at" | "started_at">("score");
+  const [lobbySort, setLobbySort] = useState<"started_at" | "name">("started_at");
   const [busy, setBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const attendeeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAttemptChanges = useRef<Map<string, Record<string, unknown>>>(new Map());
+  const rafFlushRef = useRef<number | null>(null);
 
   const loadSession = useCallback(async () => {
     if (!user) return;
@@ -182,16 +238,190 @@ function SessionLobbyPage() {
     setRosterEmails(Array.from(new Set(emails)));
   }, [sessionId, user]);
 
-  const loadAttendees = useCallback(async () => {
+  const loadLiveAttendees = useCallback(async () => {
+    const offset = livePage * attendeePageSize;
+    const searchTerm = debouncedParticipantQuery.trim();
+    const [pageRes, submittedRes] = await Promise.all([
+      (() => {
+        let query = supabase
+          .from("quiz_attempts")
+          .select(
+            "id, participant_name, participant_email, participant_id, completed, completed_at, score, total_questions, participants ( metadata )",
+            { count: "exact" },
+          )
+          .eq("session_id", sessionId);
+        if (searchTerm) {
+          query = query.or(
+            `participant_name.ilike.%${searchTerm}%,participant_email.ilike.%${searchTerm}%`,
+          );
+        }
+        if (liveSort === "completed_at") {
+          query = query.order("completed_at", { ascending: true }).order("score", { ascending: false });
+        } else if (liveSort === "started_at") {
+          query = query.order("started_at", { ascending: true });
+        } else {
+          query = query.order("score", { ascending: false }).order("started_at", { ascending: true });
+        }
+        return query.range(offset, offset + attendeePageSize - 1);
+      })(),
+      (() => {
+        let query = supabase
+          .from("quiz_attempts")
+          .select("id", { count: "exact", head: true })
+          .eq("session_id", sessionId)
+          .eq("completed", true);
+        if (searchTerm) {
+          query = query.or(
+            `participant_name.ilike.%${searchTerm}%,participant_email.ilike.%${searchTerm}%`,
+          );
+        }
+        return query;
+      })(),
+    ]);
+
+    if (pageRes.error || submittedRes.error) return;
+
+    const pageRows = (pageRes.data ?? []) as {
+      id: string;
+      participant_name: string | null;
+      participant_email: string | null;
+      participant_id: string | null;
+      completed: boolean;
+      completed_at: string | null;
+      score: number;
+      total_questions: number;
+      participants: { metadata: unknown } | null;
+    }[];
+    const mapped = pageRows.map((row) =>
+      mapLiveAttempt({
+        id: row.id,
+        participant_name: row.participant_name,
+        participant_email: row.participant_email,
+        participant_id: row.participant_id,
+        completed: row.completed,
+        completed_at: row.completed_at,
+        score: row.score,
+        total_questions: row.total_questions,
+        metadata: row.participants?.metadata ?? {},
+      }),
+    );
+
+    const total = pageRes.count ?? 0;
+    const submittedCount = submittedRes.count ?? 0;
+    setAttendees(sortAttendees(mapped));
+    setAttendeeTotal(total);
+    setSubmittedTotal(submittedCount);
+    setWaitingTotal(Math.max(0, total - submittedCount));
+  }, [attendeePageSize, debouncedParticipantQuery, livePage, liveSort, sessionId]);
+
+  const loadLobbyAttendees = useCallback(async () => {
+    const waitingOffset = waitingPage * attendeePageSize;
+    const submittedOffset = submittedPage * attendeePageSize;
+    const searchTerm = debouncedParticipantQuery.trim();
+    const [waitingRes, submittedRes] = await Promise.all([
+      (() => {
+        let query = supabase
+          .from("quiz_attempts")
+          .select(
+            "id, participant_name, participant_email, participant_id, completed, completed_at, score, total_questions, participants ( metadata )",
+            { count: "exact" },
+          )
+          .eq("session_id", sessionId)
+          .eq("completed", false);
+        if (searchTerm) {
+          query = query.or(
+            `participant_name.ilike.%${searchTerm}%,participant_email.ilike.%${searchTerm}%`,
+          );
+        }
+        if (lobbySort === "name") {
+          query = query.order("participant_name", { ascending: true });
+        } else {
+          query = query.order("started_at", { ascending: true });
+        }
+        return query.range(waitingOffset, waitingOffset + attendeePageSize - 1);
+      })(),
+      (() => {
+        let query = supabase
+          .from("quiz_attempts")
+          .select(
+            "id, participant_name, participant_email, participant_id, completed, completed_at, score, total_questions, participants ( metadata )",
+            { count: "exact" },
+          )
+          .eq("session_id", sessionId)
+          .eq("completed", true);
+        if (searchTerm) {
+          query = query.or(
+            `participant_name.ilike.%${searchTerm}%,participant_email.ilike.%${searchTerm}%`,
+          );
+        }
+        if (lobbySort === "name") {
+          query = query.order("participant_name", { ascending: true });
+        } else {
+          query = query.order("completed_at", { ascending: false });
+        }
+        return query.range(submittedOffset, submittedOffset + attendeePageSize - 1);
+      })(),
+    ]);
+
+    if (waitingRes.error || submittedRes.error) return;
+
+    const waitingRows = (waitingRes.data ?? []) as AttemptWithDetails[];
+    const submittedRows = (submittedRes.data ?? []) as AttemptWithDetails[];
+
+    setWaitingAttendees(
+      sortAttendees(
+        waitingRows.map((row) =>
+          mapLiveAttempt({
+            id: row.id,
+            participant_name: row.participant_name,
+            participant_email: row.participant_email,
+            participant_id: row.participant_id,
+            completed: row.completed,
+            completed_at: row.completed_at,
+            score: row.score,
+            total_questions: row.total_questions,
+            metadata: row.participants?.metadata ?? {},
+          }),
+        ),
+      ),
+    );
+
+    setSubmittedAttendees(
+      sortAttendees(
+        submittedRows.map((row) =>
+          mapLiveAttempt({
+            id: row.id,
+            participant_name: row.participant_name,
+            participant_email: row.participant_email,
+            participant_id: row.participant_id,
+            completed: row.completed,
+            completed_at: row.completed_at,
+            score: row.score,
+            total_questions: row.total_questions,
+            metadata: row.participants?.metadata ?? {},
+          }),
+        ),
+      ),
+    );
+
+    const waitingCount = waitingRes.count ?? 0;
+    const submittedCount = submittedRes.count ?? 0;
+    setWaitingTotal(waitingCount);
+    setSubmittedTotal(submittedCount);
+    setAttendeeTotal(waitingCount + submittedCount);
+  }, [attendeePageSize, debouncedParticipantQuery, lobbySort, sessionId, submittedPage, waitingPage]);
+
+  const loadDetailedAttendees = useCallback(async () => {
     const { data, error } = await supabase
       .from("quiz_attempts")
       .select(
         "id, participant_name, participant_email, participant_id, completed, completed_at, score, total_questions, quiz_answers ( id, is_correct ), participants ( metadata )",
       )
       .eq("session_id", sessionId)
-      .order("started_at", { ascending: true });
+      .order("score", { ascending: false })
+      .order("completed_at", { ascending: false });
     if (error) return;
-    setAttendees(
+    setAttendees(sortAttendees(
       ((data ?? []) as AttemptWithDetails[]).map((a) => {
         const meta =
           a.participants?.metadata && typeof a.participants.metadata === "object"
@@ -217,13 +447,111 @@ function SessionLobbyPage() {
           completedAt: a.completed_at,
         };
       }),
-    );
+    ));
   }, [sessionId]);
 
   useEffect(() => {
     void loadSession();
-    void loadAttendees();
-  }, [loadSession, loadAttendees]);
+  }, [loadSession]);
+
+  useEffect(() => {
+    if (!session) return;
+    if (session.status === "completed") {
+      void loadDetailedAttendees();
+      return;
+    }
+    if (session.status === "active") {
+      void loadLiveAttendees();
+      return;
+    }
+    void loadLobbyAttendees();
+  }, [loadDetailedAttendees, loadLiveAttendees, loadLobbyAttendees, session]);
+
+  useEffect(() => {
+    if (livePage > 0 && attendeeTotal <= livePage * attendeePageSize) {
+      setLivePage(0);
+    }
+  }, [attendeePageSize, attendeeTotal, livePage]);
+
+  useEffect(() => {
+    if (waitingPage > 0 && waitingTotal <= waitingPage * attendeePageSize) {
+      setWaitingPage(0);
+    }
+  }, [attendeePageSize, waitingPage, waitingTotal]);
+
+  useEffect(() => {
+    if (submittedPage > 0 && submittedTotal <= submittedPage * attendeePageSize) {
+      setSubmittedPage(0);
+    }
+  }, [attendeePageSize, submittedPage, submittedTotal]);
+
+  useEffect(() => {
+    setAttendeePageSize(isMobile ? 10 : 25);
+  }, [isMobile]);
+
+  useEffect(() => {
+    setLivePage(0);
+    setWaitingPage(0);
+    setSubmittedPage(0);
+  }, [attendeePageSize]);
+
+  const scheduleAttendeeRefresh = useCallback(() => {
+    if (attendeeRefreshRef.current) return;
+    attendeeRefreshRef.current = setTimeout(() => {
+      attendeeRefreshRef.current = null;
+      if (session?.status === "completed") void loadDetailedAttendees();
+      else if (session?.status === "active") void loadLiveAttendees();
+      else void loadLobbyAttendees();
+    }, 2500);
+  }, [loadDetailedAttendees, loadLiveAttendees, loadLobbyAttendees, session?.status]);
+
+  const flushAttemptChanges = useCallback(() => {
+    rafFlushRef.current = null;
+    const pending = pendingAttemptChanges.current;
+    if (pending.size === 0) return;
+    const rows = Array.from(pending.values());
+    pending.clear();
+    setAttendees((current) => {
+      let changed = false;
+      const copy = [...current];
+      for (const row of rows) {
+        const id = typeof row.id === "string" ? row.id : null;
+        if (!id) continue;
+        const next = mapLiveAttempt({
+          id,
+          participant_name: typeof row.participant_name === "string" ? row.participant_name : null,
+          participant_email: typeof row.participant_email === "string" ? row.participant_email : null,
+          participant_id: typeof row.participant_id === "string" ? row.participant_id : null,
+          completed: row.completed === true,
+          completed_at: typeof row.completed_at === "string" ? row.completed_at : null,
+          score: typeof row.score === "number" ? row.score : 0,
+          total_questions: typeof row.total_questions === "number" ? row.total_questions : questionCount,
+          metadata: {},
+        });
+        const index = copy.findIndex((a) => a.id === id);
+        if (index === -1) continue;
+        copy[index] = {
+          ...copy[index],
+          ...next,
+          rollNumber: next.rollNumber ?? copy[index].rollNumber,
+          seatNumber: next.seatNumber ?? copy[index].seatNumber,
+        };
+        changed = true;
+      }
+      return changed ? sortAttendees(copy) : current;
+    });
+  }, [questionCount]);
+
+  const applyAttemptChange = useCallback((row: Record<string, unknown>) => {
+    const id = typeof row.id === "string" ? row.id : null;
+    if (!id) return;
+    // Accumulate into the map (later update for same id overwrites earlier one)
+    pendingAttemptChanges.current.set(id, row);
+    // Schedule a single flush on the next animation frame
+    if (rafFlushRef.current === null) {
+      rafFlushRef.current = requestAnimationFrame(flushAttemptChanges);
+    }
+  }, [flushAttemptChanges]);
 
   // Live: refresh on session/attempt changes.
   useEffect(() => {
@@ -242,13 +570,27 @@ function SessionLobbyPage() {
           table: "quiz_attempts",
           filter: `session_id=eq.${sessionId}`,
         },
-        () => void loadAttendees(),
+        (payload) => {
+          if (payload.eventType !== "DELETE") {
+            applyAttemptChange(payload.new as Record<string, unknown>);
+          }
+          scheduleAttendeeRefresh();
+        },
       )
       .subscribe();
     return () => {
+      if (attendeeRefreshRef.current) {
+        clearTimeout(attendeeRefreshRef.current);
+        attendeeRefreshRef.current = null;
+      }
+      if (rafFlushRef.current !== null) {
+        cancelAnimationFrame(rafFlushRef.current);
+        rafFlushRef.current = null;
+      }
+      pendingAttemptChanges.current.clear();
       void supabase.removeChannel(ch);
     };
-  }, [sessionId, loadSession, loadAttendees]);
+  }, [sessionId, loadSession, scheduleAttendeeRefresh]);
 
   const joinUrl = useMemo(() => {
     if (!session?.access_code) return "";
@@ -283,12 +625,13 @@ function SessionLobbyPage() {
 
   const start = async () => {
     if (!session) return;
+    const startedAt = new Date().toISOString();
     setBusy(true);
     const { error } = await supabase
       .from("quiz_sessions")
       .update({
         status: "active",
-        started_at: new Date().toISOString(),
+        started_at: startedAt,
         paused_at: null,
         pause_offset_seconds: 0,
       })
@@ -298,6 +641,13 @@ function SessionLobbyPage() {
       toast.error(error.message);
       return;
     }
+    await broadcastParticipantStatus(session.access_code, {
+      status: "active",
+      started_at: startedAt,
+      paused_at: null,
+      pause_offset_seconds: 0,
+      is_open: true,
+    });
     toast.success("Quiz started — participants will see questions");
     void loadSession();
   };
@@ -316,6 +666,15 @@ function SessionLobbyPage() {
       toast.error(payload.error);
       return;
     }
+    const pausedAt =
+      data && typeof data === "object" && "paused_at" in data && typeof data.paused_at === "string"
+        ? data.paused_at
+        : new Date().toISOString();
+    await broadcastParticipantStatus(session.access_code, {
+      status: "active",
+      paused_at: pausedAt,
+      pause_offset_seconds: session.pause_offset_seconds,
+    });
     toast.success("Quiz paused");
     void loadSession();
   };
@@ -334,6 +693,15 @@ function SessionLobbyPage() {
       toast.error(payload.error);
       return;
     }
+    const addedSeconds =
+      data && typeof data === "object" && "added_seconds" in data && typeof data.added_seconds === "number"
+        ? data.added_seconds
+        : 0;
+    await broadcastParticipantStatus(session.access_code, {
+      status: "active",
+      paused_at: null,
+      pause_offset_seconds: session.pause_offset_seconds + addedSeconds,
+    });
     toast.success("Quiz resumed");
     void loadSession();
   };
@@ -353,6 +721,11 @@ function SessionLobbyPage() {
       toast.error(payload.error);
       return;
     }
+    await broadcastParticipantStatus(session.access_code, {
+      status: "completed",
+      paused_at: null,
+      is_open: false,
+    });
     toast.success("Quiz closed — moved to Quiz History");
     void navigate({ to: "/quiz-history" });
   };
@@ -406,11 +779,17 @@ function SessionLobbyPage() {
     scheduled_at: session.scheduled_at,
     created_at: session.created_at,
     question_count: questionCount,
-    participant_count: attendees.length,
+    participant_count: session.status === "completed" ? attendees.length : attendeeTotal,
     attempts: {
-      joined: attendees.length,
-      waiting: attendees.filter((a) => !a.completed).length,
-      submitted: attendees.filter((a) => a.completed).length,
+      joined: session.status === "completed" ? attendees.length : attendeeTotal,
+      waiting:
+        session.status === "completed"
+          ? attendees.filter((a) => !a.completed).length
+          : waitingTotal,
+      submitted:
+        session.status === "completed"
+          ? attendees.filter((a) => a.completed).length
+          : submittedTotal,
       avgPercent: 0,
       topThree: [],
     },
@@ -419,9 +798,9 @@ function SessionLobbyPage() {
   const paused = !!session.paused_at;
   const isActive = session.status === "active";
   const isCompleted = session.status === "completed";
-  const joined = attendees.length;
-  const waiting = attendees.filter((a) => !a.completed);
-  const submitted = attendees.filter((a) => a.completed);
+  const joined = isCompleted ? attendees.length : attendeeTotal;
+  const waiting = isCompleted ? attendees.filter((a) => !a.completed) : waitingAttendees;
+  const submitted = isCompleted ? attendees.filter((a) => a.completed) : submittedAttendees;
   const reportAttempts = toReportAttempts(attendees);
   const teacherName = getTeacherName(profile, user?.email);
   const schoolName = profile?.organization ?? "";
@@ -572,6 +951,17 @@ function SessionLobbyPage() {
           accessCode={session.access_code ?? ""}
           onCopy={copy}
           paused={paused}
+          joinedTotal={attendeeTotal}
+          submittedTotal={submittedTotal}
+          query={participantQuery}
+          onQueryChange={setParticipantQuery}
+          sort={liveSort}
+          onSortChange={setLiveSort}
+          page={livePage}
+          total={attendeeTotal}
+          onPageChange={setLivePage}
+          pageSize={attendeePageSize}
+          onPageSizeChange={setAttendeePageSize}
         />
       ) : (
         <LobbyView
@@ -582,6 +972,18 @@ function SessionLobbyPage() {
           waiting={waiting}
           submitted={submitted}
           joined={joined}
+          waitingTotal={waitingTotal}
+          submittedTotal={submittedTotal}
+          query={participantQuery}
+          onQueryChange={setParticipantQuery}
+          sort={lobbySort}
+          onSortChange={setLobbySort}
+          waitingPage={waitingPage}
+          submittedPage={submittedPage}
+          onWaitingPageChange={setWaitingPage}
+          onSubmittedPageChange={setSubmittedPage}
+          pageSize={attendeePageSize}
+          onPageSizeChange={setAttendeePageSize}
         />
       )}
 
@@ -655,6 +1057,18 @@ function LobbyView({
   waiting,
   submitted,
   joined,
+  waitingTotal,
+  submittedTotal,
+  query,
+  onQueryChange,
+  sort,
+  onSortChange,
+  waitingPage,
+  submittedPage,
+  onWaitingPageChange,
+  onSubmittedPageChange,
+  pageSize,
+  onPageSizeChange,
 }: {
   attendees: Attendee[];
   joinUrl: string;
@@ -663,6 +1077,18 @@ function LobbyView({
   waiting: Attendee[];
   submitted: Attendee[];
   joined: number;
+  waitingTotal: number;
+  submittedTotal: number;
+  query: string;
+  onQueryChange: (value: string) => void;
+  sort: "started_at" | "name";
+  onSortChange: (value: "started_at" | "name") => void;
+  waitingPage: number;
+  submittedPage: number;
+  onWaitingPageChange: (page: number) => void;
+  onSubmittedPageChange: (page: number) => void;
+  pageSize: number;
+  onPageSizeChange: (pageSize: number) => void;
 }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
@@ -675,25 +1101,57 @@ function LobbyView({
         statTiles={
           <div className="grid grid-cols-3 gap-2">
             <StatTile label="Joined" value={joined} tone="primary" />
-            <StatTile label="Waiting" value={waiting.length} tone="success" />
-            <StatTile label="Submitted" value={submitted.length} tone="success" />
+            <StatTile label="Waiting" value={waitingTotal} tone="success" />
+            <StatTile label="Submitted" value={submittedTotal} tone="success" />
           </div>
         }
       />
-      <div className="rounded-2xl border border-border bg-card/40 p-4">
+      <div className="rounded-2xl border border-border bg-card/40 p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[220px] flex-1">
+            <Input
+              placeholder="Search participants..."
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+            />
+          </div>
+          <Select value={sort} onValueChange={(value) => onSortChange(value as "started_at" | "name")}>
+            <SelectTrigger className="h-9 w-[170px]">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="started_at">Newest joined</SelectItem>
+              <SelectItem value="name">Name (A-Z)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Tabs defaultValue="waiting" className="space-y-3">
           <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="waiting">Waiting Room ({waiting.length})</TabsTrigger>
-            <TabsTrigger value="submitted">Submitted ({submitted.length})</TabsTrigger>
+            <TabsTrigger value="waiting">Waiting Room ({waitingTotal})</TabsTrigger>
+            <TabsTrigger value="submitted">Submitted ({submittedTotal})</TabsTrigger>
           </TabsList>
           <TabsContent value="waiting">
             <AttendeeList
               list={waiting}
+              page={waitingPage}
+              total={waitingTotal}
+              onPageChange={onWaitingPageChange}
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
               emptyHint="Participants who scan the QR will show up here."
             />
           </TabsContent>
           <TabsContent value="submitted">
-            <AttendeeList list={submitted} showScores emptyHint="No one has submitted yet." />
+            <AttendeeList
+              list={submitted}
+              showScores
+              page={submittedPage}
+              total={submittedTotal}
+              onPageChange={onSubmittedPageChange}
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
+              emptyHint="No one has submitted yet."
+            />
           </TabsContent>
         </Tabs>
       </div>
@@ -707,17 +1165,40 @@ function LiveView({
   accessCode,
   onCopy,
   paused,
+  joinedTotal,
+  submittedTotal,
+  query,
+  onQueryChange,
+  sort,
+  onSortChange,
+  page,
+  total,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
 }: {
   attendees: Attendee[];
   joinUrl: string;
   accessCode: string;
   onCopy: (text: string, label: string) => Promise<void>;
   paused: boolean;
+  joinedTotal: number;
+  submittedTotal: number;
+  query: string;
+  onQueryChange: (value: string) => void;
+  sort: "score" | "completed_at" | "started_at";
+  onSortChange: (value: "score" | "completed_at" | "started_at") => void;
+  page: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  pageSize: number;
+  onPageSizeChange: (pageSize: number) => void;
 }) {
   const entries: LeaderboardEntry[] = attendees.map((a) => ({
     id: a.id,
     name: a.name,
     email: a.email,
+    rollNumber: a.rollNumber,
     score: a.score,
     total: a.total,
     completed: a.completed,
@@ -733,18 +1214,18 @@ function LiveView({
           <div className="grid grid-cols-2 gap-2">
             <StatTile
               label="Joined"
-              value={attendees.length}
+              value={joinedTotal}
               tone="primary"
             />
             <StatTile
               label="Submitted"
-              value={attendees.filter((a) => a.completed).length}
+              value={submittedTotal}
               tone="success"
             />
           </div>
         }
       />
-      <div className="rounded-2xl border border-border bg-card/40 p-5">
+      <div className="rounded-2xl border border-border bg-card/40 p-5 space-y-3">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -760,7 +1241,37 @@ function LiveView({
             </span>
           )}
         </div>
-        <Leaderboard entries={entries} mode="live" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[220px] flex-1">
+            <Input
+              placeholder="Search participants..."
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+            />
+          </div>
+          <Select value={sort} onValueChange={(value) => onSortChange(value as "score" | "completed_at" | "started_at")}> 
+            <SelectTrigger className="h-9 w-[200px]">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="score">Score (high to low)</SelectItem>
+              <SelectItem value="completed_at">Fastest completion</SelectItem>
+              <SelectItem value="started_at">Join order</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Suspense fallback={<LeaderboardLoading />}>
+          <Leaderboard entries={entries} mode="live" />
+        </Suspense>
+        <PaginationControls
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          label="participants"
+          onPageChange={onPageChange}
+          pageSizeOptions={PARTICIPANT_PAGE_SIZES}
+          onPageSizeChange={onPageSizeChange}
+        />
       </div>
     </div>
   );
@@ -793,12 +1304,21 @@ function ResultsView({
     id: a.id,
     name: a.name,
     email: a.email,
+    rollNumber: a.rollNumber,
     score: a.score,
     total: a.total,
     completed: a.completed,
   }));
   const submittedCount = attendees.filter((a) => a.completed).length;
-  const rows = getQuizReportRows(reportAttempts);
+  const [resultPage, setResultPage] = useState(0);
+  const rows = useMemo(
+    () =>
+      getQuizReportRows(reportAttempts).sort(
+        (a, b) => b.score - a.score || b.percent - a.percent || a.rank - b.rank,
+      ),
+    [reportAttempts],
+  );
+  const visibleRows = paginate(rows, resultPage, RESULT_PAGE_SIZE);
   const top = rows[0];
   const totals = rows.reduce(
     (sum, row) => ({
@@ -808,6 +1328,10 @@ function ResultsView({
     }),
     { correct: 0, wrong: 0, unattempted: 0 },
   );
+
+  useEffect(() => {
+    setResultPage(0);
+  }, [rows.length]);
 
   return (
     <div className="space-y-5 print:space-y-3" id="quiz-results">
@@ -879,7 +1403,9 @@ function ResultsView({
       </div>
 
       <div className="rounded-2xl border border-border bg-card/40 p-5 print:border-0 print:bg-transparent print:p-0">
-        <Leaderboard entries={entries} mode="final" />
+        <Suspense fallback={<LeaderboardLoading />}>
+          <Leaderboard entries={entries} mode="final" />
+        </Suspense>
       </div>
 
       <div className="rounded-2xl border border-border bg-card/40 overflow-hidden print:border-black">
@@ -906,7 +1432,7 @@ function ResultsView({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <tr key={row.id} className="border-t border-border/50">
                 <td className="px-3 py-2 font-bold">{row.rank}</td>
                 <td className="px-3 py-2 font-semibold">{row.name}</td>
@@ -923,7 +1449,22 @@ function ResultsView({
             ))}
           </tbody>
         </table>
+        <PaginationControls
+          page={resultPage}
+          pageSize={RESULT_PAGE_SIZE}
+          total={rows.length}
+          label="participants"
+          onPageChange={setResultPage}
+        />
       </div>
+    </div>
+  );
+}
+
+function LeaderboardLoading() {
+  return (
+    <div className="rounded-xl border border-border bg-card/30 p-5 text-sm text-muted-foreground">
+      Loading leaderboard...
     </div>
   );
 }
@@ -974,6 +1515,35 @@ function toReportAttempts(attendees: Attendee[]): QuizReportAttempt[] {
   }));
 }
 
+function mapLiveAttempt(a: AttemptLive): Attendee {
+  const meta = a.metadata && typeof a.metadata === "object"
+    ? (a.metadata as Record<string, unknown>)
+    : {};
+  const attempted = a.completed ? a.total_questions : 0;
+  return {
+    id: a.id,
+    name: a.participant_name ?? "Anonymous",
+    email: a.participant_email,
+    rollNumber: stringMeta(meta.roll_number),
+    seatNumber: stringMeta(meta.seat_number),
+    completed: a.completed,
+    score: a.score,
+    total: a.total_questions,
+    attempted,
+    correct: a.completed ? a.score : 0,
+    wrong: 0,
+    unattempted: Math.max(0, a.total_questions - attempted),
+    completedAt: a.completed_at,
+  };
+}
+
+function sortAttendees(attendees: Attendee[]) {
+  return attendees.slice().sort((a, b) => {
+    if (a.completed !== b.completed) return Number(b.completed) - Number(a.completed);
+    return b.score - a.score || b.total - a.total || a.name.localeCompare(b.name);
+  });
+}
+
 function getTeacherName(profile: ProfileRow | null, email?: string | null) {
   const full = profile?.full_name?.trim();
   if (full) return full;
@@ -983,6 +1553,35 @@ function getTeacherName(profile: ProfileRow | null, email?: string | null) {
 
 function stringMeta(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function broadcastParticipantStatus(
+  accessCode: string | null,
+  payload: ParticipantStatusBroadcast,
+) {
+  if (!accessCode) return;
+  const channel = supabase.channel(`quiz-status-${accessCode}`, {
+    config: { broadcast: { self: false } },
+  });
+
+  try {
+    await new Promise<void>((resolve) => {
+      const timeout = window.setTimeout(resolve, 1200);
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          window.clearTimeout(timeout);
+          resolve();
+        }
+      });
+    });
+    await channel.send({
+      type: "broadcast",
+      event: "status",
+      payload: { access_code: accessCode, ...payload },
+    });
+  } finally {
+    void supabase.removeChannel(channel);
+  }
 }
 
 function JoinPanel({
@@ -1051,12 +1650,27 @@ function JoinPanel({
 function AttendeeList({
   list,
   showScores,
+  page,
+  total,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
   emptyHint,
 }: {
   list: Attendee[];
   showScores?: boolean;
+  page?: number;
+  total?: number;
+  onPageChange?: (page: number) => void;
+  pageSize?: number;
+  onPageSizeChange?: (pageSize: number) => void;
   emptyHint: string;
 }) {
+  const resolvedPage = page ?? 0;
+  const resolvedTotal = total ?? list.length;
+  const resolvedPageSize = pageSize ?? 25;
+  const visible = page === undefined ? paginate(list, resolvedPage, resolvedPageSize) : list;
+
   if (list.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-card/20 p-8 text-center text-xs text-muted-foreground">
@@ -1065,34 +1679,45 @@ function AttendeeList({
     );
   }
   return (
-    <ul className="space-y-1.5 max-h-[420px] overflow-y-auto">
-      {list.map((a, i) => (
-        <li key={a.id} className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2.5">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
-            {i + 1}
-          </span>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">{a.name}</div>
-            {a.email && (
-              <div className="text-[11px] text-muted-foreground truncate">{a.email}</div>
-            )}
-          </div>
-          {showScores ? (
-            <div className="text-right">
-              <div className="text-sm font-bold text-success">
-                {a.score} / {a.total}
-              </div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">pts</div>
-            </div>
-          ) : (
-            <span className="rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-              Waiting
+    <div className="overflow-hidden rounded-xl border border-border/50 bg-card/20">
+      <ul className="space-y-1.5 p-2">
+        {visible.map((a, i) => (
+          <li key={a.id} className="flex items-center gap-3 rounded-lg bg-secondary/40 px-3 py-2.5">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+              {resolvedPage * resolvedPageSize + i + 1}
             </span>
-          )}
-          {!showScores && <Users className="h-3 w-3 text-muted-foreground" />}
-        </li>
-      ))}
-    </ul>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{a.name}</div>
+              {a.email && (
+                <div className="text-[11px] text-muted-foreground truncate">{a.email}</div>
+              )}
+            </div>
+            {showScores ? (
+              <div className="text-right">
+                <div className="text-sm font-bold text-success">
+                  {a.score} / {a.total}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">pts</div>
+              </div>
+            ) : (
+              <span className="rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                Waiting
+              </span>
+            )}
+            {!showScores && <Users className="h-3 w-3 text-muted-foreground" />}
+          </li>
+        ))}
+      </ul>
+      <PaginationControls
+        page={resolvedPage}
+        pageSize={resolvedPageSize}
+        total={resolvedTotal}
+        label="participants"
+        onPageChange={onPageChange ?? (() => {})}
+        pageSizeOptions={pageSize ? PARTICIPANT_PAGE_SIZES : undefined}
+        onPageSizeChange={onPageSizeChange}
+      />
+    </div>
   );
 }
 
