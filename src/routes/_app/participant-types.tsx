@@ -27,6 +27,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,12 +107,13 @@ function QuickCreateDialog({
   placeholder: string;
   onConfirm: (name: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     const name = value.trim();
-    if (!name) { toast.error("Name is required"); return; }
+    if (!name) { toast.error(t("common.required")); return; }
     setBusy(true);
     try {
       await onConfirm(name);
@@ -127,7 +129,7 @@ function QuickCreateDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div>
-          <Label className="mb-1.5">Name</Label>
+          <Label className="mb-1.5">{t("pt.name")}</Label>
           <Input
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -137,9 +139,9 @@ function QuickCreateDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => { setValue(""); onClose(); }} disabled={busy}>Cancel</Button>
+          <Button variant="ghost" onClick={() => { setValue(""); onClose(); }} disabled={busy}>{t("common.cancel")}</Button>
           <Button onClick={submit} disabled={busy} className="bg-gradient-primary text-primary-foreground shadow-glow">
-            {busy ? "Creating…" : "Create"}
+            {busy ? t("cat.creating") : t("common.create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -201,7 +203,7 @@ function ParticipantStatsPanel({ participant, onClose }: { participant: Particip
         lastQuizAt: attempts[0]?.completed_at ?? null,
         recentAttempts: attempts.slice(0, 5).map((a) => {
           const pct = a.total_questions > 0 ? Math.round((a.score / a.total_questions) * 100) : 0;
-          return { title: titleById.get(a.session_id) ?? "Unknown quiz", score: a.score, total: a.total_questions, pct, date: a.completed_at ? new Date(a.completed_at).toLocaleDateString() : "—" };
+          return { title: titleById.get(a.session_id) ?? "Unknown quiz", score: a.score, total: a.total_questions, pct, date: a.completed_at ? new Date(a.completed_at).toLocaleDateString() : "-" };
         }),
       });
       setLoading(false);
@@ -307,6 +309,7 @@ function ParticipantsPage() {
 
 function ParticipantsIndex() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [types, setTypes] = useState<TypeRow[]>([]);
   const [subs, setSubs] = useState<SubRow[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -416,7 +419,7 @@ function ParticipantsIndex() {
     if (!user) return;
     const { error } = await supabase.from("participant_types").insert({ owner_id: user.id, name });
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Type "${name}" created`);
+    toast.success(t("pt.typeCreated").replace("{name}", name));
     await loadWithRaw();
   };
 
@@ -424,7 +427,7 @@ function ParticipantsIndex() {
     if (!user || selectedTypeId === "__all__") return;
     const { data, error } = await supabase.from("participant_subtypes").insert({ owner_id: user.id, type_id: selectedTypeId, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Group "${name}" created`);
+    toast.success(t("pt.groupCreated").replace("{name}", name));
     await loadWithRaw();
     if (data) setSelectedSubId(data.id);
   };
@@ -436,7 +439,7 @@ function ParticipantsIndex() {
     const { data, error } = await supabase.from("participants").insert({ ...row, subtype_id: subtypeId }).select("id, name, email, mobile, metadata, subtype_id, created_at").single();
     if (error) { toast.error(error.message); throw error; }
     if (data) {
-      toast.success(`Added ${data.name}`);
+      toast.success(t("pt.participantAdded").replace("{name}", data.name));
       setPage(0);
       await loadWithRaw();
     }
@@ -449,7 +452,7 @@ function ParticipantsIndex() {
     const { data, error } = await supabase.from("participants").insert(rows).select("id, name, email, mobile, metadata, subtype_id, created_at");
     if (error) { toast.error(error.message); throw error; }
     const inserted = (data ?? []) as ParticipantRow[];
-    toast.success(`Added ${inserted.length} participant${inserted.length === 1 ? "" : "s"}`);
+    toast.success(`${t("pt.added")} ${inserted.length} ${inserted.length === 1 ? t("pt.participant") : t("pt.participants")}`);
     setPage(0);
     await loadWithRaw();
   };
@@ -461,21 +464,21 @@ function ParticipantsIndex() {
     if (error) { toast.error(error.message); throw error; }
     setRawRows((prev) => prev.map((r) => r.id === id ? { ...r, name: row.name, email: row.email, mobile: row.mobile, metadata: row.metadata, meta: row.metadata as ParticipantMeta } : r));
     setParticipants((prev) => prev.map((p) => p.id === id ? { ...p, name: row.name, email: row.email, mobile: row.mobile, metadata: row.metadata as ParticipantMeta } : p));
-    toast.success("Participant updated");
+    toast.success(t("pt.participantUpdated"));
   };
 
   const removeParticipant = async (id: string) => {
     const { error } = await supabase.from("participants").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
     if (selectedId === id) setSelectedId(null);
-    toast.success("Participant removed");
+    toast.success(t("pt.participantRemoved"));
     await loadWithRaw();
   };
 
   const generateInvites = async (emails: string[]): Promise<InviteRow[]> => {
     if (!user) return [];
     const subtypeId = selectedSubId !== "__all__" ? selectedSubId : null;
-    if (!subtypeId) { toast.error("Select a group first to generate invite links."); return []; }
+    if (!subtypeId) { toast.error(t("pt.selectGroupFirst")); return []; }
     const inputs = (emails.length > 0
       ? emails.map((e) => ({ owner_id: user.id, subtype_id: subtypeId, email: e as string | null }))
       : [{ owner_id: user.id, subtype_id: subtypeId, email: null as string | null }]);
@@ -496,16 +499,14 @@ function ParticipantsIndex() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Manage Participants</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Organise your roster by type and group. Select a group below to view and manage participants.
-          </p>
+          <h1 className="font-display text-3xl font-bold tracking-tight">{t("pt.manageTitle")}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{t("pt.manageDesc")}</p>
         </div>
         <Button
           className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
           onClick={() => navigate({ to: "/participant-types/add" })}
         >
-          <UserPlus className="h-4 w-4" /> Add Participant
+          <UserPlus className="h-4 w-4" /> {t("pt.addParticipant")}
         </Button>
       </div>
 
@@ -513,14 +514,14 @@ function ParticipantsIndex() {
       <div className="flex flex-wrap items-end gap-3">
         {/* Type select */}
         <div className="flex-1 min-w-[180px] max-w-[240px]">
-          <Label className="text-xs text-muted-foreground mb-1 block">Type</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">{t("pt.type")}</Label>
           <div className="flex gap-1">
             <Select value={selectedTypeId} onValueChange={handleTypeChange}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="All types" />
+                <SelectValue placeholder={t("pt.allTypes")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All types</SelectItem>
+                <SelectItem value="__all__">{t("pt.allTypes")}</SelectItem>
                 {types.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -532,14 +533,14 @@ function ParticipantsIndex() {
 
         {/* Group select */}
         <div className="flex-1 min-w-[180px] max-w-[240px]">
-          <Label className="text-xs text-muted-foreground mb-1 block">Group</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">{t("pt.group")}</Label>
           <div className="flex gap-1">
             <Select value={selectedSubId} onValueChange={(v) => { setSelectedSubId(v); setSelectedId(null); }} disabled={selectedTypeId === "__all__"}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder={selectedTypeId === "__all__" ? "Pick a type first" : "All groups"} />
+                <SelectValue placeholder={selectedTypeId === "__all__" ? t("pt.pickTypeFirst") : t("pt.allGroups")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All groups</SelectItem>
+                <SelectItem value="__all__">{t("pt.allGroups")}</SelectItem>
                 {visibleSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -551,13 +552,13 @@ function ParticipantsIndex() {
 
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Label className="text-xs text-muted-foreground mb-1 block">Search</Label>
+          <Label className="text-xs text-muted-foreground mb-1 block">{t("common.search")}</Label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name, email, roll number…"
+              placeholder={t("pt.searchPlaceholder")}
               className="pl-9"
             />
           </div>
@@ -567,10 +568,10 @@ function ParticipantsIndex() {
       {/* Stats summary row */}
       <div className="flex flex-wrap gap-3">
         {[
-          { label: "Types", value: typeCount, color: "bg-primary/10 text-primary" },
-          { label: "Groups", value: subCount, color: "bg-secondary/60 text-muted-foreground" },
-          { label: "Total participants", value: totalCount, color: "bg-secondary/60 text-muted-foreground" },
-          { label: "Showing", value: filteredParticipants.length, color: "bg-success/10 text-success" },
+          { label: t("pt.types"), value: typeCount, color: "bg-primary/10 text-primary" },
+          { label: t("pt.groups"), value: subCount, color: "bg-secondary/60 text-muted-foreground" },
+          { label: t("pt.totalParticipants"), value: totalCount, color: "bg-secondary/60 text-muted-foreground" },
+          { label: t("pt.showing"), value: filteredParticipants.length, color: "bg-success/10 text-success" },
         ].map((s) => (
           <div key={s.label} className={`rounded-xl px-4 py-2 text-xs font-semibold ${s.color}`}>
             {s.label}: <span className="text-base font-bold ml-1">{s.value}</span>
@@ -582,24 +583,24 @@ function ParticipantsIndex() {
       <div className={`flex gap-4 items-start ${selectedParticipant ? "lg:flex-row flex-col" : ""}`}>
         <div className={`min-w-0 ${selectedParticipant ? "lg:flex-1" : "w-full"}`}>
           {loading ? (
-            <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">Loading participants…</div>
+            <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">{t("pt.loading")}</div>
           ) : filteredParticipants.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
               <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/60" />
               {totalCount === 0 ? (
                 <>
-                  <p className="mt-3 text-sm font-medium">No participants yet</p>
-                  <p className="mt-1 text-xs text-muted-foreground">First create a Type (e.g. Student), then add participants.</p>
+                  <p className="mt-3 text-sm font-medium">{t("pt.empty")}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("pt.emptyHint")}</p>
                 </>
               ) : selectedTypeId === "__all__" ? (
                 <>
-                  <p className="mt-3 text-sm font-medium">No matches</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Try a different search or filter.</p>
+                  <p className="mt-3 text-sm font-medium">{t("pt.noMatches")}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("pt.noMatchesHint")}</p>
                 </>
               ) : (
                 <>
-                  <p className="mt-3 text-sm font-medium">No participants in this group</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Add them manually, upload a file, or generate invite links.</p>
+                  <p className="mt-3 text-sm font-medium">{t("pt.emptyGroup")}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t("pt.emptyGroupHint")}</p>
                 </>
               )}
             </div>
@@ -608,11 +609,11 @@ function ParticipantsIndex() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Contact</TableHead>
-                    <TableHead className="hidden md:table-cell">Details</TableHead>
-                    <TableHead className="hidden lg:table-cell">Organization</TableHead>
-                    <TableHead className="w-[100px] text-right">Actions</TableHead>
+                    <TableHead>{t("pt.colName")}</TableHead>
+                    <TableHead>{t("pt.colContact")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("pt.colDetails")}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t("pt.colOrg")}</TableHead>
+                    <TableHead className="w-[100px] text-right">{t("pt.colActions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -650,15 +651,15 @@ function ParticipantsIndex() {
       <QuickCreateDialog
         open={createTypeOpen}
         onClose={() => setCreateTypeOpen(false)}
-        title="New participant type"
-        placeholder="e.g. Student, Teacher, Employee"
+        title={t("pt.newType")}
+        placeholder={t("pt.newTypePlaceholder")}
         onConfirm={createType}
       />
       <QuickCreateDialog
         open={createSubOpen}
         onClose={() => setCreateSubOpen(false)}
-        title="New group"
-        placeholder="e.g. Class 9, Engineering Team"
+        title={t("pt.newGroup")}
+        placeholder={t("pt.newGroupPlaceholder")}
         onConfirm={createSub}
       />
     </div>
@@ -673,6 +674,7 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
   onUpdate: (id: string, d: ParticipantDraft) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const ptype = p.metadata.participant_type;
   const typeEmoji = ptype === "student" ? "🎓" : ptype === "teacher" ? "📚" : ptype === "employee" ? "💼" : ptype === "fun" ? "🎉" : "";
 
@@ -697,7 +699,7 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
         <div className="text-sm space-y-0.5">
           {p.email && <div className="flex items-center gap-1.5 text-muted-foreground"><Mail className="h-3 w-3" /><span className="truncate max-w-[200px]">{p.email}</span></div>}
           {p.mobile && <div className="flex items-center gap-1.5 text-muted-foreground"><Phone className="h-3 w-3" />{p.mobile}</div>}
-          {!p.email && !p.mobile && <span className="text-xs text-muted-foreground">—</span>}
+          {!p.email && !p.mobile && <span className="text-xs text-muted-foreground">-</span>}
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
@@ -706,17 +708,17 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
           {p.metadata.employee_id && <div className="flex items-center gap-1.5"><Hash className="h-3 w-3 text-muted-foreground" />{p.metadata.employee_id}</div>}
           {p.metadata.seat_number && <div className="flex items-center gap-1.5"><Armchair className="h-3 w-3 text-muted-foreground" />{p.metadata.seat_number}</div>}
           {p.metadata.department && <div className="text-muted-foreground">{p.metadata.department}</div>}
-          {!p.metadata.roll_number && !p.metadata.employee_id && !p.metadata.seat_number && !p.metadata.department && <span className="text-muted-foreground">—</span>}
+          {!p.metadata.roll_number && !p.metadata.employee_id && !p.metadata.seat_number && !p.metadata.department && <span className="text-muted-foreground">-</span>}
         </div>
       </TableCell>
       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-        {p.metadata.organization || "—"}
+        {p.metadata.organization || "-"}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end gap-1">
           <ParticipantDialog
-            title="Edit participant"
-            submitLabel="Save changes"
+            title={t("pt.editTitle")}
+            submitLabel={t("pt.saveChanges")}
             initial={draftFromParticipant(p)}
             onSubmit={(d) => onUpdate(p.id, d)}
             trigger={
@@ -732,6 +734,11 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
   );
 }
 
+function DeleteTitle({ name }: { name: string }) { const { t } = useI18n(); return <>{t("pt.removeTitle").replace("{name}", name)}</>; }
+function DeleteDesc() { const { t } = useI18n(); return <>{t("pt.removeDesc")}</>; }
+function CancelLabel() { const { t } = useI18n(); return <>{t("common.cancel")}</>; }
+function DeleteLabel({ busy }: { busy: boolean }) { const { t } = useI18n(); return <>{busy ? t("pt.deleting") : t("common.delete")}</>; }
+
 function DeleteParticipantButton({ p, onConfirm }: { p: Participant; onConfirm: (id: string) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -742,11 +749,11 @@ function DeleteParticipantButton({ p, onConfirm }: { p: Participant; onConfirm: 
       </Button>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove {p.name}?</AlertDialogTitle>
-          <AlertDialogDescription>They'll be removed from your roster. Past quiz attempts are kept.</AlertDialogDescription>
+          <AlertDialogTitle><DeleteTitle name={p.name} /></AlertDialogTitle>
+          <AlertDialogDescription><DeleteDesc /></AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}><CancelLabel /></AlertDialogCancel>
           <AlertDialogAction
             disabled={busy}
             onClick={async (e) => {
@@ -755,7 +762,7 @@ function DeleteParticipantButton({ p, onConfirm }: { p: Participant; onConfirm: 
             }}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {busy ? "Deleting…" : "Delete"}
+            <DeleteLabel busy={busy} />
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

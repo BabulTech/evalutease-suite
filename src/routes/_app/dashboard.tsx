@@ -119,7 +119,7 @@ function DashboardPage() {
 
   const cards = [
     {
-      label: "Total Quiz",
+      label: t("dash.totalQuiz"),
       value: stats.sessions,
       icon: PlayCircle,
       color: "text-primary",
@@ -128,7 +128,7 @@ function DashboardPage() {
       limit: sessionLimit,
     },
     {
-      label: "Active Sessions",
+      label: t("dash.activeSessions"),
       value: stats.active,
       icon: Activity,
       color: "text-success",
@@ -158,8 +158,8 @@ function DashboardPage() {
 
   const actions = [
     { label: t("dash.generateQR"), to: "/sessions/new" as const, icon: QrCode },
-    { label: "Manage Categories", to: "/categories" as const, icon: HelpCircle },
-    { label: "Manage Participants", to: "/participant-types" as const, icon: Users },
+    { label: t("dash.manageCategories"), to: "/categories" as const, icon: HelpCircle },
+    { label: t("dash.manageParticipants"), to: "/participant-types" as const, icon: Users },
   ];
 
   return (
@@ -167,11 +167,9 @@ function DashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">{t("nav.dashboard")}</h1>
-          <p className="text-muted-foreground mt-1">
-            A clear view of your quizzes, sessions, and participants.
-          </p>
+          <p className="text-muted-foreground mt-1">{t("dash.desc")}</p>
         </div>
-        {/* Plan badge — visible once plan has loaded */}
+        {/* Plan badge - visible once plan has loaded */}
         {!planLoading && plan && (
           <div
             className={`flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold cursor-pointer transition-all hover:shadow-glow ${
@@ -190,15 +188,15 @@ function DashboardPage() {
             ) : (
               <Zap className="h-4 w-4 opacity-50" />
             )}
-            <span className="capitalize">{plan.name} Plan</span>
+            <span className="capitalize">{plan.name} {t("dash.plan")}</span>
             {plan.slug === "free" && (
-              <span className="text-xs font-normal text-muted-foreground ml-1">· Upgrade</span>
+              <span className="text-xs font-normal text-muted-foreground ml-1">· {t("dash.upgrade")}</span>
             )}
           </div>
         )}
       </div>
 
-      {/* Upgrade banner — free tier only */}
+      {/* Upgrade banner - free tier only */}
       {isFreeTier && !upgradeBannerDismissed && (
         <div className="relative rounded-2xl overflow-hidden border border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-purple-500/10 p-5 flex items-center gap-5 shadow-glow">
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
@@ -206,17 +204,15 @@ function DashboardPage() {
             <Zap className="h-6 w-6 text-primary-foreground" />
           </div>
           <div className="relative flex-1 min-w-0">
-            <div className="font-display font-bold text-base">You're on the Free plan</div>
-            <div className="text-sm text-muted-foreground mt-0.5">
-              Unlock unlimited quizzes, AI features, and more participants by upgrading to Pro.
-            </div>
+            <div className="font-display font-bold text-base">{t("dash.freePlanBanner")}</div>
+            <div className="text-sm text-muted-foreground mt-0.5">{t("dash.freePlanBannerDesc")}</div>
           </div>
           <div className="relative flex items-center gap-2 shrink-0">
             <Button
               onClick={() => setUpgradeOpen(true)}
               className="bg-gradient-primary text-primary-foreground shadow-glow gap-1.5 cursor-pointer"
             >
-              <Star className="h-4 w-4" /> Upgrade to Pro
+              <Star className="h-4 w-4" /> {t("dash.upgradeToPro")}
             </Button>
             <button
               type="button"
@@ -250,7 +246,7 @@ function DashboardPage() {
               {c.left !== null && c.limit !== null && (
                 <div className="mt-2 space-y-1">
                   <div className={`text-[10px] font-medium ${danger ? "text-destructive" : "text-muted-foreground"}`}>
-                    {c.limit === -1 ? "Unlimited" : `${c.left} left of ${c.limit}`}
+                    {c.limit === -1 ? t("dash.unlimited") : `${c.left} ${t("dash.leftOf")} ${c.limit}`}
                   </div>
                   {c.limit !== -1 && (
                     <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
@@ -285,18 +281,18 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* Pro pitch card — free tier only */}
+      {/* Pro pitch card - free tier only */}
       {isFreeTier && (
         <div className="rounded-2xl border border-primary/30 bg-card/60 p-6 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <Star className="h-5 w-5 text-primary" />
-            <span className="font-display font-bold text-lg">Go Pro and unlock everything</span>
+            <span className="font-display font-bold text-lg">{t("dash.goProTitle")}</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { icon: "🚀", title: "Unlimited Quizzes", desc: "Create as many quiz sessions as you need, every day." },
-              { icon: "🤖", title: "AI Question Builder", desc: "Auto-generate questions with AI in seconds." },
-              { icon: "👥", title: "500+ Participants", desc: "Host large groups without hitting a cap." },
+              { icon: "🚀", title: t("dash.proFeature1Title"), desc: t("dash.proFeature1Desc") },
+              { icon: "🤖", title: t("dash.proFeature2Title"), desc: t("dash.proFeature2Desc") },
+              { icon: "👥", title: t("dash.proFeature3Title"), desc: t("dash.proFeature3Desc") },
             ].map((f) => (
               <div key={f.title} className="rounded-xl border border-border bg-muted/20 p-4 space-y-1.5">
                 <div className="text-2xl">{f.icon}</div>
@@ -310,13 +306,13 @@ function DashboardPage() {
               onClick={() => setUpgradeOpen(true)}
               className="bg-gradient-primary text-primary-foreground shadow-glow gap-2 cursor-pointer"
             >
-              <Sparkles className="h-4 w-4" /> See Plans &amp; Pricing
+              <Sparkles className="h-4 w-4" /> {t("dash.seePlans")}
               <ArrowRight className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Check className="h-3.5 w-3.5 text-success" /> Cancel anytime
+              <Check className="h-3.5 w-3.5 text-success" /> {t("dash.cancelAnytime")}
               <span className="mx-1">·</span>
-              <Check className="h-3.5 w-3.5 text-success" /> No hidden fees
+              <Check className="h-3.5 w-3.5 text-success" /> {t("dash.noHiddenFees")}
             </div>
           </div>
         </div>
@@ -328,7 +324,7 @@ function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">{t("dash.recentSessions")}</h3>
             <Link to="/sessions" className="text-xs text-primary hover:underline">
-              View all
+              {t("dash.viewAll")}
             </Link>
           </div>
           {recent.length === 0 ? (
@@ -362,7 +358,7 @@ function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">{t("dash.upcoming")}</h3>
             <Button size="sm" variant="ghost" className="text-primary text-xs" asChild>
-              <Link to="/sessions/new">+ Schedule</Link>
+              <Link to="/sessions/new">+ {t("dash.schedule")}</Link>
             </Button>
           </div>
           {upcoming.length === 0 ? (

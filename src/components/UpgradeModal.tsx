@@ -25,7 +25,7 @@ type PromoResult = {
 type Props = {
   open: boolean;
   onClose: () => void;
-  /** Which feature triggered the lock — shown in the header */
+  /** Which feature triggered the lock - shown in the header */
   lockedFeature?: string;
   /** Pre-select a plan to upgrade to */
   targetSlug?: string;
@@ -89,7 +89,7 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
       toast.error(`Code "${code}" is not valid for the ${selected} plan`); return;
     }
     setPromo(result);
-    toast.success(`Promo applied — ${data.discount_percent ? `${data.discount_percent}% off` : `$${((data.discount_fixed_cents ?? 0) / 100).toFixed(2)} off`}`);
+    toast.success(`Promo applied - ${data.discount_percent ? `${data.discount_percent}% off` : `$${((data.discount_fixed_cents ?? 0) / 100).toFixed(2)} off`}`);
   };
 
   const handleUpgrade = async () => {
@@ -289,7 +289,7 @@ export function UpgradeModal({ open, onClose, lockedFeature, targetSlug }: Props
             <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <div className="font-semibold text-sm">
-                  {selectedPlan.name} — {billing === "yearly" ? "Yearly" : "Monthly"}
+                  {selectedPlan.name} - {billing === "yearly" ? "Yearly" : "Monthly"}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {hasDiscount

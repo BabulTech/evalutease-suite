@@ -169,7 +169,7 @@ function AdminPage() {
     if (!user) { void navigate({ to: "/login" }); return; }
     supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
       .then(({ data }) => {
-        if (!data) { toast.error("Access denied — admins only"); void navigate({ to: "/dashboard" }); }
+        if (!data) { toast.error("Access denied - admins only"); void navigate({ to: "/dashboard" }); }
         else setIsAdmin(true);
       });
     // count open app feedback
@@ -310,7 +310,7 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
       const planMap: Record<string, string> = {};
       (subs ?? []).forEach((s) => { planMap[s.user_id] = (s.plans as { slug: string } | null)?.slug ?? "free"; });
       setRecentUsers((profiles ?? []).map((p) => ({
-        name: p.full_name ?? "—", email: p.email ?? "—",
+        name: p.full_name ?? "-", email: p.email ?? "-",
         plan: planMap[p.id] ?? "free", joined: p.created_at,
       })));
 
@@ -318,9 +318,9 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
       const ownerIds = [...new Set((sessions ?? []).map((s) => s.owner_id))];
       const { data: owners } = await supabase.from("profiles").select("id, full_name").in("id", ownerIds);
       const ownerMap: Record<string, string> = {};
-      (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "—"; });
+      (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "-"; });
       setRecentQuizzes((sessions ?? []).map((s) => ({
-        title: s.title, owner: ownerMap[s.owner_id] ?? "—",
+        title: s.title, owner: ownerMap[s.owner_id] ?? "-",
         status: s.status, created: s.created_at,
       })));
 
@@ -473,7 +473,7 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
         const plan = (raw.plans ?? null) as Record<string, unknown> | null;
         setSubDetails({
           plan_name: (plan?.name as string) ?? user.plan_slug,
-          status: (raw.status as string) ?? "—",
+          status: (raw.status as string) ?? "-",
           started_at: (raw.current_period_start as string | null) ?? null,
           expires_at: (raw.current_period_end as string | null) ?? null,
           stripe_customer_id: (raw.stripe_customer_id as string | null) ?? null,
@@ -504,8 +504,8 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
           {(user.full_name ?? user.email ?? "?").charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-display font-bold text-lg">{user.full_name ?? "—"}</div>
-          <div className="text-sm text-muted-foreground">{user.email ?? "—"}</div>
+          <div className="font-display font-bold text-lg">{user.full_name ?? "-"}</div>
+          <div className="text-sm text-muted-foreground">{user.email ?? "-"}</div>
           <div className="flex items-center gap-2 mt-1">
             {planBadge(user.plan_slug)}
             {statusBadge(user.sub_status)}
@@ -525,7 +525,7 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
           ].map(([l, v]) => (
             <div key={l} className="space-y-0.5">
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{l}</div>
-              <div className="text-xs font-medium">{v ?? "—"}</div>
+              <div className="text-xs font-medium">{v ?? "-"}</div>
             </div>
           ))}
         </div>
@@ -554,12 +554,12 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
                 {[
                   ["Plan", subDetails.plan_name],
                   ["Status", subDetails.status],
-                  ["Started", subDetails.started_at ? fmtDate(subDetails.started_at) : "—"],
-                  ["Expires", subDetails.expires_at ? fmtDate(subDetails.expires_at) : "—"],
+                  ["Started", subDetails.started_at ? fmtDate(subDetails.started_at) : "-"],
+                  ["Expires", subDetails.expires_at ? fmtDate(subDetails.expires_at) : "-"],
                 ].map(([l, v]) => (
                   <div key={l} className="space-y-0.5">
                     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{l}</div>
-                    <div className="text-xs font-medium capitalize">{v ?? "—"}</div>
+                    <div className="text-xs font-medium capitalize">{v ?? "-"}</div>
                   </div>
                 ))}
               </div>
@@ -757,12 +757,12 @@ function UsersSection() {
                     {(u.full_name ?? u.email ?? "?").charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="text-xs font-medium">{u.full_name ?? "—"}</div>
-                    <div className="text-[11px] text-muted-foreground">{u.email ?? "—"}</div>
+                    <div className="text-xs font-medium">{u.full_name ?? "-"}</div>
+                    <div className="text-[11px] text-muted-foreground">{u.email ?? "-"}</div>
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{[u.organization, u.country].filter(Boolean).join(" · ") || "—"}</td>
+              <td className="px-4 py-3 text-xs text-muted-foreground">{[u.organization, u.country].filter(Boolean).join(" · ") || "-"}</td>
               <td className="px-4 py-3">{planBadge(u.plan_slug)}</td>
               <td className="px-4 py-3 text-xs font-medium text-center">{u.session_count}</td>
               <td className="px-4 py-3 text-xs font-medium text-center">{u.question_count}</td>
@@ -844,7 +844,7 @@ function ParticipantsSection() {
     ]);
 
     const ownerMap: Record<string, string> = {};
-    (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "—"; });
+    (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "-"; });
     const subMap: Record<string, string> = {};
     (subtypes ?? []).forEach((s) => { subMap[s.id] = s.name; });
 
@@ -859,8 +859,8 @@ function ParticipantsSection() {
 
     setRows(parts.map((p) => ({
       id: p.id, name: p.name, email: p.email, mobile: p.mobile,
-      owner_name: ownerMap[p.owner_id] ?? "—",
-      subtype: p.subtype_id ? (subMap[p.subtype_id] ?? "—") : "—",
+      owner_name: ownerMap[p.owner_id] ?? "-",
+      subtype: p.subtype_id ? (subMap[p.subtype_id] ?? "-") : "-",
       created_at: p.created_at,
       attempt_count: attemptMap[p.id]?.count ?? 0,
       avg_score: attemptMap[p.id]
@@ -906,7 +906,7 @@ function ParticipantsSection() {
             <tr key={r.id} className="hover:bg-muted/10 transition-colors">
               <td className="px-4 py-3">
                 <div className="text-xs font-medium">{r.name}</div>
-                <div className="text-[11px] text-muted-foreground">{r.email ?? r.mobile ?? "—"}</div>
+                <div className="text-[11px] text-muted-foreground">{r.email ?? r.mobile ?? "-"}</div>
               </td>
               <td className="px-4 py-3 text-xs text-muted-foreground">{r.owner_name}</td>
               <td className="px-4 py-3 text-xs text-muted-foreground">{r.subtype}</td>
@@ -915,7 +915,7 @@ function ParticipantsSection() {
                 <div className="flex items-center gap-2">
                   <Progress value={r.avg_score} className="h-1.5 w-16" />
                   <span className={`text-xs font-semibold ${r.avg_score >= 70 ? "text-success" : r.avg_score >= 40 ? "text-warning" : "text-destructive"}`}>
-                    {r.attempt_count > 0 ? `${r.avg_score}%` : "—"}
+                    {r.attempt_count > 0 ? `${r.avg_score}%` : "-"}
                   </span>
                 </div>
               </td>
@@ -971,7 +971,7 @@ function QuizzesSection() {
       ]);
 
       const ownerMap: Record<string, { name: string; email: string }> = {};
-      (owners ?? []).forEach((o) => { ownerMap[o.id] = { name: o.full_name ?? "—", email: o.email ?? "—" }; });
+      (owners ?? []).forEach((o) => { ownerMap[o.id] = { name: o.full_name ?? "-", email: o.email ?? "-" }; });
 
       const qMap: Record<string, number> = {};
       (qLinks ?? []).forEach((q) => { qMap[q.session_id] = (qMap[q.session_id] ?? 0) + 1; });
@@ -986,7 +986,7 @@ function QuizzesSection() {
 
       setRows(sessions.map((s) => ({
         id: s.id, title: s.title, status: s.status, mode: s.mode, topic: s.topic,
-        owner_name: ownerMap[s.owner_id]?.name ?? "—", owner_email: ownerMap[s.owner_id]?.email ?? "—",
+        owner_name: ownerMap[s.owner_id]?.name ?? "-", owner_email: ownerMap[s.owner_id]?.email ?? "-",
         q_count: qMap[s.id] ?? 0,
         attempt_count: attMap[s.id]?.count ?? 0,
         avg_score: attMap[s.id] ? Math.round(attMap[s.id].totalPct / attMap[s.id].count) : 0,
@@ -1036,7 +1036,7 @@ function QuizzesSection() {
                 <div className="text-xs font-medium">{r.owner_name}</div>
                 <div className="text-[11px] text-muted-foreground">{r.owner_email}</div>
               </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{r.topic ?? "—"}</td>
+              <td className="px-4 py-3 text-xs text-muted-foreground">{r.topic ?? "-"}</td>
               <td className="px-4 py-3">{statusBadge(r.status)}</td>
               <td className="px-4 py-3 text-xs font-medium text-center">{r.q_count}</td>
               <td className="px-4 py-3 text-xs font-medium text-center">{r.attempt_count}</td>
@@ -1046,7 +1046,7 @@ function QuizzesSection() {
                     <Progress value={r.avg_score} className="h-1.5 w-12" />
                     <span className={`text-xs font-semibold ${r.avg_score >= 70 ? "text-success" : r.avg_score >= 40 ? "text-warning" : "text-destructive"}`}>{r.avg_score}%</span>
                   </div>
-                ) : <span className="text-xs text-muted-foreground">—</span>}
+                ) : <span className="text-xs text-muted-foreground">-</span>}
               </td>
               <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDateShort(r.created_at)}</td>
             </tr>
@@ -1086,7 +1086,7 @@ function CategoriesSection() {
       ]);
 
       const ownerMap: Record<string, string> = {};
-      (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "—"; });
+      (owners ?? []).forEach((o) => { ownerMap[o.id] = o.full_name ?? "-"; });
       const subCnt: Record<string, number> = {};
       (subs ?? []).forEach((s) => { subCnt[s.category_id] = (subCnt[s.category_id] ?? 0) + 1; });
       const qCnt: Record<string, number> = {};
@@ -1094,7 +1094,7 @@ function CategoriesSection() {
 
       setRows(cats.map((c) => ({
         id: c.id, name: c.name, subject: c.subject, icon: c.icon,
-        owner_name: ownerMap[c.owner_id] ?? "—",
+        owner_name: ownerMap[c.owner_id] ?? "-",
         sub_count: subCnt[c.id] ?? 0, question_count: qCnt[c.id] ?? 0,
         created_at: c.created_at,
       })));
@@ -1128,7 +1128,7 @@ function CategoriesSection() {
                   <span className="text-xs font-medium">{r.name}</span>
                 </div>
               </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{r.subject ?? "—"}</td>
+              <td className="px-4 py-3 text-xs text-muted-foreground">{r.subject ?? "-"}</td>
               <td className="px-4 py-3 text-xs text-muted-foreground">{r.owner_name}</td>
               <td className="px-4 py-3 text-xs font-medium text-center">{r.sub_count}</td>
               <td className="px-4 py-3 text-xs font-medium text-center">{r.question_count}</td>
@@ -1173,13 +1173,13 @@ function ReviewsSection() {
       const sessMap: Record<string, { title: string; owner_id: string }> = {};
       (sessions ?? []).forEach((s) => { sessMap[s.id] = { title: s.title, owner_id: s.owner_id }; });
       const ownerMap: Record<string, { name: string; email: string }> = {};
-      (owners ?? []).forEach((o) => { ownerMap[o.id] = { name: o.full_name ?? "—", email: o.email ?? "—" }; });
+      (owners ?? []).forEach((o) => { ownerMap[o.id] = { name: o.full_name ?? "-", email: o.email ?? "-" }; });
 
       setRows(feedback.map((f) => {
         const sess = sessMap[f.session_id];
-        const owner = sess ? (ownerMap[sess.owner_id] ?? { name: "—", email: "—" }) : { name: "—", email: "—" };
+        const owner = sess ? (ownerMap[sess.owner_id] ?? { name: "-", email: "-" }) : { name: "-", email: "-" };
         return {
-          id: f.id, session_title: sess?.title ?? "—",
+          id: f.id, session_title: sess?.title ?? "-",
           host_name: owner.name, host_email: owner.email,
           participant_name: f.participant_name, participant_email: f.participant_email,
           rating: f.rating, comment: f.comment, submitted_at: f.submitted_at,
@@ -1199,7 +1199,7 @@ function ReviewsSection() {
     return r;
   }, [rows, search, ratingFilter]);
 
-  const avg = rows.length ? (rows.reduce((s, r) => s + r.rating, 0) / rows.length).toFixed(1) : "—";
+  const avg = rows.length ? (rows.reduce((s, r) => s + r.rating, 0) / rows.length).toFixed(1) : "-";
   const dist = [5, 4, 3, 2, 1].map((n) => ({ n, cnt: rows.filter((r) => r.rating === n).length }));
 
   return (
@@ -1272,7 +1272,7 @@ function ReviewsSection() {
               </td>
               <td className="px-4 py-3">
                 <div className="text-xs font-medium">{r.participant_name}</div>
-                <div className="text-[11px] text-muted-foreground">{r.participant_email ?? "—"}</div>
+                <div className="text-[11px] text-muted-foreground">{r.participant_email ?? "-"}</div>
               </td>
               <td className="px-4 py-3">
                 <div className="flex gap-0.5">
@@ -1320,10 +1320,10 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
     const userIds = [...new Set(data.map((d) => d.user_id))];
     const { data: profiles } = await supabase.from("profiles").select("id,full_name,email").in("id", userIds);
     const profMap: Record<string, { name: string; email: string }> = {};
-    (profiles ?? []).forEach((p) => { profMap[p.id] = { name: p.full_name ?? "—", email: p.email ?? "—" }; });
+    (profiles ?? []).forEach((p) => { profMap[p.id] = { name: p.full_name ?? "-", email: p.email ?? "-" }; });
 
     const enriched = data.map((d) => ({
-      id: d.id, user_name: profMap[d.user_id]?.name ?? "—", user_email: profMap[d.user_id]?.email ?? "—",
+      id: d.id, user_name: profMap[d.user_id]?.name ?? "-", user_email: profMap[d.user_id]?.email ?? "-",
       type: d.type, title: d.title, body: d.body,
       status: d.status, priority: d.priority, admin_reply: d.admin_reply, created_at: d.created_at,
     }));
@@ -1538,7 +1538,7 @@ function PlansSection() {
       });
       toast.success("Plan saved & Stripe prices synced");
     } catch (err) {
-      toast.warning("Plan saved but Stripe sync failed — check server logs", {
+      toast.warning("Plan saved but Stripe sync failed - check server logs", {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -1759,8 +1759,8 @@ function FinanceSection() {
 
       setPayments(data.map((p) => ({
         id: p.id, user_name: profMap[p.user_id]?.full_name ?? "Unknown",
-        user_email: profMap[p.user_id]?.email ?? "—",
-        plan_name: p.plan_id ? (planMap[p.plan_id] ?? "—") : "—",
+        user_email: profMap[p.user_id]?.email ?? "-",
+        plan_name: p.plan_id ? (planMap[p.plan_id] ?? "-") : "-",
         amount_cents: p.amount_cents, currency: p.currency,
         status: p.status, description: p.description ?? null, paid_at: p.paid_at,
       })));
@@ -1816,7 +1816,7 @@ function FinanceSection() {
               <td className="px-4 py-3">
                 <Badge className={`text-[10px] border-0 ${p.status === "paid" ? "bg-success/15 text-success" : p.status === "refunded" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>{p.status}</Badge>
               </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{p.description ?? "—"}</td>
+              <td className="px-4 py-3 text-xs text-muted-foreground">{p.description ?? "-"}</td>
             </tr>
           ))}
         </tbody>
@@ -1970,7 +1970,7 @@ function PromoCodesSection() {
     if (dt === "free") return "🎁 FREE";
     if (dt === "percent" && r.discount_percent) return `${r.discount_percent}% off`;
     if (dt === "fixed" && r.discount_fixed_cents) return `-$${(r.discount_fixed_cents / 100).toFixed(2)}`;
-    return "—";
+    return "-";
   };
 
   const isExpired = (r: PromoRow) => r.expires_at ? new Date(r.expires_at) < new Date() : false;

@@ -133,7 +133,7 @@ function slugify(value: string) {
 }
 
 export function formatDuration(seconds: number | null | undefined): string {
-  if (seconds === null || seconds === undefined || Number.isNaN(seconds) || seconds < 0) return "—";
+  if (seconds === null || seconds === undefined || Number.isNaN(seconds) || seconds < 0) return "-";
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds - m * 60);

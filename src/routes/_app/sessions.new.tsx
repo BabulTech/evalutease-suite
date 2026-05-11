@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,12 +55,12 @@ type SubtypeRow = { id: string; type_id: string; name: string };
 type DifficultyCustom = { easy: number; medium: number; hard: number; enabled: boolean };
 type PickStrategy = "random" | "least_used" | "most_used" | "newest" | "oldest";
 
-const PICK_STRATEGIES: { value: PickStrategy; label: string; desc: string; icon: React.ElementType }[] = [
-  { value: "random",     label: "Random",           desc: "Shuffle and pick randomly",           icon: Shuffle },
-  { value: "least_used", label: "Least used first",  desc: "Questions rarely seen in past quizzes", icon: TrendingDown },
-  { value: "most_used",  label: "Most used first",   desc: "Your most-tested questions",           icon: TrendingUp },
-  { value: "newest",     label: "Newest first",      desc: "Recently added questions first",       icon: Hash },
-  { value: "oldest",     label: "Oldest first",      desc: "Questions added earliest",             icon: Hash },
+const PICK_STRATEGY_DEFS: { value: PickStrategy; labelKey: string; descKey: string; icon: React.ElementType }[] = [
+  { value: "random",     labelKey: "newSess.psRandom",    descKey: "newSess.psRandomDesc",    icon: Shuffle },
+  { value: "least_used", labelKey: "newSess.psLeastUsed", descKey: "newSess.psLeastUsedDesc", icon: TrendingDown },
+  { value: "most_used",  labelKey: "newSess.psMostUsed",  descKey: "newSess.psMostUsedDesc",  icon: TrendingUp },
+  { value: "newest",     labelKey: "newSess.psNewest",    descKey: "newSess.psNewestDesc",    icon: Hash },
+  { value: "oldest",     labelKey: "newSess.psOldest",    descKey: "newSess.psOldestDesc",    icon: Hash },
 ];
 
 const QUIZ_TYPES = [
@@ -82,6 +83,7 @@ type FieldErrors = {
 function NewSessionPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useI18n();
   const { isLocked, remaining, plan, loading: planLoading } = usePlan();
   const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -94,10 +96,10 @@ function NewSessionPage() {
             <Lock className="h-8 w-8 text-destructive" />
           </div>
           <div>
-            <h2 className="font-display text-2xl font-bold">Daily Quiz Limit Reached</h2>
+            <h2 className="font-display text-2xl font-bold">{t("newSess.limitTitle")}</h2>
             <p className="text-muted-foreground mt-2 text-sm">
-              Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span> plan
-              allows {plan?.limits.quizzes_per_day ?? 5} quizzes per day. Upgrade to create more.
+              Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span>{" "}
+              {t("newSess.limitDesc").replace("{n}", String(plan?.limits.quizzes_per_day ?? 5))}
             </p>
           </div>
           <div className="flex flex-col gap-2">
@@ -105,10 +107,10 @@ function NewSessionPage() {
               className="bg-gradient-primary text-primary-foreground shadow-glow gap-2"
               onClick={() => setShowUpgrade(true)}
             >
-              <Zap className="h-4 w-4" /> Upgrade Plan
+              <Zap className="h-4 w-4" /> {t("newSess.upgradePlan")}
             </Button>
             <Button variant="ghost" onClick={() => void navigate({ to: "/sessions" })}>
-              Back to Sessions
+              {t("newSess.backToSessions")}
             </Button>
           </div>
         </div>
@@ -228,7 +230,7 @@ function NewSessionPage() {
     const t = title.trim();
     if (!t) errs.title = "Title is required";
     else if (t.length > 200) errs.title = "Title must be ≤ 200 characters";
-    if (!subcategoryId) errs.category = "Pick a category — quiz questions come from the chosen sub-category";
+    if (!subcategoryId) errs.category = "Pick a category - quiz questions come from the chosen sub-category";
     if (!quizType) errs.quizType = "Select a quiz type";
     const timeNum = Number(timeText);
     if (!Number.isFinite(timeNum) || timeNum < 5 || timeNum > 3600)
@@ -251,7 +253,7 @@ function NewSessionPage() {
     const errs = validate(mode);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
-      toast.error("Please fix the highlighted fields");
+      toast.error(t("newSess.fixFields"));
       return;
     }
     setErrors({});
@@ -278,7 +280,7 @@ function NewSessionPage() {
     if (partsResult.error) { toast.error(partsResult.error.message); return; }
     let allQuestions = qs ?? [];
     if (allQuestions.length === 0) {
-      setErrors((prev) => ({ ...prev, category: "That sub-category has no questions yet — add some first" }));
+      setErrors((prev) => ({ ...prev, category: "That sub-category has no questions yet - add some first" }));
       toast.error("No questions in that sub-category");
       return;
     }
@@ -300,7 +302,7 @@ function NewSessionPage() {
       } else if (pickStrategy === "oldest") {
         selectedQs = [...allQuestions].sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(0, wantN);
       } else {
-        // least_used / most_used — need usage counts
+        // least_used / most_used - need usage counts
         const ids = allQuestions.map((q) => q.id);
         const { data: usageData } = await supabase
           .from("quiz_session_questions")
@@ -381,7 +383,7 @@ function NewSessionPage() {
     }
 
     setBusy(false);
-    toast.success(isScheduled ? "Session scheduled" : "Lobby is open");
+    toast.success(isScheduled ? t("newSess.sessionScheduled") : t("newSess.lobbyOpen"));
     if (isScheduled) {
       void navigate({ to: "/sessions" });
     } else {
@@ -397,15 +399,12 @@ function NewSessionPage() {
         to="/sessions"
         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
-        <ChevronLeft className="h-3.5 w-3.5" /> All sessions
+        <ChevronLeft className="h-3.5 w-3.5" /> {t("newSess.allSessions")}
       </Link>
 
       <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">New Quiz Session</h1>
-        <p className="text-muted-foreground mt-1">
-          Pick a category, quiz type, and decide who can join, then save and open the lobby — or
-          schedule it for later.
-        </p>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t("newSess.title")}</h1>
+        <p className="text-muted-foreground mt-1">{t("newSess.desc")}</p>
       </div>
 
       {loading ? (
@@ -417,12 +416,12 @@ function NewSessionPage() {
           {/* Title */}
           <div>
             <Label className="mb-1.5">
-              Title <span className="text-destructive">*</span>
+              {t("newSess.titleLabel")} <span className="text-destructive">*</span>
             </Label>
             <Input
               value={title}
               onChange={(e) => { setTitle(e.target.value); setErrors((p) => ({ ...p, title: undefined })); }}
-              placeholder="e.g. Class 9 — Science quiz, Friday review"
+              placeholder={t("newSess.titlePlaceholder")}
               maxLength={200}
               autoFocus
               className={errors.title ? "border-destructive focus-visible:ring-destructive" : ""}
@@ -434,15 +433,15 @@ function NewSessionPage() {
           <div className="rounded-2xl border border-border bg-muted/10 p-4 space-y-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">1</span>
-              Select Question Source
+              {t("newSess.step1")}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label className="mb-1">Category <span className="text-destructive">*</span></Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">Main subject area</p>
+                <Label className="mb-1">{t("newSess.category")} <span className="text-destructive">*</span></Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.categoryHint")}</p>
                 <Select value={categoryId} onValueChange={(v) => { setCategoryId(v); setSubcategoryId(""); setErrors((p) => ({ ...p, category: undefined })); }}>
                   <SelectTrigger className={errors.category && !categoryId ? "border-destructive" : ""}>
-                    <SelectValue placeholder="Select category…" />
+                    <SelectValue placeholder={t("newSess.selectCategory")} />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -450,12 +449,12 @@ function NewSessionPage() {
                 </Select>
               </div>
               <div>
-                <Label className="mb-1">Sub-category <span className="text-destructive">*</span></Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">Specific topic — questions come from here</p>
+                <Label className="mb-1">{t("newSess.subCategory")} <span className="text-destructive">*</span></Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.subCategoryHint")}</p>
                 <Select value={subcategoryId} disabled={!categoryId}
                   onValueChange={(v) => { setSubcategoryId(v); setErrors((p) => ({ ...p, category: undefined })); }}>
                   <SelectTrigger className={errors.category ? "border-destructive" : ""}>
-                    <SelectValue placeholder={categoryId ? "Select sub-category…" : "Pick a category first"} />
+                    <SelectValue placeholder={categoryId ? t("newSess.selectSubCategory") : t("newSess.pickCategoryFirst")} />
                   </SelectTrigger>
                   <SelectContent>
                     {subcategories.filter((s) => s.category_id === categoryId).map((s) =>
@@ -473,10 +472,10 @@ function NewSessionPage() {
                 <div className="flex items-center gap-2">
                   <Layers className="h-4 w-4 text-primary shrink-0" />
                   <span className="text-sm font-semibold">
-                    {subQuestionCount} question{subQuestionCount !== 1 ? "s" : ""} available
+                    {subQuestionCount} {subQuestionCount !== 1 ? t("newSess.questions") : t("newSess.question")} {t("newSess.available")}
                   </span>
                   {subQuestionCount === 0 && (
-                    <span className="text-xs text-destructive">— add questions to this sub-category first</span>
+                    <span className="text-xs text-destructive">{t("newSess.addQuestionsFirst")}</span>
                   )}
                 </div>
 
@@ -493,8 +492,8 @@ function NewSessionPage() {
                             : "border-border bg-card/30 text-muted-foreground hover:border-primary/30"
                         }`}
                       >
-                        <div className="font-semibold">All questions</div>
-                        <div className="text-[11px] mt-0.5 opacity-80">Use all {subQuestionCount} questions</div>
+                        <div className="font-semibold">{t("newSess.allQuestions")}</div>
+                        <div className="text-[11px] mt-0.5 opacity-80">{t("newSess.allQuestionsDesc").replace("{n}", String(subQuestionCount))}</div>
                       </button>
                       <button
                         type="button"
@@ -505,8 +504,8 @@ function NewSessionPage() {
                             : "border-border bg-card/30 text-muted-foreground hover:border-primary/30"
                         }`}
                       >
-                        <div className="font-semibold">Pick a number</div>
-                        <div className="text-[11px] mt-0.5 opacity-80">Choose how many to include</div>
+                        <div className="font-semibold">{t("newSess.pickNumber")}</div>
+                        <div className="text-[11px] mt-0.5 opacity-80">{t("newSess.pickNumberDesc")}</div>
                       </button>
                     </div>
 
@@ -515,9 +514,9 @@ function NewSessionPage() {
                       <div className="space-y-3 pt-1 border-t border-border">
                         <div>
                           <Label className="mb-1.5 text-sm">
-                            Number of questions
+                            {t("newSess.numberOfQuestions")}
                             <span className="ml-2 text-xs font-normal text-muted-foreground">
-                              (max {subQuestionCount})
+                              ({t("newSess.maxN").replace("{n}", String(subQuestionCount))})
                             </span>
                           </Label>
                           <div className="flex items-center gap-2">
@@ -533,16 +532,16 @@ function NewSessionPage() {
                               className="w-28"
                             />
                             <span className="text-xs text-muted-foreground">
-                              of {subQuestionCount} will be selected
+                              {t("newSess.ofNSelected").replace("{n}", String(subQuestionCount))}
                             </span>
                           </div>
                         </div>
 
                         {numQuestions < subQuestionCount && (
                           <div>
-                            <Label className="mb-2 text-sm">How to pick them</Label>
+                            <Label className="mb-2 text-sm">{t("newSess.howToPick")}</Label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {PICK_STRATEGIES.map((s) => {
+                              {PICK_STRATEGY_DEFS.map((s) => {
                                 const Icon = s.icon;
                                 return (
                                   <button
@@ -558,9 +557,9 @@ function NewSessionPage() {
                                     <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${pickStrategy === s.value ? "text-primary" : "text-muted-foreground"}`} />
                                     <div>
                                       <div className={`text-xs font-semibold ${pickStrategy === s.value ? "text-primary" : ""}`}>
-                                        {s.label}
+                                        {t(s.labelKey)}
                                       </div>
-                                      <div className="text-[10px] text-muted-foreground">{s.desc}</div>
+                                      <div className="text-[10px] text-muted-foreground">{t(s.descKey)}</div>
                                     </div>
                                   </button>
                                 );
@@ -580,15 +579,15 @@ function NewSessionPage() {
           <div className="rounded-2xl border border-border bg-muted/10 p-4 space-y-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">2</span>
-              Quiz Settings
+              {t("newSess.step2")}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label className="mb-1">Quiz Type <span className="text-destructive">*</span></Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">Format of questions in this session</p>
+                <Label className="mb-1">{t("newSess.quizType")} <span className="text-destructive">*</span></Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.quizTypeHint")}</p>
                 <Select value={quizType} onValueChange={(v) => { setQuizType(v); setErrors((p) => ({ ...p, quizType: undefined })); }}>
                   <SelectTrigger className={errors.quizType ? "border-destructive" : ""}>
-                    <SelectValue placeholder="Select quiz type…" />
+                    <SelectValue placeholder={t("newSess.selectQuizType")} />
                   </SelectTrigger>
                   <SelectContent>
                     {QUIZ_TYPES.map((qt) => <SelectItem key={qt.value} value={qt.value}>{qt.label}</SelectItem>)}
@@ -597,8 +596,8 @@ function NewSessionPage() {
                 {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
               </div>
               <div>
-                <Label className="mb-1">Time per question (seconds)</Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">How long each participant gets to answer</p>
+                <Label className="mb-1">{t("newSess.timePerQ")}</Label>
+                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.timePerQHint")}</p>
                 <Input type="number" min={5} max={3600} value={timeText}
                   onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
                   className={errors.time ? "border-destructive" : ""} />
@@ -610,9 +609,9 @@ function NewSessionPage() {
             <div className="rounded-xl border border-border bg-card/40 p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold">Customize question selection by difficulty</div>
+                  <div className="text-sm font-semibold">{t("newSess.customDifficulty")}</div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
-                    When enabled, pick how many easy, medium, and hard questions to include.
+                    {t("newSess.customDifficultyDesc")}
                   </div>
                 </div>
                 <Switch checked={diffCustom.enabled}
@@ -627,7 +626,7 @@ function NewSessionPage() {
                         <label className={`text-xs font-semibold capitalize ${colors[level]} mb-1 block`}>
                           {level === "easy" ? "🟢" : level === "medium" ? "🟡" : "🔴"} {level}
                         </label>
-                        <p className="text-[10px] text-muted-foreground mb-1">Number of questions</p>
+                        <p className="text-[10px] text-muted-foreground mb-1">{t("newSess.numberOfQuestionsLabel")}</p>
                         <Input type="number" min={0} max={50} value={diffCustom[level]}
                           onChange={(e) => setDiffCustom((p) => ({ ...p, [level]: Math.max(0, Number(e.target.value)) }))}
                           className="h-8 text-sm" />
@@ -635,7 +634,7 @@ function NewSessionPage() {
                     );
                   })}
                   <div className="col-span-3 text-xs text-muted-foreground">
-                    Total: <span className="font-semibold">{diffCustom.easy + diffCustom.medium + diffCustom.hard}</span> questions will be selected randomly from the sub-category.
+                    {t("newSess.diffTotal").replace("{n}", String(diffCustom.easy + diffCustom.medium + diffCustom.hard))}
                   </div>
                 </div>
               )}
@@ -653,10 +652,10 @@ function NewSessionPage() {
                 )}
                 <div>
                   <Label htmlFor="public-switch" className="text-sm font-semibold">
-                    Public
+                    {t("newSess.public")}
                   </Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Anyone with the QR or PIN can join.
+                    {t("newSess.publicDesc")}
                   </p>
                 </div>
               </div>
@@ -673,7 +672,7 @@ function NewSessionPage() {
 
             {!isPublic && (
               <div className="pt-3 border-t border-border space-y-2">
-                <Label>Select participant sub-types</Label>
+                <Label>{t("newSess.selectSubTypes")}</Label>
                 <SubtypeCombobox
                   types={types}
                   subtypes={subtypes}
@@ -708,7 +707,7 @@ function NewSessionPage() {
                 )}
                 {!errors.subtypes && (
                   <p className="text-xs text-muted-foreground">
-                    Only participants in the selected sub-types can join.
+                    {t("newSess.subtypesNote")}
                   </p>
                 )}
               </div>
@@ -722,10 +721,10 @@ function NewSessionPage() {
                 <CalendarClock className="h-4 w-4 text-primary" />
                 <div>
                   <Label htmlFor="schedule-switch" className="text-sm font-semibold">
-                    Schedule for later
+                    {t("newSess.scheduleLater")}
                   </Label>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Keep this off to create the lobby immediately.
+                    {t("newSess.scheduleLaterDesc")}
                   </p>
                 </div>
               </div>
@@ -746,7 +745,7 @@ function NewSessionPage() {
 
             {scheduleEnabled && (
               <div className="pt-3 border-t border-border">
-                <Label className="mb-1.5">Date and time</Label>
+                <Label className="mb-1.5">{t("newSess.dateTime")}</Label>
                 <Input
                   type="datetime-local"
                   value={scheduledAtLocal}
@@ -758,7 +757,7 @@ function NewSessionPage() {
                   <p className="mt-1 text-xs text-destructive">{errors.schedule}</p>
                 ) : (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    The session will appear in your list and auto-start when this time arrives.
+                    {t("newSess.scheduleNote")}
                   </p>
                 )}
               </div>
@@ -776,7 +775,7 @@ function NewSessionPage() {
               ) : (
                 <Zap className="h-4 w-4" />
               )}
-              {busy ? "Saving..." : scheduleEnabled ? "Schedule" : "Save & Open Lobby"}
+              {busy ? t("newSess.saving") : scheduleEnabled ? t("newSess.schedule") : t("newSess.saveOpenLobby")}
             </Button>
           </div>
         </div>

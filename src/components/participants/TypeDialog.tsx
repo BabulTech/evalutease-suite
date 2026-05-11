@@ -65,7 +65,7 @@ export function TypeDialog({ trigger, initial, title, submitLabel = "Save", onSu
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Participant types group your roster — students, teachers, partners, etc.
+            Participant types group your roster - students, teachers, partners, etc.
           </DialogDescription>
         </DialogHeader>
 

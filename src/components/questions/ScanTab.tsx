@@ -82,7 +82,7 @@ export function ScanTab({ disabled, onSave, saving }: Props) {
       }
       setDrafts(out);
       toast.success(
-        `Extracted ${out.length} question${out.length === 1 ? "" : "s"} — review before saving`,
+        `Extracted ${out.length} question${out.length === 1 ? "" : "s"} - review before saving`,
       );
     } catch (err) {
       const msg = (err as Error)?.message ?? "Image extraction failed";
@@ -99,7 +99,7 @@ export function ScanTab({ disabled, onSave, saving }: Props) {
           <ScanLine className="h-4 w-4" /> Scan an image with Claude
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Upload a photo or screenshot of a question paper — printed, handwritten, or formatted any
+          Upload a photo or screenshot of a question paper - printed, handwritten, or formatted any
           way you like. Claude will read the page and turn each question it finds into an editable
           MCQ draft. No fixed format required.
         </p>
@@ -120,7 +120,7 @@ export function ScanTab({ disabled, onSave, saving }: Props) {
                 <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/60" />
                 <div className="mt-3 text-sm font-medium">Click to upload an image</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  JPG, PNG, GIF, or WebP — up to 5 MB
+                  JPG, PNG, GIF, or WebP - up to 5 MB
                 </div>
               </div>
             )}
@@ -154,7 +154,7 @@ export function ScanTab({ disabled, onSave, saving }: Props) {
             value={hint}
             onChange={(e) => setHint(e.target.value)}
             placeholder={
-              "Anything Claude should know about the page — e.g. 'class 10 physics, Urdu medium', 'second column only', 'correct answers are circled'…"
+              "Anything Claude should know about the page - e.g. 'class 10 physics, Urdu medium', 'second column only', 'correct answers are circled'…"
             }
             className="min-h-[160px] text-sm"
           />

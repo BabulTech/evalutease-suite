@@ -46,7 +46,7 @@ export function InviteDialog({ trigger, subtypeName, onGenerate }: Props) {
       toast.success("Link copied");
       window.setTimeout(() => setCopied(false), 1500);
     } else {
-      toast.error("Could not copy — select and copy manually");
+      toast.error("Could not copy - select and copy manually");
     }
   };
 

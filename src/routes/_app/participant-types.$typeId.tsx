@@ -132,7 +132,7 @@ function TypeDetailPage() {
               {type?.name ?? "Type"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Groups let you split this type — e.g. Class 9, Class 10 inside Student.
+              Groups let you split this type - e.g. Class 9, Class 10 inside Student.
             </p>
           </div>
         </div>
@@ -162,7 +162,7 @@ function TypeDetailPage() {
               <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/60" />
               <p className="mt-3 text-sm font-medium">No groups yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Add one — e.g. <span className="text-foreground">Class 9</span>,{" "}
+                Add one - e.g. <span className="text-foreground">Class 9</span>,{" "}
                 <span className="text-foreground">Engineering Team</span>.
               </p>
             </div>

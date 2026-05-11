@@ -5,6 +5,7 @@ import {
   BookOpen, FolderOpen, FolderPlus, Layers, Plus, Search, X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,7 @@ function QuickCreateDialog({
   onCreated: (id: string, name: string) => void;
 }) {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [saving, setSaving] = useState(false);
@@ -53,7 +55,7 @@ function QuickCreateDialog({
         .insert({ owner_id: user.id, name: name.trim() }).select("id").single();
       setSaving(false);
       if (error) { toast.error(error.message); return; }
-      toast.success(`Category "${name.trim()}" created`);
+      toast.success(t("cat.categoryCreated").replace("{name}", name.trim()));
       onCreated(data.id, name.trim());
     } else {
       if (!categoryId) return;
@@ -62,7 +64,7 @@ function QuickCreateDialog({
         .select("id").single();
       setSaving(false);
       if (error) { toast.error(error.message); return; }
-      toast.success(`Topic "${name.trim()}" created`);
+      toast.success(t("cat.topicCreated").replace("{name}", name.trim()));
       onCreated(data.id, name.trim());
     }
     setName(""); setDesc("");
@@ -75,7 +77,7 @@ function QuickCreateDialog({
       <div className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-elegant space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display font-bold text-base">
-            {mode === "category" ? "New Category" : "New Topic"}
+            {mode === "category" ? t("cat.newCategory") : t("cat.newTopic")}
           </h3>
           <button type="button" onClick={onClose} className="rounded-lg p-1 hover:bg-muted/40 cursor-pointer">
             <X className="h-4 w-4" />
@@ -84,23 +86,23 @@ function QuickCreateDialog({
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
-              {mode === "category" ? "Category name" : "Topic name"} *
+              {mode === "category" ? t("cat.categoryName") : t("cat.topicName")} *
             </label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Science"
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("cat.namePlaceholder")}
               onKeyDown={(e) => e.key === "Enter" && void submit()} autoFocus />
           </div>
           {mode === "subcategory" && (
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
-              <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Short description" />
+              <label className="text-xs text-muted-foreground mb-1 block">{t("cat.descOptional")}</label>
+              <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t("cat.descPlaceholder")} />
             </div>
           )}
         </div>
         <div className="flex gap-2 pt-1">
-          <Button variant="outline" className="flex-1 cursor-pointer" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" className="flex-1 cursor-pointer" onClick={onClose}>{t("common.cancel")}</Button>
           <Button className="flex-1 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer"
             onClick={() => void submit()} disabled={saving || !name.trim()}>
-            {saving ? "Creating…" : "Create"}
+            {saving ? t("cat.creating") : t("common.create")}
           </Button>
         </div>
       </div>
@@ -111,6 +113,7 @@ function QuickCreateDialog({
 // ── Main page ────────────────────────────────────────────────────────────────
 function QuestionsPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   const [cats, setCats] = useState<Cat[]>([]);
@@ -209,14 +212,14 @@ function QuestionsPage() {
     const { error } = await supabase.from("questions").update(update).eq("id", id);
     if (error) { toast.error(error.message); return; }
     setQuestions((prev) => prev.map((q) => q.id === id ? { ...q, ...update } : q));
-    toast.success("Question updated");
+    toast.success(t("q.updated"));
   };
 
   const deleteQuestion = async (id: string) => {
     const { error } = await supabase.from("questions").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
     setQuestions((prev) => prev.filter((q) => q.id !== id));
-    toast.success("Question deleted");
+    toast.success(t("q.deleted"));
   };
 
   const selectedCatName = cats.find((c) => c.id === selectedCat)?.name ?? "";
@@ -228,34 +231,32 @@ function QuestionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight flex items-center gap-2">
-            <BookOpen className="h-7 w-7 text-primary" /> Manage Questions
+            <BookOpen className="h-7 w-7 text-primary" /> {t("cat.manageQuestions")}
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Select a category and topic to view, add, edit, or delete questions.
-          </p>
+          <p className="text-muted-foreground mt-1 text-sm">{t("cat.manageDesc")}</p>
         </div>
         <Button
           onClick={() => navigate({ to: "/categories/add" })}
           className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer"
         >
-          <Plus className="h-4 w-4" /> Add Question
+          <Plus className="h-4 w-4" /> {t("cat.addQuestion")}
         </Button>
       </div>
 
       {/* Filter bar */}
       <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          <Layers className="h-3.5 w-3.5" /> Browse Questions by Category
+          <Layers className="h-3.5 w-3.5" /> {t("cat.browseByCategory")}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Category select */}
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Category</label>
-            <p className="text-[10px] text-muted-foreground/70">The main subject area</p>
+            <label className="text-xs text-muted-foreground">{t("cat.category")}</label>
+            <p className="text-[10px] text-muted-foreground/70">{t("cat.categoryHint")}</p>
             <div className="flex gap-2">
               <Select value={selectedCat} onValueChange={(v) => { setSelectedCat(v); setSelectedSub(""); setQuestions([]); }}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Select category…" />
+                  <SelectValue placeholder={t("cat.selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -270,12 +271,12 @@ function QuestionsPage() {
 
           {/* Subcategory select */}
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Topic</label>
-            <p className="text-[10px] text-muted-foreground/70">Topic within the category</p>
+            <label className="text-xs text-muted-foreground">{t("cat.topic")}</label>
+            <p className="text-[10px] text-muted-foreground/70">{t("cat.topicHint")}</p>
             <div className="flex gap-2">
               <Select value={selectedSub} onValueChange={setSelectedSub} disabled={!selectedCat}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={selectedCat ? "Select topic…" : "Pick a category first"} />
+                  <SelectValue placeholder={selectedCat ? t("cat.selectTopic") : t("cat.pickCategoryFirst")} />
                 </SelectTrigger>
                 <SelectContent>
                   {filteredSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -295,17 +296,17 @@ function QuestionsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search questions by text…" className="pl-9" />
+              placeholder={t("cat.searchQuestions")} className="pl-9" />
           </div>
         )}
       </div>
 
       {/* Question list area */}
       {!selectedCat ? (
-        <EmptyPrompt icon={FolderOpen} title="Select a category" desc="Choose a category above to see its questions, or click Add Question to start." />
+        <EmptyPrompt icon={FolderOpen} title={t("cat.selectCategoryTitle")} desc={t("cat.selectCategoryDesc")} />
       ) : !selectedSub ? (
-        <EmptyPrompt icon={Layers} title="Select a topic"
-          desc={`Pick a topic under "${selectedCatName}" to view its questions.`} />
+        <EmptyPrompt icon={Layers} title={t("cat.selectTopicTitle")}
+          desc={t("cat.selectTopicDesc").replace("{cat}", selectedCatName)} />
       ) : (
         <div className="space-y-4">
           {/* Topic header */}
@@ -317,13 +318,13 @@ function QuestionsPage() {
                 <span className="font-semibold text-sm text-primary">{selectedSubName}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {questionTotal} question{questionTotal !== 1 ? "s" : ""}
-                {search ? ` matching "${search}"` : ""}
+                {questionTotal} {questionTotal !== 1 ? t("q.counts") : t("q.count")}
+                {search ? ` ${t("cat.matching")} "${search}"` : ""}
               </p>
             </div>
             <Button size="sm" onClick={() => navigate({ to: "/categories/add" })}
               className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer">
-              <Plus className="h-3.5 w-3.5" /> Add to this topic
+              <Plus className="h-3.5 w-3.5" /> {t("cat.addToTopic")}
             </Button>
           </div>
 
@@ -332,19 +333,19 @@ function QuestionsPage() {
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
                 <div className="font-display text-xl font-bold">{questionTotal}</div>
-                <div className="text-xs text-muted-foreground">Total questions</div>
+                <div className="text-xs text-muted-foreground">{t("cat.totalQuestions")}</div>
               </div>
               <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
                 <div className="font-display text-xl font-bold">
                   {Array.from(usageCounts.entries()).filter(([id]) => questions.some((q) => q.id === id)).reduce((s, [, v]) => s + v, 0)}
                 </div>
-                <div className="text-xs text-muted-foreground">Times used in quizzes</div>
+                <div className="text-xs text-muted-foreground">{t("cat.timesUsed")}</div>
               </div>
               <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
                 <div className="font-display text-xl font-bold">
                   {questions.filter((q) => !usageCounts.has(q.id)).length}
                 </div>
-                <div className="text-xs text-muted-foreground">Never used</div>
+                <div className="text-xs text-muted-foreground">{t("cat.neverUsed")}</div>
               </div>
             </div>
           )}

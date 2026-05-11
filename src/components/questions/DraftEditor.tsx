@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n";
 import {
   type DraftQuestion,
   type Difficulty,
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props) {
+  const { t } = useI18n();
   const remaining = MAX_QUESTION_LENGTH - draft.text.length;
   const overLimit = remaining < 0;
 
@@ -37,7 +39,7 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
         <div className="flex-1 space-y-1.5">
           <div className="flex items-center justify-between">
             <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-              {typeof index === "number" ? `Question ${index + 1}` : "Question"}
+              {typeof index === "number" ? `${t("q.question")} ${index + 1}` : t("q.question")}
             </Label>
             <span
               className={`text-xs font-medium ${overLimit ? "text-destructive" : "text-muted-foreground"}`}
@@ -50,7 +52,7 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
             onChange={(e) =>
               onChange({ ...draft, text: e.target.value.slice(0, MAX_QUESTION_LENGTH) })
             }
-            placeholder="Type the question…"
+            placeholder={t("q.typePlaceholder")}
             maxLength={MAX_QUESTION_LENGTH}
             className="min-h-[64px] resize-none"
           />
@@ -81,7 +83,7 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
               <button
                 type="button"
                 onClick={() => onChange({ ...draft, correctIndex: i })}
-                title={isCorrect ? "Correct answer" : "Mark as correct"}
+                title={isCorrect ? t("q.correctAnswer") : t("q.markCorrect")}
                 className={`shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold ${
                   isCorrect
                     ? "border-success bg-success text-success-foreground"
@@ -97,7 +99,7 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
                   opts[i] = e.target.value.slice(0, MAX_OPTION_LENGTH);
                   onChange({ ...draft, options: opts });
                 }}
-                placeholder={`Option ${labelFor(i)}`}
+                placeholder={`${t("q.option")} ${labelFor(i)}`}
                 maxLength={MAX_OPTION_LENGTH}
                 className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-8"
               />
@@ -110,7 +112,7 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
         <div className="grid gap-3 md:grid-cols-3">
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              Difficulty
+              {t("q.difficulty")}
             </Label>
             <Select
               value={draft.difficulty}
@@ -120,15 +122,15 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="easy">Easy</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="hard">Hard</SelectItem>
+                <SelectItem value="easy">{t("q.easy")}</SelectItem>
+                <SelectItem value="medium">{t("q.medium")}</SelectItem>
+                <SelectItem value="hard">{t("q.hard")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              Time (seconds)
+              {t("q.timeSec")}
             </Label>
             <Input
               type="number"
@@ -144,20 +146,19 @@ export function DraftEditor({ draft, index, onChange, onRemove, compact }: Props
           </div>
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              Explanation (optional)
+              {t("q.explanation")}
             </Label>
             <Input
               value={draft.explanation}
               onChange={(e) => onChange({ ...draft, explanation: e.target.value })}
-              placeholder="Why is the marked answer correct?"
+              placeholder={t("q.explanationPlaceholder")}
             />
           </div>
         </div>
       )}
 
       <p className="text-xs text-muted-foreground">
-        Tip: click the {OPTION_COUNT > 0 ? "letter" : ""} circle to mark an option as the correct
-        answer.
+        {t("q.tip")}
       </p>
     </div>
   );

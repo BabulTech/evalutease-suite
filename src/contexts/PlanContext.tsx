@@ -6,8 +6,13 @@ export type PlanLimitKey =
   | "quizzes_per_day"
   | "ai_calls_per_day"
   | "participants_per_session"
+  | "participants_total"
   | "question_bank"
-  | "sessions_total";
+  | "sessions_total"
+  | "schedules_per_day"
+  | "custom_branding"
+  | "custom_marking"
+  | "custom_time_bonus";
 
 export type PlanInfo = {
   id: string;
@@ -40,11 +45,16 @@ type PlanContextValue = {
 };
 
 const DEFAULT_FREE_LIMITS: Record<PlanLimitKey, number> = {
-  quizzes_per_day: 5,
-  ai_calls_per_day: 3,
-  participants_per_session: 30,
-  question_bank: 100,
-  sessions_total: 20,
+  quizzes_per_day:          3,
+  ai_calls_per_day:         2,
+  participants_per_session: 20,
+  participants_total:       50,
+  question_bank:            100,
+  sessions_total:           20,
+  schedules_per_day:        1,
+  custom_branding:          0,
+  custom_marking:           0,
+  custom_time_bonus:        0,
 };
 
 const PlanContext = createContext<PlanContextValue>({

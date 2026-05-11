@@ -470,7 +470,7 @@ function ParticipantStatsPanel({
           score: a.score,
           total: a.total_questions,
           pct,
-          date: a.completed_at ? new Date(a.completed_at).toLocaleDateString() : "—",
+          date: a.completed_at ? new Date(a.completed_at).toLocaleDateString() : "-",
         };
       });
 
@@ -723,7 +723,7 @@ function ParticipantTableRow({
               {p.mobile}
             </div>
           )}
-          {!p.email && !p.mobile && <span className="text-xs text-muted-foreground">—</span>}
+          {!p.email && !p.mobile && <span className="text-xs text-muted-foreground">-</span>}
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell">
@@ -741,12 +741,12 @@ function ParticipantTableRow({
             </div>
           )}
           {!p.metadata.roll_number && !p.metadata.seat_number && (
-            <span className="text-muted-foreground">—</span>
+            <span className="text-muted-foreground">-</span>
           )}
         </div>
       </TableCell>
       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-        {p.metadata.organization || "—"}
+        {p.metadata.organization || "-"}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end gap-1">

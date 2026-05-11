@@ -19,6 +19,7 @@ import {
   Ban,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ type SessionStat = {
 
 function ReviewsPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [feedbacks, setFeedbacks] = useState<FeedbackRow[]>([]);
   const [sessionStats, setSessionStats] = useState<SessionStat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,33 +194,31 @@ function ReviewsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Star className="h-7 w-7 text-warning" /> Reviews
+          <Star className="h-7 w-7 text-warning" /> {t("rev.title")}
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Participant feedback and real quiz performance data from your completed sessions.
-        </p>
+        <p className="text-muted-foreground mt-1">{t("rev.desc")}</p>
       </div>
 
-      {/* Summary cards — all real data */}
+      {/* Summary cards - all real data */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all duration-300">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <MessageSquare className="h-3.5 w-3.5" /> Total Reviews
+            <MessageSquare className="h-3.5 w-3.5" /> {t("rev.totalReviews")}
           </div>
           <div className="font-display text-3xl font-bold">{totalReviews}</div>
         </div>
         <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all duration-300">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <Star className="h-3.5 w-3.5 text-warning" /> Avg Rating
+            <Star className="h-3.5 w-3.5 text-warning" /> {t("rev.avgRating")}
           </div>
           <div className="font-display text-3xl font-bold text-warning">
-            {avgRating ?? "—"}
+            {avgRating ?? "-"}
             {avgRating && <span className="text-lg text-muted-foreground">/5</span>}
           </div>
         </div>
         <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all duration-300">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <Users className="h-3.5 w-3.5" /> Quizzes Reviewed
+            <Users className="h-3.5 w-3.5" /> {t("rev.quizzesReviewed")}
           </div>
           <div className="font-display text-3xl font-bold">{quizzesWithFeedback}</div>
         </div>
@@ -227,10 +227,10 @@ function ReviewsPage() {
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted/40 w-fit flex-wrap">
         {([
-          { key: "feedback",    label: "Participant Feedback" },
-          { key: "performance", label: "Quiz Performance" },
-          { key: "appreview",   label: "App Review" },
-        ] as const).map(({ key, label }) => (
+          { key: "feedback",    labelKey: "rev.tabFeedback" },
+          { key: "performance", labelKey: "rev.tabPerformance" },
+          { key: "appreview",   labelKey: "rev.tabAppReview" },
+        ] as const).map(({ key, labelKey }) => (
           <button
             key={key}
             type="button"
@@ -241,14 +241,14 @@ function ReviewsPage() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
 
       {loading && activeTab !== "appreview" ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-          Loading…
+          {t("common.loading")}
         </div>
       ) : activeTab === "feedback" ? (
         <FeedbackTab feedbacks={feedbacks} />
@@ -263,14 +263,13 @@ function ReviewsPage() {
 
 /* ── Feedback tab ── */
 function FeedbackTab({ feedbacks }: { feedbacks: FeedbackRow[] }) {
+  const { t } = useI18n();
   if (feedbacks.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
         <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground/60" />
-        <p className="mt-3 text-sm font-medium">No participant feedback yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Participants can rate and comment after completing a quiz. It will appear here.
-        </p>
+        <p className="mt-3 text-sm font-medium">{t("rev.noFeedback")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("rev.noFeedbackHint")}</p>
       </div>
     );
   }
@@ -316,16 +315,15 @@ function FeedbackTab({ feedbacks }: { feedbacks: FeedbackRow[] }) {
   );
 }
 
-/* ── Performance tab — 100% real data, no generated text ── */
+/* ── Performance tab - 100% real data, no generated text ── */
 function PerformanceTab({ stats }: { stats: SessionStat[] }) {
+  const { t } = useI18n();
   if (stats.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
         <BarChart3 className="mx-auto h-10 w-10 text-muted-foreground/60" />
-        <p className="mt-3 text-sm font-medium">No completed sessions yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Performance data appears once you close a quiz session.
-        </p>
+        <p className="mt-3 text-sm font-medium">{t("rev.noSessions")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("rev.noSessionsHint")}</p>
       </div>
     );
   }
@@ -364,17 +362,17 @@ function PerformanceTab({ stats }: { stats: SessionStat[] }) {
             <>
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="rounded-xl bg-secondary/40 px-3 py-2.5 text-center">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Avg Score</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("rev.avgScore")}</div>
                   <div className={`text-xl font-bold ${scoreColor(s.avg_pct)}`}>{s.avg_pct}%</div>
                 </div>
                 <div className="rounded-xl bg-secondary/40 px-3 py-2.5 text-center">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 flex items-center justify-center gap-1">
-                    <Trophy className="h-3 w-3 text-warning" /> Highest
+                    <Trophy className="h-3 w-3 text-warning" /> {t("rev.highest")}
                   </div>
                   <div className="text-xl font-bold text-warning">{s.highest_pct}%</div>
                 </div>
                 <div className="rounded-xl bg-secondary/40 px-3 py-2.5 text-center">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Lowest</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{t("rev.lowest")}</div>
                   <div className={`text-xl font-bold ${scoreColor(s.lowest_pct)}`}>{s.lowest_pct}%</div>
                 </div>
               </div>
@@ -383,15 +381,15 @@ function PerformanceTab({ stats }: { stats: SessionStat[] }) {
               <div className="flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-1.5 text-success">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span className="font-semibold">{s.total_correct}</span> correct
+                  <span className="font-semibold">{s.total_correct}</span> {t("rev.correct")}
                 </div>
                 <div className="flex items-center gap-1.5 text-destructive">
                   <XCircle className="h-3.5 w-3.5" />
-                  <span className="font-semibold">{s.total_wrong}</span> wrong
+                  <span className="font-semibold">{s.total_wrong}</span> {t("rev.wrong")}
                 </div>
                 {s.total_unattempted > 0 && (
                   <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <span className="font-semibold">{s.total_unattempted}</span> skipped
+                    <span className="font-semibold">{s.total_unattempted}</span> {t("rev.skipped")}
                   </div>
                 )}
               </div>
@@ -407,7 +405,7 @@ function PerformanceTab({ stats }: { stats: SessionStat[] }) {
               </div>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">No participants completed this session.</p>
+            <p className="text-xs text-muted-foreground">{t("rev.noParticipants")}</p>
           )}
         </div>
       ))}
@@ -450,6 +448,7 @@ function statusCls(s: string) {
 }
 
 function AppReviewTab({ userId }: { userId: string }) {
+  const { t } = useI18n();
   const [submissions, setSubmissions] = useState<AppFeedbackRow[]>([]);
   const [loadingSubs, setLoadingSubs] = useState(true);
   const [type, setType]         = useState<string>("improvement");
@@ -472,14 +471,14 @@ function AppReviewTab({ userId }: { userId: string }) {
   useEffect(() => { void loadSubmissions(); }, [loadSubmissions]);
 
   const submit = async () => {
-    if (!title.trim() || !body.trim()) { toast.error("Title and description are required"); return; }
+    if (!title.trim() || !body.trim()) { toast.error(t("fb.required")); return; }
     setSubmitting(true);
     const { error } = await supabase.from("app_feedback").insert({
       user_id: userId, type, priority, title: title.trim(), body: body.trim(),
     });
     setSubmitting(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Review submitted — thank you for your feedback!");
+    toast.success(t("rev.submitSuccess"));
     setTitle(""); setBody(""); setType("improvement"); setPriority("medium");
     void loadSubmissions();
   };
@@ -489,16 +488,13 @@ function AppReviewTab({ userId }: { userId: string }) {
       {/* Submit form */}
       <div className="rounded-2xl border border-border bg-card/60 p-5 space-y-4 hover:border-primary/30 hover:shadow-glow transition-all duration-300">
         <div>
-          <h3 className="font-semibold">Share Your Feedback</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Report bugs, request features, or suggest improvements for Evalutease.
-            Your feedback is reviewed by the admin team.
-          </p>
+          <h3 className="font-semibold">{t("rev.shareFeedback")}</h3>
+          <p className="text-xs text-muted-foreground mt-1">{t("rev.shareFeedbackDesc")}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="text-xs mb-1.5 block">Feedback type</Label>
+            <Label className="text-xs mb-1.5 block">{t("rev.feedbackType")}</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
@@ -513,7 +509,7 @@ function AppReviewTab({ userId }: { userId: string }) {
             </Select>
           </div>
           <div>
-            <Label className="text-xs mb-1.5 block">Priority</Label>
+            <Label className="text-xs mb-1.5 block">{t("rev.priority")}</Label>
             <Select value={priority} onValueChange={setPriority}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue />
@@ -528,7 +524,7 @@ function AppReviewTab({ userId }: { userId: string }) {
         </div>
 
         <div>
-          <Label className="text-xs mb-1.5 block">Title</Label>
+          <Label className="text-xs mb-1.5 block">{t("rev.feedbackTitle")}</Label>
           <Input
             placeholder="Short summary of your feedback…"
             value={title}
@@ -539,9 +535,9 @@ function AppReviewTab({ userId }: { userId: string }) {
         </div>
 
         <div>
-          <Label className="text-xs mb-1.5 block">Description</Label>
+          <Label className="text-xs mb-1.5 block">{t("rev.description")}</Label>
           <Textarea
-            placeholder="Describe in detail — steps to reproduce, what you'd like changed, or ideas…"
+            placeholder="Describe in detail - steps to reproduce, what you'd like changed, or ideas…"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={5}
@@ -557,13 +553,13 @@ function AppReviewTab({ userId }: { userId: string }) {
           className="w-full bg-gradient-primary text-primary-foreground shadow-glow gap-1.5"
         >
           <Send className="h-3.5 w-3.5" />
-          {submitting ? "Submitting…" : "Submit to Admin"}
+          {submitting ? t("rev.submitting") : t("rev.submitToAdmin")}
         </Button>
       </div>
 
       {/* Past submissions */}
       <div className="space-y-3">
-        <h3 className="font-semibold text-sm px-1">Your Submissions</h3>
+        <h3 className="font-semibold text-sm px-1">{t("rev.yourSubmissions")}</h3>
 
         {loadingSubs ? (
           <div className="space-y-2">
@@ -574,7 +570,7 @@ function AppReviewTab({ userId }: { userId: string }) {
         ) : submissions.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border bg-card/30 p-8 text-center">
             <MessageSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
-            <p className="mt-2 text-sm text-muted-foreground">No submissions yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t("rev.noSubmissions")}</p>
           </div>
         ) : (
           <ul className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
@@ -600,7 +596,7 @@ function AppReviewTab({ userId }: { userId: string }) {
 
                   {s.admin_reply && (
                     <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2">
-                      <div className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-0.5">Admin Reply</div>
+                      <div className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-0.5">{t("rev.adminReply")}</div>
                       <p className="text-xs text-foreground">{s.admin_reply}</p>
                     </div>
                   )}

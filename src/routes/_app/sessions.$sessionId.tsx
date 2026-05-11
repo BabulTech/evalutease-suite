@@ -595,7 +595,7 @@ function SessionLobbyPage() {
   const joinUrl = useMemo(() => {
     if (!session?.access_code) return "";
     // Allow a hard-coded public base (e.g. https://babulquize.netlify.app) to override
-    // window.location.origin — useful when the host is browsing the dashboard on a
+    // window.location.origin - useful when the host is browsing the dashboard on a
     // host-only adapter (192.168.56.x) that phones can't reach.
     const envBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined)?.replace(/\/$/, "");
     if (envBase) return `${envBase}/q/${session.access_code}`;
@@ -648,7 +648,7 @@ function SessionLobbyPage() {
       pause_offset_seconds: 0,
       is_open: true,
     });
-    toast.success("Quiz started — participants will see questions");
+    toast.success("Quiz started - participants will see questions");
     void loadSession();
   };
 
@@ -726,7 +726,7 @@ function SessionLobbyPage() {
       paused_at: null,
       is_open: false,
     });
-    toast.success("Quiz closed — moved to Quiz History");
+    toast.success("Quiz closed - moved to Quiz History");
     void navigate({ to: "/quiz-history" });
   };
 
@@ -839,7 +839,7 @@ function SessionLobbyPage() {
         </div>
       </div>
 
-      {/* Action bar — disabled entirely when the quiz is finished. */}
+      {/* Action bar - disabled entirely when the quiz is finished. */}
       <div className="flex flex-wrap gap-2 print:hidden">
         {!isActive && !isCompleted && (
           <Button
@@ -1615,7 +1615,7 @@ function JoinPanel({
       <div className="rounded-2xl border border-border bg-card/60 p-5">
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Quiz PIN</div>
         <div className="mt-2 font-display text-4xl font-bold text-primary tracking-wider">
-          {accessCode || "—"}
+          {accessCode || "-"}
         </div>
         {accessCode && (
           <button

@@ -67,7 +67,7 @@ export default function QuizReportVisualization({
 
       <SectionLabel
         title="Score Performance"
-        desc="How well participants scored — from the top to the lowest result."
+        desc="How well participants scored - from the top to the lowest result."
       />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <Metric icon={BarChart3} label="Class average" value={`${stats.avg}%`}
@@ -75,9 +75,9 @@ export default function QuizReportVisualization({
         <Metric icon={Trophy} label="Highest score" value={stats.best === null ? "-" : `${stats.best}%`}
           desc="Best individual score in this session" color="text-success" />
         <Metric icon={BarChart3} label="Median score" value={stats.median === null ? "-" : `${stats.median}%`}
-          desc="Middle value — half scored above this, half below" />
+          desc="Middle value - half scored above this, half below" />
         <Metric icon={Flame} label="Lowest score" value={stats.worst === null ? "-" : `${stats.worst}%`}
-          desc="Lowest individual score — shows who may need extra help" color="text-destructive" />
+          desc="Lowest individual score - shows who may need extra help" color="text-destructive" />
       </div>
 
       <SectionLabel
@@ -88,9 +88,9 @@ export default function QuizReportVisualization({
         <AnswerMetric label="Correct answers" value={stats.totals.correct} tone="success"
           desc="Questions answered correctly across all participants" />
         <AnswerMetric label="Wrong answers" value={stats.totals.wrong} tone="danger"
-          desc="Incorrect answers — useful for spotting tricky questions" />
+          desc="Incorrect answers - useful for spotting tricky questions" />
         <AnswerMetric label="Skipped / not attempted" value={stats.totals.unattempted} tone="muted"
-          desc="Questions left blank — may indicate time pressure or confusion" />
+          desc="Questions left blank - may indicate time pressure or confusion" />
       </div>
 
       <SectionLabel

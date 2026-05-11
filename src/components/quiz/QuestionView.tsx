@@ -138,7 +138,7 @@ export function QuestionView({
           </div>
           <h3 className="font-display text-xl font-bold">Quiz paused</h3>
           <p className="text-sm text-muted-foreground max-w-sm">
-            The teacher has paused this quiz. Hang tight — your timer is frozen and answers are
+            The teacher has paused this quiz. Hang tight - your timer is frozen and answers are
             disabled until it resumes.
           </p>
         </div>

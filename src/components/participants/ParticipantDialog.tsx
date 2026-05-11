@@ -98,7 +98,7 @@ export function ParticipantDialog({
                 <SelectValue placeholder="Select type (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">— Not specified —</SelectItem>
+                <SelectItem value="__none__">- Not specified -</SelectItem>
                 {TYPE_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
                     {o.emoji} {o.label}
@@ -108,7 +108,7 @@ export function ParticipantDialog({
             </Select>
           </div>
 
-          {/* Name — always required */}
+          {/* Name - always required */}
           <div className="md:col-span-2">
             <Label className="mb-1.5">
               Name <span className="text-destructive">*</span>
@@ -121,7 +121,7 @@ export function ParticipantDialog({
             />
           </div>
 
-          {/* Email + Mobile — always shown */}
+          {/* Email + Mobile - always shown */}
           <div>
             <Label className="mb-1.5">Email</Label>
             <Input
@@ -254,7 +254,7 @@ export function ParticipantDialog({
             </div>
           )}
 
-          {/* Address — shown for student/teacher/employee/unset */}
+          {/* Address - shown for student/teacher/employee/unset */}
           {ptype !== "fun" && (
             <div className="md:col-span-2">
               <Label className="mb-1.5">Address</Label>
@@ -266,7 +266,7 @@ export function ParticipantDialog({
             </div>
           )}
 
-          {/* Notes — shown for non-fun (fun reuses notes for alias) */}
+          {/* Notes - shown for non-fun (fun reuses notes for alias) */}
           {ptype !== "fun" && (
             <div className="md:col-span-2">
               <Label className="mb-1.5">Notes</Label>

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,11 +72,12 @@ function QuickCreateDialog({ open, onClose, title, placeholder, onConfirm }: {
   open: boolean; onClose: () => void; title: string; placeholder: string;
   onConfirm: (name: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     const name = value.trim();
-    if (!name) { toast.error("Name is required"); return; }
+    if (!name) { toast.error(t("ptAdd.nameRequired")); return; }
     setBusy(true);
     try { await onConfirm(name); setValue(""); onClose(); } finally { setBusy(false); }
   };
@@ -84,12 +86,12 @@ function QuickCreateDialog({ open, onClose, title, placeholder, onConfirm }: {
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div>
-          <Label className="mb-1.5">Name</Label>
+          <Label className="mb-1.5">{t("ptAdd.name")}</Label>
           <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoFocus onKeyDown={(e) => { if (e.key === "Enter") void submit(); }} />
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => { setValue(""); onClose(); }} disabled={busy}>Cancel</Button>
-          <Button onClick={submit} disabled={busy} className="bg-gradient-primary text-primary-foreground shadow-glow">{busy ? "Creating…" : "Create"}</Button>
+          <Button variant="ghost" onClick={() => { setValue(""); onClose(); }} disabled={busy}>{t("common.cancel")}</Button>
+          <Button onClick={submit} disabled={busy} className="bg-gradient-primary text-primary-foreground shadow-glow">{busy ? t("common.saving") : t("common.create")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -108,41 +110,42 @@ function GroupSelector({
   onNewType: () => void;
   onNewSub: () => void;
 }) {
+  const { t } = useI18n();
   const visibleSubs = subs.filter((s) => s.type_id === typeId);
   return (
     <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Step 1 — Choose group</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("ptAdd.step1")}</div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label className="mb-1.5 text-sm">Type</Label>
+          <Label className="mb-1.5 text-sm">{t("ptAdd.typeLabel")}</Label>
           <div className="flex gap-1">
             <Select value={typeId || "__none__"} onValueChange={(v) => onTypeChange(v === "__none__" ? "" : v)}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Select type" />
+                <SelectValue placeholder={t("ptAdd.selectType")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">— Select type —</SelectItem>
+                <SelectItem value="__none__">{t("ptAdd.noneType")}</SelectItem>
                 {types.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="New type" onClick={onNewType}>
+            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title={t("ptAdd.newType")} onClick={onNewType}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
         </div>
         <div>
-          <Label className="mb-1.5 text-sm">Sub-type <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Label className="mb-1.5 text-sm">{t("ptAdd.groupLabel")} <span className="text-muted-foreground font-normal">({t("ptAdd.groupOptional")})</span></Label>
           <div className="flex gap-1">
             <Select value={subId || "__none__"} onValueChange={(v) => onSubChange(v === "__none__" ? "" : v)} disabled={!typeId}>
               <SelectTrigger className="flex-1">
-                <SelectValue placeholder={typeId ? "Select sub-type" : "Pick type first"} />
+                <SelectValue placeholder={typeId ? t("ptAdd.selectGroup") : t("ptAdd.pickTypeFirst")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">— None —</SelectItem>
+                <SelectItem value="__none__">{t("ptAdd.noneGroup")}</SelectItem>
                 {visibleSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="New sub-type" disabled={!typeId} onClick={onNewSub}>
+            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title={t("ptAdd.newGroup")} disabled={!typeId} onClick={onNewSub}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -155,6 +158,7 @@ function GroupSelector({
 /* ── Main page ── */
 function AddParticipantPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   const [types, setTypes] = useState<TypeRow[]>([]);
@@ -181,7 +185,7 @@ function AddParticipantPage() {
     if (!user) return;
     const { data, error } = await supabase.from("participant_types").insert({ owner_id: user.id, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Type "${name}" created`);
+    toast.success(t("pt.typeCreated").replace("{name}", name));
     await loadGroups();
     if (data) setTypeId(data.id);
   };
@@ -190,7 +194,7 @@ function AddParticipantPage() {
     if (!user || !typeId) return;
     const { data, error } = await supabase.from("participant_subtypes").insert({ owner_id: user.id, type_id: typeId, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Sub-type "${name}" created`);
+    toast.success(t("pt.groupCreated").replace("{name}", name));
     await loadGroups();
     if (data) setSubId(data.id);
   };
@@ -209,11 +213,11 @@ function AddParticipantPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await supabase.from("participants").insert(rows as any);
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Added ${drafts.length} participant${drafts.length === 1 ? "" : "s"}`);
+    toast.success(`${t("pt.added")} ${drafts.length} ${drafts.length === 1 ? t("pt.participant") : t("pt.participants")}`);
   };
 
   const generateInvite = async (): Promise<InviteRow | null> => {
-    if (!user || !subId) { toast.error("Select a sub-type to generate invite links."); return null; }
+    if (!user || !subId) { toast.error(t("pt.selectGroupFirst")); return null; }
     const { data, error } = await supabase.from("participant_invites")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .insert([{ owner_id: user.id, subtype_id: subId, email: null as any }])
@@ -232,12 +236,10 @@ function AddParticipantPage() {
           onClick={() => navigate({ to: "/participant-types" })}
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-4"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to participants
+          <ArrowLeft className="h-3.5 w-3.5" /> {t("ptAdd.backTo")}
         </button>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Add Participants</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Choose how you'd like to add participants — manually, by invite link, via file upload, or by scanning an image.
-        </p>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t("ptAdd.title")}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("ptAdd.desc")}</p>
       </div>
 
       {/* Group selector */}
@@ -252,17 +254,17 @@ function AddParticipantPage() {
 
       {/* Tabs */}
       <div className="rounded-2xl border border-border bg-card/50 p-5">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">Step 2 — Add method</div>
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">{t("ptAdd.step2")}</div>
         <Tabs defaultValue="manual">
           <TabsList className="mb-6 w-full grid grid-cols-4">
-            <TabsTrigger value="manual" className="gap-1.5"><UserPlus className="h-3.5 w-3.5" /><span className="hidden sm:inline">Manual</span></TabsTrigger>
-            <TabsTrigger value="invite" className="gap-1.5"><Mail className="h-3.5 w-3.5" /><span className="hidden sm:inline">Invite Link</span></TabsTrigger>
-            <TabsTrigger value="upload" className="gap-1.5"><Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload CSV</span></TabsTrigger>
-            <TabsTrigger value="scan" className="gap-1.5"><ScanLine className="h-3.5 w-3.5" /><span className="hidden sm:inline">Scan Image</span></TabsTrigger>
+            <TabsTrigger value="manual" className="gap-1.5"><UserPlus className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabManual")}</span></TabsTrigger>
+            <TabsTrigger value="invite" className="gap-1.5"><Mail className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabInvite")}</span></TabsTrigger>
+            <TabsTrigger value="upload" className="gap-1.5"><Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabUpload")}</span></TabsTrigger>
+            <TabsTrigger value="scan" className="gap-1.5"><ScanLine className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabScan")}</span></TabsTrigger>
           </TabsList>
 
           <TabsContent value="manual">
-            <ManualTab typeId={typeId} onSave={async (d) => { await insertOne(d); toast.success(`Added ${d.name}`); }} />
+            <ManualTab typeId={typeId} onSave={async (d) => { await insertOne(d); toast.success(t("pt.participantAdded").replace("{name}", d.name)); }} />
           </TabsContent>
 
           <TabsContent value="invite">
@@ -280,14 +282,15 @@ function AddParticipantPage() {
       </div>
 
       {/* Quick-create dialogs */}
-      <QuickCreateDialog open={createTypeOpen} onClose={() => setCreateTypeOpen(false)} title="New participant type" placeholder="e.g. Student, Teacher, Employee" onConfirm={createType} />
-      <QuickCreateDialog open={createSubOpen} onClose={() => setCreateSubOpen(false)} title="New sub-type" placeholder="e.g. Class 9, Engineering Team" onConfirm={createSub} />
+      <QuickCreateDialog open={createTypeOpen} onClose={() => setCreateTypeOpen(false)} title={t("ptAdd.newTypeTitle")} placeholder={t("ptAdd.newTypePlaceholder")} onConfirm={createType} />
+      <QuickCreateDialog open={createSubOpen} onClose={() => setCreateSubOpen(false)} title={t("ptAdd.newGroupTitle")} placeholder={t("ptAdd.newGroupPlaceholder")} onConfirm={createSub} />
     </div>
   );
 }
 
 /* ── Manual tab ── */
 function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: ParticipantDraft) => Promise<void> }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<ParticipantDraft>(() => emptyDraft());
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -310,7 +313,7 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
   if (!typeId) return (
     <div className="rounded-xl border border-dashed border-border bg-card/30 py-10 text-center">
       <UserPlus className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
-      <p className="text-sm text-muted-foreground">Select a type above to add participants manually.</p>
+      <p className="text-sm text-muted-foreground">{t("ptAdd.selectTypeManual")}</p>
     </div>
   );
 
@@ -320,45 +323,45 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <Label className="mb-1.5">Participant type</Label>
+          <Label className="mb-1.5">{t("ptAdd.participantType")}</Label>
           <Select value={ptype || "__none__"} onValueChange={(v) => set("participant_type", v === "__none__" ? "" : v as ParticipantType)}>
-            <SelectTrigger><SelectValue placeholder="Select role (optional)" /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={t("ptAdd.selectRole")} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none__">— Not specified —</SelectItem>
+              <SelectItem value="__none__">{t("ptAdd.notSpecified")}</SelectItem>
               {TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
 
         <div className="md:col-span-2">
-          <Label className="mb-1.5">Name <span className="text-destructive">*</span></Label>
-          <Input value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" autoFocus />
+          <Label className="mb-1.5">{t("ptAdd.name")} <span className="text-destructive">*</span></Label>
+          <Input value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder={t("ptAdd.fullName")} autoFocus />
         </div>
         <div>
-          <Label className="mb-1.5">Email</Label>
+          <Label className="mb-1.5">{t("ptAdd.email")}</Label>
           <Input type="email" value={draft.email} onChange={(e) => set("email", e.target.value)} placeholder="participant@example.com" />
         </div>
         <div>
-          <Label className="mb-1.5">Mobile</Label>
+          <Label className="mb-1.5">{t("ptAdd.mobile")}</Label>
           <Input type="tel" value={draft.mobile} onChange={(e) => set("mobile", e.target.value)} placeholder="+92 300 0000000" />
         </div>
 
         {(ptype === "student" || ptype === "") && (
           <>
             <div>
-              <Label className="mb-1.5">School / Organization</Label>
+              <Label className="mb-1.5">{t("ptAdd.schoolOrg")}</Label>
               <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
             </div>
             <div>
-              <Label className="mb-1.5">Class / Grade</Label>
+              <Label className="mb-1.5">{t("ptAdd.classGrade")}</Label>
               <Input value={draft.grade || draft.class} onChange={(e) => { set("grade", e.target.value); set("class", e.target.value); }} placeholder="Class 10 / Year 12" />
             </div>
             <div>
-              <Label className="mb-1.5">Roll number</Label>
+              <Label className="mb-1.5">{t("ptAdd.rollNumber")}</Label>
               <Input value={draft.roll_number} onChange={(e) => set("roll_number", e.target.value)} placeholder="2026-CS-042" />
             </div>
             <div>
-              <Label className="mb-1.5">Seat number</Label>
+              <Label className="mb-1.5">{t("ptAdd.seatNumber")}</Label>
               <Input value={draft.seat_number} onChange={(e) => set("seat_number", e.target.value)} placeholder="A-12" />
             </div>
           </>
@@ -367,15 +370,15 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
         {ptype === "teacher" && (
           <>
             <div>
-              <Label className="mb-1.5">Employee ID</Label>
+              <Label className="mb-1.5">{t("ptAdd.employeeId")}</Label>
               <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
             </div>
             <div>
-              <Label className="mb-1.5">School / Institution</Label>
+              <Label className="mb-1.5">{t("ptAdd.schoolInstitution")}</Label>
               <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
             </div>
             <div>
-              <Label className="mb-1.5">Subject / Class</Label>
+              <Label className="mb-1.5">{t("ptAdd.subjectClass")}</Label>
               <Input value={draft.class} onChange={(e) => set("class", e.target.value)} placeholder="Mathematics, Class 9–10" />
             </div>
           </>
@@ -384,15 +387,15 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
         {ptype === "employee" && (
           <>
             <div>
-              <Label className="mb-1.5">Employee ID</Label>
+              <Label className="mb-1.5">{t("ptAdd.employeeId")}</Label>
               <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
             </div>
             <div>
-              <Label className="mb-1.5">Company / Organization</Label>
+              <Label className="mb-1.5">{t("ptAdd.companyOrg")}</Label>
               <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Acme Corp" />
             </div>
             <div>
-              <Label className="mb-1.5">Department</Label>
+              <Label className="mb-1.5">{t("ptAdd.department")}</Label>
               <Input value={draft.department} onChange={(e) => set("department", e.target.value)} placeholder="Engineering" />
             </div>
           </>
@@ -400,23 +403,23 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
 
         {ptype === "fun" && (
           <div>
-            <Label className="mb-1.5">Nickname / Alias</Label>
+            <Label className="mb-1.5">{t("ptAdd.nicknameAlias")}</Label>
             <Input value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="QuizMaster99" />
           </div>
         )}
 
         {ptype !== "fun" && (
           <div className="md:col-span-2">
-            <Label className="mb-1.5">Notes</Label>
-            <Textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Anything worth noting" rows={2} />
+            <Label className="mb-1.5">{t("ptAdd.notes")}</Label>
+            <Textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder={t("ptAdd.anythingNoting")} rows={2} />
           </div>
         )}
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => setDraft(emptyDraft())} disabled={busy}>Reset</Button>
+        <Button variant="ghost" onClick={() => setDraft(emptyDraft())} disabled={busy}>{t("ptAdd.reset")}</Button>
         <Button onClick={submit} disabled={busy} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-          {saved ? <><Check className="h-4 w-4" /> Added!</> : busy ? "Saving…" : <><UserPlus className="h-4 w-4" /> Add Participant</>}
+          {saved ? <><Check className="h-4 w-4" /> {t("ptAdd.added")}</> : busy ? t("ptAdd.saving") : <><UserPlus className="h-4 w-4" /> {t("ptAdd.addParticipant")}</>}
         </Button>
       </div>
     </div>
@@ -425,6 +428,7 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
 
 /* ── Invite link tab ── */
 function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Promise<InviteRow | null> }) {
+  const { t } = useI18n();
   const [invite, setInvite] = useState<InviteRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -439,28 +443,26 @@ function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Pro
 
   const copy = async (url: string) => {
     const ok = await copyText(url);
-    if (ok) { setCopied(true); toast.success("Link copied"); setTimeout(() => setCopied(false), 1500); }
+    if (ok) { setCopied(true); toast.success(t("ptAdd.linkCopied")); setTimeout(() => setCopied(false), 1500); }
     else toast.error("Could not copy");
   };
 
   if (!subId) return (
     <div className="rounded-xl border border-dashed border-border bg-card/30 py-10 text-center">
       <Mail className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
-      <p className="text-sm text-muted-foreground">Select a <span className="font-medium text-foreground">sub-type</span> above to generate invite links.</p>
-      <p className="text-xs text-muted-foreground mt-1">Invite links are tied to a specific sub-type (e.g. Class 9).</p>
+      <p className="text-sm text-muted-foreground">{t("ptAdd.selectGroupInvite")}</p>
+      <p className="text-xs text-muted-foreground mt-1">{t("ptAdd.inviteGroupNote")}</p>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        Generate a QR code + link that participants can open on their phones to self-register into the selected sub-type.
-      </p>
+      <p className="text-sm text-muted-foreground">{t("ptAdd.inviteDesc")}</p>
 
       {!invite ? (
         <div className="flex justify-center">
           <Button onClick={generate} disabled={busy} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow px-8">
-            {busy ? "Generating…" : <><Mail className="h-4 w-4" /> Generate Invite Link</>}
+            {busy ? t("ptAdd.generating") : <><Mail className="h-4 w-4" /> {t("ptAdd.generateInvite")}</>}
           </Button>
         </div>
       ) : (
@@ -483,16 +485,14 @@ function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Pro
 
           <div className="flex gap-2 w-full max-w-md">
             <Button onClick={() => copy(invite.url)} className="flex-1 gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              {copied ? <><Check className="h-4 w-4" /> Copied!</> : <><Copy className="h-4 w-4" /> Copy Link</>}
+              {copied ? <><Check className="h-4 w-4" /> {t("ptAdd.copied")}</> : <><Copy className="h-4 w-4" /> {t("ptAdd.copyLink")}</>}
             </Button>
             <Button variant="outline" onClick={() => { setInvite(null); setCopied(false); }}>
-              New Link
+              {t("ptAdd.newLink")}
             </Button>
           </div>
 
-          <p className="text-xs text-muted-foreground text-center">
-            Each link is single-use. Generate a new one for each participant, or share the QR code for anyone to scan.
-          </p>
+          <p className="text-xs text-muted-foreground text-center">{t("ptAdd.inviteSingleUse")}</p>
         </div>
       )}
     </div>
@@ -501,6 +501,7 @@ function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Pro
 
 /* ── Upload CSV tab ── */
 function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: ParticipantDraft[]) => Promise<void> }) {
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const [filename, setFilename] = useState("");
   const [drafts, setDrafts] = useState<ParticipantDraft[]>([]);
@@ -519,7 +520,7 @@ function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Partic
 
   const parse = () => {
     const out = parseParticipantsCsv(text);
-    if (!out.length) { toast.error("No rows with a name found — check your header row"); return; }
+    if (!out.length) { toast.error("No rows with a name found - check your header row"); return; }
     setDrafts(out);
     toast.success(`${out.length} participant${out.length === 1 ? "" : "s"} parsed`);
   };
@@ -536,7 +537,7 @@ function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Partic
   if (!typeId) return (
     <div className="rounded-xl border border-dashed border-border bg-card/30 py-10 text-center">
       <Upload className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
-      <p className="text-sm text-muted-foreground">Select a type above before uploading a file.</p>
+      <p className="text-sm text-muted-foreground">{t("ptAdd.selectTypeUpload")}</p>
     </div>
   );
 
@@ -552,28 +553,28 @@ function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Partic
         role="button"
       >
         <FileText className="mx-auto h-10 w-10 text-muted-foreground/60" />
-        <div className="mt-3 text-sm font-medium">{filename ? `Loaded: ${filename}` : "Click to choose a CSV / TSV file"}</div>
-        <div className="mt-1 text-xs text-muted-foreground">or drag-and-drop · up to 1 MB</div>
+        <div className="mt-3 text-sm font-medium">{filename ? `Loaded: ${filename}` : t("ptAdd.chooseFile")}</div>
+        <div className="mt-1 text-xs text-muted-foreground">{t("ptAdd.dragDrop")}</div>
         <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
       </div>
 
       <div>
-        <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">Paste or edit content</Label>
+        <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">{t("ptAdd.pasteEdit")}</Label>
         <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={"name,email,roll_number,class\nAli Khan,ali@example.com,2026-CS-01,Class 9"} className="min-h-[140px] font-mono text-xs" />
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => fileRef.current?.click()} className="gap-2"><Upload className="h-4 w-4" /> Choose file</Button>
-        <Button onClick={parse} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">Parse rows</Button>
+        <Button variant="ghost" onClick={() => fileRef.current?.click()} className="gap-2"><Upload className="h-4 w-4" /> {t("ptAdd.chooseFileBtn")}</Button>
+        <Button onClick={parse} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">{t("ptAdd.parseRows")}</Button>
       </div>
 
       <ParticipantDraftReview drafts={drafts} setDrafts={setDrafts} />
 
       {drafts.length > 0 && (
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-          <Button variant="ghost" onClick={() => setDrafts([])} disabled={saving}><X className="h-4 w-4 mr-1" /> Discard</Button>
+          <Button variant="ghost" onClick={() => setDrafts([])} disabled={saving}><X className="h-4 w-4 mr-1" /> {t("ptAdd.discard")}</Button>
           <Button onClick={handleSave} disabled={saving || !drafts.length} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-            <Save className="h-4 w-4" />{saving ? "Saving…" : `Save all (${drafts.length})`}
+            <Save className="h-4 w-4" />{saving ? t("ptAdd.saving") : `${t("ptAdd.saveAll")} (${drafts.length})`}
           </Button>
         </div>
       )}
@@ -583,6 +584,7 @@ function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Partic
 
 /* ── Scan image tab ── */
 function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: ParticipantDraft[]) => Promise<void> }) {
+  const { t } = useI18n();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageName, setImageName] = useState("");
   const [imageBase64, setImageBase64] = useState("");
@@ -642,13 +644,13 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
   if (!typeId) return (
     <div className="rounded-xl border border-dashed border-border bg-card/30 py-10 text-center">
       <ScanLine className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
-      <p className="text-sm text-muted-foreground">Select a type above before scanning an image.</p>
+      <p className="text-sm text-muted-foreground">{t("ptAdd.selectTypeScan")}</p>
     </div>
   );
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Upload a photo of a class list, attendance sheet, or any document — AI will extract participants automatically.</p>
+      <p className="text-sm text-muted-foreground">{t("ptAdd.scanDesc")}</p>
 
       <div
         className="rounded-2xl border-2 border-dashed border-border hover:border-primary/40 bg-card/30 p-6 text-center cursor-pointer transition-colors"
@@ -660,8 +662,8 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
         ) : (
           <>
             <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/60" />
-            <div className="mt-3 text-sm font-medium">Click to choose an image</div>
-            <div className="mt-1 text-xs text-muted-foreground">JPG, PNG, WebP — up to 5 MB</div>
+            <div className="mt-3 text-sm font-medium">{t("ptAdd.clickImage")}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{t("ptAdd.imgFormats")}</div>
           </>
         )}
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
@@ -669,15 +671,15 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
 
       {imageUrl && (
         <div>
-          <Label className="mb-1.5 text-sm">Hint for AI <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <Label className="mb-1.5 text-sm">{t("ptAdd.hintForAi")} <span className="text-muted-foreground font-normal">({t("ptAdd.groupOptional")})</span></Label>
           <Input value={hint} onChange={(e) => setHint(e.target.value)} placeholder='e.g. "Class 10-A attendance sheet, columns: name, roll no, class"' />
         </div>
       )}
 
       <div className="flex justify-end gap-2">
-        {imageUrl && <Button variant="ghost" onClick={reset} disabled={extracting || saving}><X className="h-4 w-4 mr-1" /> Clear</Button>}
+        {imageUrl && <Button variant="ghost" onClick={reset} disabled={extracting || saving}><X className="h-4 w-4 mr-1" /> {t("ptAdd.clear")}</Button>}
         <Button onClick={extract} disabled={!imageUrl || extracting} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-          <ScanLine className="h-4 w-4" />{extracting ? "Extracting…" : "Extract participants"}
+          <ScanLine className="h-4 w-4" />{extracting ? t("ptAdd.extracting") : t("ptAdd.extractParticipants")}
         </Button>
       </div>
 
@@ -685,9 +687,9 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
 
       {drafts.length > 0 && (
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
-          <Button variant="ghost" onClick={() => setDrafts([])} disabled={saving}><X className="h-4 w-4 mr-1" /> Discard</Button>
+          <Button variant="ghost" onClick={() => setDrafts([])} disabled={saving}><X className="h-4 w-4 mr-1" /> {t("ptAdd.discard")}</Button>
           <Button onClick={handleSave} disabled={saving} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-            <Save className="h-4 w-4" />{saving ? "Saving…" : `Save all (${drafts.length})`}
+            <Save className="h-4 w-4" />{saving ? t("ptAdd.saving") : `${t("ptAdd.saveAll")} (${drafts.length})`}
           </Button>
         </div>
       )}

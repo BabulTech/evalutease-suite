@@ -36,9 +36,10 @@ import {
   timedPage,
 } from "./helpers.js";
 
-const CLASSES = 5;
-const STUDENTS_PER_CLASS = 100;
-const TOTAL_STUDENTS = CLASSES * STUDENTS_PER_CLASS; // 500
+const CLASSES            = Number(__ENV.CLASSES             || 5);
+const STUDENTS_PER_CLASS = Number(__ENV.STUDENTS_PER_CLASS  || 100);
+const TOTAL_STUDENTS     = CLASSES * STUDENTS_PER_CLASS;
+const SUSTAIN_DURATION   = __ENV.SUSTAIN || "8m";
 
 // SMOKE=true → 5 VUs, ~70 s run for connectivity verification
 const isSmoke = (__ENV.SMOKE || "false").toLowerCase() === "true";
@@ -54,8 +55,8 @@ const studentStages = isSmoke
       { duration: "30s", target: STUDENTS_PER_CLASS * 2 },     // class 2
       { duration: "30s", target: STUDENTS_PER_CLASS * 3 },     // class 3
       { duration: "30s", target: STUDENTS_PER_CLASS * 4 },     // class 4
-      { duration: "30s", target: TOTAL_STUDENTS },             // class 5 — full 500
-      { duration: "8m",  target: TOTAL_STUDENTS },             // sustain
+      { duration: "30s", target: TOTAL_STUDENTS },             // class 5 — full load
+      { duration: SUSTAIN_DURATION, target: TOTAL_STUDENTS },  // sustain
       { duration: "60s", target: 0 },                          // wind down
     ];
 
@@ -103,9 +104,9 @@ export function setup() {
 export function studentScenario() {
   const quizCode = chooseQuizCode();
 
-  group("load session page", () => {
-    timedPage(`/q/${quizCode}`, "participant_quiz_page");
-  });
+  // Skip Vercel HTML page load — irrelevant to backend capacity,
+  // and single-IP load tests get WAF-blocked by Vercel/CDN.
+  // To test the frontend, use Grafana Cloud k6 (distributed IPs).
 
   // Verify session is accessible and get session info
   const joinSummary = rpc(
@@ -169,8 +170,6 @@ export function studentScenario() {
 
   // Mark attempt complete
   completeAttempt(attemptId);
-
-  timedPage(`/q/${quizCode}`, "participant_result_page");
   pause(2);
 }
 

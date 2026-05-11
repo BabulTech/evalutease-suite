@@ -100,7 +100,7 @@ function SessionsPage() {
   const remove = async (id: string) => {
     const target = sessions.find((s) => s.id === id);
     if (target?.status === "active") {
-      toast.error("Active quizzes are locked. Close the session before deleting it.");
+      toast.error(t("sess.deleteActive"));
       return;
     }
     const { error } = await supabase.from("quiz_sessions").delete().eq("id", id).neq("status", "active");
@@ -109,7 +109,7 @@ function SessionsPage() {
       return;
     }
     setSessions((prev) => prev.filter((s) => s.id !== id));
-    toast.success("Session deleted");
+    toast.success(t("sess.deleted"));
   };
 
   return (
@@ -117,31 +117,27 @@ function SessionsPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight">{t("nav.sessions")}</h1>
-          <p className="text-muted-foreground mt-1">
-            Generate QR/link sessions, schedule them, and run live quizzes for your participants.
-          </p>
+          <p className="text-muted-foreground mt-1">{t("sess.description")}</p>
         </div>
         <Button
           asChild
           className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
         >
           <Link to="/sessions/new">
-            <QrCode className="h-4 w-4" /> Generate QR Session
+            <QrCode className="h-4 w-4" /> {t("sess.generateQR")}
           </Link>
         </Button>
       </div>
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-          Loading sessions…
+          {t("sess.loading")}
         </div>
       ) : sessions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
           <PlayCircle className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No sessions yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Hit Generate QR Session to create your first one.
-          </p>
+          <p className="mt-3 text-sm font-medium">{t("sess.empty")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("sess.emptyHint")}</p>
         </div>
       ) : (
         <>
@@ -153,7 +149,7 @@ function SessionsPage() {
           {hasMore && (
             <div className="flex justify-center">
               <Button variant="outline" onClick={() => setVisibleLimit((v) => v + SESSION_PAGE_SIZE)}>
-                Load more sessions
+                {t("sess.loadMore")}
               </Button>
             </div>
           )}

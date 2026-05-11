@@ -168,7 +168,7 @@ function InvitePage() {
           {data.type.name} → {data.subtype.name}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Fill in your details below — your type and group are pre-selected.
+          Fill in your details below - your type and group are pre-selected.
         </p>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -183,7 +183,7 @@ function InvitePage() {
                 <SelectValue placeholder="Select your role (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">— Not specified —</SelectItem>
+                <SelectItem value="__none__">- Not specified -</SelectItem>
                 {TYPE_OPTIONS.map((o) => (
                   <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>
                 ))}
@@ -191,7 +191,7 @@ function InvitePage() {
             </Select>
           </div>
 
-          {/* Name — always */}
+          {/* Name - always */}
           <div className="md:col-span-2">
             <Label className="mb-1.5">Name <span className="text-destructive">*</span></Label>
             <Input value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" autoFocus maxLength={120} />

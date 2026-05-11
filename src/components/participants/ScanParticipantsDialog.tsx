@@ -92,7 +92,7 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
         return;
       }
       setDrafts(out);
-      toast.success(`Extracted ${out.length} participant${out.length === 1 ? "" : "s"} — review before saving`);
+      toast.success(`Extracted ${out.length} participant${out.length === 1 ? "" : "s"} - review before saving`);
     } catch (err) {
       toast.error((err as Error)?.message ?? "Image extraction failed");
     } finally {
@@ -151,7 +151,7 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
                     <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/60" />
                     <div className="mt-3 text-sm font-medium">Click to upload an image</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      JPG, PNG, GIF, or WebP — up to 5 MB
+                      JPG, PNG, GIF, or WebP - up to 5 MB
                     </div>
                   </div>
                 )}
@@ -185,7 +185,7 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
                 value={hint}
                 onChange={(e) => setHint(e.target.value)}
                 placeholder={
-                  "Anything Claude should know — e.g. 'class 9-A roll-call sheet, names in column 2', 'ignore signatures'…"
+                  "Anything Claude should know - e.g. 'class 9-A roll-call sheet, names in column 2', 'ignore signatures'…"
                 }
                 className="min-h-[160px] text-sm"
               />

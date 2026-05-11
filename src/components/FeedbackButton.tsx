@@ -3,6 +3,7 @@ import { MessageSquarePlus, X, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +31,7 @@ const PRIORITIES = [
 
 export function FeedbackButton() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [type, setType] = useState("improvement");
   const [priority, setPriority] = useState("medium");
@@ -41,14 +43,14 @@ export function FeedbackButton() {
 
   const submit = async () => {
     if (!user) return;
-    if (!title.trim() || !body.trim()) { toast.error("Title and description are required"); return; }
+    if (!title.trim() || !body.trim()) { toast.error(t("fb.required")); return; }
     setSubmitting(true);
     const { error } = await supabase.from("app_feedback").insert({
       user_id: user.id, type, priority, title: title.trim(), body: body.trim(),
     });
     setSubmitting(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Feedback sent to admin — thank you!");
+    toast.success(t("fb.sent"));
     reset();
     setOpen(false);
   };
@@ -59,11 +61,11 @@ export function FeedbackButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="Send feedback to admin"
+        title={t("fb.title")}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-gradient-primary text-primary-foreground px-4 py-2.5 text-sm font-semibold shadow-glow hover:scale-105 transition-transform"
       >
         <MessageSquarePlus className="h-4 w-4" />
-        Feedback
+        {t("fb.button")}
       </button>
 
       {/* Slide-up panel */}
@@ -73,8 +75,8 @@ export function FeedbackButton() {
           <div className="relative z-10 w-full max-w-md rounded-2xl border border-border bg-card shadow-elegant p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-display font-bold text-base">Send Feedback</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Help us improve Evalutease.</p>
+                <h3 className="font-display font-bold text-base">{t("fb.title")}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{t("fb.desc")}</p>
               </div>
               <button type="button" onClick={() => setOpen(false)} className="rounded-xl p-1.5 hover:bg-muted/40 transition-colors">
                 <X className="h-4 w-4 text-muted-foreground" />
@@ -83,14 +85,14 @@ export function FeedbackButton() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs mb-1 block">Type</Label>
+                <Label className="text-xs mb-1 block">{t("fb.type")}</Label>
                 <Select value={type} onValueChange={setType}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>{TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label className="text-xs mb-1 block">Priority</Label>
+                <Label className="text-xs mb-1 block">{t("fb.priority")}</Label>
                 <Select value={priority} onValueChange={setPriority}>
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>{PRIORITIES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
@@ -99,12 +101,12 @@ export function FeedbackButton() {
             </div>
 
             <div>
-              <Label className="text-xs mb-1 block">Title</Label>
+              <Label className="text-xs mb-1 block">{t("fb.titleLabel")}</Label>
               <Input placeholder="Brief summary…" value={title} onChange={(e) => setTitle(e.target.value)} className="text-sm" maxLength={120} />
             </div>
 
             <div>
-              <Label className="text-xs mb-1 block">Description</Label>
+              <Label className="text-xs mb-1 block">{t("fb.description")}</Label>
               <Textarea
                 placeholder="Describe the issue, idea, or improvement in detail…"
                 value={body}
@@ -122,7 +124,7 @@ export function FeedbackButton() {
               className="w-full bg-gradient-primary text-primary-foreground shadow-glow gap-1.5"
             >
               <Send className="h-3.5 w-3.5" />
-              {submitting ? "Sending…" : "Send to Admin"}
+              {submitting ? t("fb.sending") : t("fb.sendToAdmin")}
             </Button>
           </div>
         </div>

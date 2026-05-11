@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ManualTab } from "@/components/questions/ManualTab";
 import { QuestionList } from "@/components/questions/QuestionList";
 import { PaginationControls } from "@/components/PaginationControls";
+import { useI18n } from "@/lib/i18n";
 import {
   DEFAULT_TIME_SECONDS,
   type DraftQuestion,
@@ -43,6 +44,7 @@ type CatRow = { id: string; name: string };
 function SubCategoryQuestionsPage() {
   const { categoryId, subId } = Route.useParams();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [category, setCategory] = useState<CatRow | null>(null);
   const [sub, setSub] = useState<SubRow | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -150,7 +152,7 @@ function SubCategoryQuestionsPage() {
       created_at: row.created_at,
     }));
     setQuestions((prev) => [...inserted, ...prev]);
-    toast.success(`${inserted.length} question${inserted.length === 1 ? "" : "s"} saved`);
+    toast.success(`${inserted.length} ${inserted.length === 1 ? t("q.count") : t("q.counts")} ${t("q.saved")}`);
   };
 
   const updateQuestion = async (id: string, draft: DraftQuestion) => {
@@ -179,7 +181,7 @@ function SubCategoryQuestionsPage() {
           : q,
       ),
     );
-    toast.success("Question updated");
+    toast.success(t("q.updated"));
   };
 
   const deleteQuestion = async (id: string) => {
@@ -189,14 +191,14 @@ function SubCategoryQuestionsPage() {
       return;
     }
     setQuestions((prev) => prev.filter((q) => q.id !== id));
-    toast.success("Question deleted");
+    toast.success(t("q.deleted"));
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Link to="/categories" className="hover:text-foreground">
-          All categories
+          {t("q.allCategories")}
         </Link>
         <ChevronLeft className="h-3 w-3 rotate-180" />
         <Link
@@ -204,10 +206,10 @@ function SubCategoryQuestionsPage() {
           params={{ categoryId }}
           className="hover:text-foreground"
         >
-          {category?.name ?? "Category"}
+          {category?.name ?? t("q.category")}
         </Link>
         <ChevronLeft className="h-3 w-3 rotate-180" />
-        <span className="text-foreground">{sub?.name ?? "Topic"}</span>
+        <span className="text-foreground">{sub?.name ?? t("q.topic")}</span>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -217,7 +219,7 @@ function SubCategoryQuestionsPage() {
           </div>
           <div>
             <h1 className="font-display text-2xl font-bold tracking-tight">
-              {sub?.name ?? "Topic"}
+              {sub?.name ?? t("q.topic")}
             </h1>
             {sub?.description && (
               <p className="text-muted-foreground mt-1 text-sm">{sub.description}</p>
@@ -225,23 +227,23 @@ function SubCategoryQuestionsPage() {
           </div>
         </div>
         <div className="text-xs text-muted-foreground">
-          {questionTotal} question{questionTotal === 1 ? "" : "s"}
+          {questionTotal} {questionTotal === 1 ? t("q.count") : t("q.counts")}
         </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
           <TabsTrigger value="manual" className="gap-1.5 py-2">
-            <FileEdit className="h-4 w-4" /> Manual
+            <FileEdit className="h-4 w-4" /> {t("q.tabManual")}
           </TabsTrigger>
           <TabsTrigger value="scan" className="gap-1.5 py-2">
-            <ScanLine className="h-4 w-4" /> Scan Image
+            <ScanLine className="h-4 w-4" /> {t("q.tabScan")}
           </TabsTrigger>
           <TabsTrigger value="ai" className="gap-1.5 py-2">
-            <Sparkles className="h-4 w-4" /> AI Generate
+            <Sparkles className="h-4 w-4" /> {t("q.tabAI")}
           </TabsTrigger>
           <TabsTrigger value="upload" className="gap-1.5 py-2">
-            <Upload className="h-4 w-4" /> Upload File
+            <Upload className="h-4 w-4" /> {t("q.tabUpload")}
           </TabsTrigger>
         </TabsList>
 
@@ -267,7 +269,7 @@ function SubCategoryQuestionsPage() {
 
       <div>
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          Questions in this topic
+          {t("q.questionsInTopic")}
         </h3>
         <QuestionList
           questions={questions}
@@ -288,5 +290,6 @@ function SubCategoryQuestionsPage() {
 }
 
 function TabLoading() {
-  return <div className="rounded-xl border border-border bg-card/30 p-6 text-sm text-muted-foreground">Loading...</div>;
+  const { t } = useI18n();
+  return <div className="rounded-xl border border-border bg-card/30 p-6 text-sm text-muted-foreground">{t("common.loading")}</div>;
 }

@@ -371,7 +371,7 @@ export function ShareResultCard(props: Props) {
             <Share2 className="h-4 w-4 text-primary" />
           </div>
           <span className="font-semibold text-sm">Share Result</span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">— let everyone know!</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">- let everyone know!</span>
         </div>
         <span className="text-muted-foreground text-xs">{open ? "▲" : "▼"}</span>
       </button>

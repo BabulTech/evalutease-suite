@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -87,24 +88,25 @@ type DateRange = "all" | "7d" | "30d" | "90d";
 type StatusFilter = "all" | "completed" | "pending";
 type SortOption = "rank" | "percentDesc" | "percentAsc" | "name" | "fastest" | "recent";
 
-const DATE_RANGE_LABEL: Record<DateRange, string> = {
-  all: "All time",
-  "7d": "Last 7 days",
-  "30d": "Last 30 days",
-  "90d": "Last 90 days",
+const DATE_RANGE_KEYS: Record<DateRange, string> = {
+  all: "rep.allTime",
+  "7d": "rep.last7d",
+  "30d": "rep.last30d",
+  "90d": "rep.last90d",
 };
 
-const SORT_LABEL: Record<SortOption, string> = {
-  rank: "Position (best first)",
-  percentDesc: "Score % (high → low)",
-  percentAsc: "Score % (low → high)",
-  name: "Name (A → Z)",
-  fastest: "Fastest finish",
-  recent: "Most recent",
+const SORT_KEYS: Record<SortOption, string> = {
+  rank: "rep.positionBestFirst",
+  percentDesc: "rep.scoreHighLow",
+  percentAsc: "rep.scoreLowHigh",
+  name: "rep.nameAZ",
+  fastest: "rep.fastest",
+  recent: "rep.mostRecent",
 };
 
 function ReportsPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [sessions, setSessions] = useState<ReportSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -210,7 +212,7 @@ function ReportsPage() {
     return sessions.filter((s) => subjectLabel(s) === subjectFilter);
   }, [sessions, subjectFilter]);
 
-  // sessions is already the current server-side page — no further slicing needed
+  // sessions is already the current server-side page - no further slicing needed
   const visibleSessions = filteredSessions;
 
   useEffect(() => {
@@ -387,12 +389,9 @@ function ReportsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="h-7 w-7 text-primary" /> Reports
+            <BarChart3 className="h-7 w-7 text-primary" /> {t("rep.title")}
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Slice quiz results by date, subject, pass mark, and status — then export the filtered
-            view.
-          </p>
+          <p className="text-muted-foreground mt-1">{t("rep.desc")}</p>
         </div>
         {selected && reportMode === "quiz" && (
           <div className="flex gap-2 print:hidden">
@@ -411,15 +410,13 @@ function ReportsPage() {
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-          Loading reports...
+          {t("common.loading")}
         </div>
       ) : sessions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
           <Trophy className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No completed quiz reports yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Close a live quiz session and its final report will appear here.
-          </p>
+          <p className="mt-3 text-sm font-medium">{t("rep.empty")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("rep.emptyHint")}</p>
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
@@ -435,7 +432,7 @@ function ReportsPage() {
                     : ""
                 }
               >
-                <BarChart3 className="mr-1.5 h-4 w-4" /> Quiz
+                <BarChart3 className="mr-1.5 h-4 w-4" /> {t("rep.quiz")}
               </Button>
               <Button
                 type="button"
@@ -447,55 +444,55 @@ function ReportsPage() {
                     : ""
                 }
               >
-                <UserRound className="mr-1.5 h-4 w-4" /> Student
+                <UserRound className="mr-1.5 h-4 w-4" /> {t("rep.student")}
               </Button>
             </div>
 
             <div className="rounded-2xl border border-border bg-card/40 p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Filter className="h-3.5 w-3.5" /> Filters
+                  <Filter className="h-3.5 w-3.5" /> {t("rep.filters")}
                 </div>
                 <button
                   type="button"
                   onClick={resetFilters}
                   className="text-[11px] inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
                 >
-                  <RotateCcw className="h-3 w-3" /> Reset
+                  <RotateCcw className="h-3 w-3" /> {t("rep.reset")}
                 </button>
               </div>
 
-              <FilterField icon={Search} label="Search quizzes" hint="Filter the quiz list by title, subject, or topic">
+              <FilterField icon={Search} label={t("rep.searchQuizzes")} hint={t("rep.searchQuizzesHint")}>
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="e.g. Science, Chapter 3…"
+                  placeholder={t("rep.searchQuizzesPlaceholder")}
                   className="h-9"
                 />
               </FilterField>
 
-              <FilterField icon={CalendarRange} label="Date range" hint="Show only quizzes held within this period">
+              <FilterField icon={CalendarRange} label={t("rep.dateRange")} hint={t("rep.dateRangeHint")}>
                 <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(DATE_RANGE_LABEL) as DateRange[]).map((value) => (
+                    {(Object.keys(DATE_RANGE_KEYS) as DateRange[]).map((value) => (
                       <SelectItem key={value} value={value}>
-                        {DATE_RANGE_LABEL[value]}
+                        {t(DATE_RANGE_KEYS[value])}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </FilterField>
 
-              <FilterField icon={ListFilter} label="Subject" hint="Narrow results to a specific subject">
+              <FilterField icon={ListFilter} label={t("rep.subjectFilter")} hint={t("rep.subjectHint")}>
                 <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                   <SelectTrigger className="h-9">
-                    <SelectValue placeholder="All subjects" />
+                    <SelectValue placeholder={t("rep.allSubjects")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All subjects</SelectItem>
+                    <SelectItem value="all">{t("rep.allSubjects")}</SelectItem>
                     {subjectOptions.map((option) => (
                       <SelectItem key={option} value={option}>
                         {option}
@@ -505,7 +502,7 @@ function ReportsPage() {
                 </Select>
               </FilterField>
 
-              <FilterField icon={Target} label={`Pass mark — ${passMark}%`} hint="Score % a participant needs to pass. Affects pass rate & result badges.">
+              <FilterField icon={Target} label={`${t("rep.passMark")} - ${passMark}%`} hint={t("rep.passMarkHint")}>
                 <div className="flex items-center gap-2">
                   <input
                     type="range" min={0} max={100} step={5} value={passMark}
@@ -516,41 +513,41 @@ function ReportsPage() {
                 </div>
               </FilterField>
 
-              <FilterField icon={Search} label={reportMode === "quiz" ? "Find participant" : "Search"} hint={reportMode === "quiz" ? "Search by name, email, roll or seat number" : "Search by name, email, or quiz title"}>
+              <FilterField icon={Search} label={reportMode === "quiz" ? t("rep.findParticipant") : t("rep.searchStudent")} hint={reportMode === "quiz" ? t("rep.findParticipantHint") : t("rep.searchStudentHint")}>
                 <Input
                   value={studentQuery}
                   onChange={(e) => setStudentQuery(e.target.value)}
-                  placeholder={reportMode === "quiz" ? "Name, email, roll…" : "Name, email, quiz…"}
+                  placeholder={reportMode === "quiz" ? t("rep.findParticipantPlaceholder") : t("rep.searchStudentPlaceholder")}
                   className="h-9"
                 />
               </FilterField>
 
-              <FilterField icon={Flame} label="Submission status" hint="Filter by whether participants finished the quiz">
+              <FilterField icon={Flame} label={t("rep.submissionStatus")} hint={t("rep.submissionStatusHint")}>
                 <div className="grid grid-cols-3 gap-1.5">
                   {([
-                    { val: "all", label: "All" },
-                    { val: "completed", label: "Submitted" },
-                    { val: "pending", label: "Left early" },
-                  ] as const).map(({ val, label }) => (
+                    { val: "all", key: "rep.all" },
+                    { val: "completed", key: "rep.submittedStatus" },
+                    { val: "pending", key: "rep.leftEarly" },
+                  ] as const).map(({ val, key }) => (
                     <Button key={val} type="button" size="sm"
                       variant={statusFilter === val ? "default" : "outline"}
                       onClick={() => setStatusFilter(val)}
                       className={statusFilter === val ? "bg-primary text-primary-foreground text-xs" : "text-xs"}>
-                      {label}
+                      {t(key)}
                     </Button>
                   ))}
                 </div>
               </FilterField>
 
-              <FilterField icon={ArrowDownAZ} label="Sort participants by" hint="Controls the order of rows in the results table">
+              <FilterField icon={ArrowDownAZ} label={t("rep.sortBy")} hint={t("rep.sortByHint")}>
                 <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(SORT_LABEL) as SortOption[]).map((value) => (
+                    {(Object.keys(SORT_KEYS) as SortOption[]).map((value) => (
                       <SelectItem key={value} value={value}>
-                        {SORT_LABEL[value]}
+                        {t(SORT_KEYS[value])}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -558,7 +555,7 @@ function ReportsPage() {
               </FilterField>
 
               {reportMode === "student" && (
-                <FilterField icon={UserRound} label="Student view">
+                <FilterField icon={UserRound} label={t("rep.studentView")}>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Button
                       type="button"
@@ -569,7 +566,7 @@ function ReportsPage() {
                         studentMode === "attempts" ? "bg-primary text-primary-foreground" : ""
                       }
                     >
-                      Per attempt
+                      {t("rep.perAttempt")}
                     </Button>
                     <Button
                       type="button"
@@ -580,7 +577,7 @@ function ReportsPage() {
                         studentMode === "students" ? "bg-primary text-primary-foreground" : ""
                       }
                     >
-                      Per student
+                      {t("rep.perStudent")}
                     </Button>
                   </div>
                 </FilterField>
@@ -589,11 +586,11 @@ function ReportsPage() {
 
             <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
               <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/50">
-                {filteredSessions.length} {filteredSessions.length === 1 ? "quiz" : "quizzes"}
+                {filteredSessions.length} {filteredSessions.length === 1 ? t("rep.quizCount") : t("rep.quizzesCount")}
               </div>
               {filteredSessions.length === 0 ? (
                 <div className="px-4 py-6 text-xs text-muted-foreground text-center">
-                  No quizzes match these filters.
+                  {t("rep.noQuizzesMatch")}
                 </div>
               ) : (
                 visibleSessions.map((s) => {
@@ -609,7 +606,7 @@ function ReportsPage() {
                     >
                       <div className="font-semibold truncate">{s.title}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                        {categoryLabel(s) || "Uncategorised"}
+                        {categoryLabel(s) || t("hist.uncategorised")}
                       </div>
                       <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
                         {new Date(s.created_at).toLocaleDateString()}
@@ -639,13 +636,13 @@ function ReportsPage() {
             <main className="space-y-6" id="report-print-area">
               {attemptsLoading && (
                 <div className="rounded-2xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
-                  Loading participant attempts...
+                  {t("rep.loadingAttempts")}
                 </div>
               )}
               <Suspense
                 fallback={
                   <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-                    Loading report visualization…
+                    {t("rep.loadingViz")}
                   </div>
                 }
               >
@@ -662,20 +659,20 @@ function ReportsPage() {
 
               {/* ── Section 6: Full results table ── */}
               <SectionLabel
-                title="Full Results Table"
-                desc="Every participant's detailed result. Use the filters on the left to narrow down."
+                title={t("rep.fullResultsTable")}
+                desc={t("rep.fullResultsDesc")}
               />
               <AttemptsTable rows={filteredRows} passMark={passMark} />
             </main>
           ) : (
             <main className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
               <Filter className="mx-auto h-10 w-10 text-muted-foreground/60" />
-              <p className="mt-3 text-sm font-medium">No quizzes match these filters</p>
+              <p className="mt-3 text-sm font-medium">{t("rep.noQuizzesMatch")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Loosen the date range, subject, or search to see results.
+                {t("rep.loosenFilters")}
               </p>
               <Button variant="outline" size="sm" className="mt-4" onClick={resetFilters}>
-                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset filters
+                <RotateCcw className="h-3.5 w-3.5 mr-1" /> {t("rep.resetFilters")}
               </Button>
             </main>
           )}
@@ -730,28 +727,29 @@ function QuizReportHeader({
   teacherName: string;
   schoolName: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card/60 to-card/40 p-6 print:border-0 print:bg-transparent print:p-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1 flex-1 min-w-0">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-            <Trophy className="h-3 w-3" /> Final Quiz Report
+            <Trophy className="h-3 w-3" /> {t("rep.finalReport")}
           </div>
           <h2 className="font-display text-2xl font-bold leading-tight">{session.title}</h2>
           <p className="text-xs text-muted-foreground">
-            Held on {new Date(session.created_at).toLocaleString()} {categoryLabel(session) ? `· ${categoryLabel(session)}` : ""}
+            {t("rep.heldOn")} {new Date(session.created_at).toLocaleString()} {categoryLabel(session) ? `· ${categoryLabel(session)}` : ""}
           </p>
           <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 md:grid-cols-4">
-            <ReportDetail label="Teacher" value={teacherName} />
-            <ReportDetail label="School / Org" value={schoolName || "Not specified"} />
-            <ReportDetail label="Subject" value={subjectLabel(session)} />
-            <ReportDetail label="Topic" value={session.topic || "Not specified"} />
+            <ReportDetail label={t("rep.teacherLabel")} value={teacherName} />
+            <ReportDetail label={t("rep.schoolOrg")} value={schoolName || t("rep.notSpecified")} />
+            <ReportDetail label={t("rep.subjectLabel")} value={subjectLabel(session)} />
+            <ReportDetail label={t("rep.topicLabel")} value={session.topic || t("rep.notSpecified")} />
           </dl>
         </div>
         {top && (
           <div className="rounded-2xl border border-warning/30 bg-warning/5 px-5 py-4 text-center shrink-0">
             <div className="text-2xl">🥇</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Top scorer</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">{t("rep.topScorer")}</div>
             <div className="font-display font-bold text-base mt-0.5 max-w-[140px] truncate">{top.name}</div>
             <div className="text-success font-bold text-sm">{top.score} pts · {top.percent}%</div>
           </div>
@@ -762,6 +760,7 @@ function QuizReportHeader({
 }
 
 function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: number }) {
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const [answerStats, setAnswerStats] = useState<
     Record<string, { correct: number; wrong: number; attempted: number }>
@@ -800,23 +799,23 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
       {rows.length === 0 ? (
         <div className="p-10 text-center">
           <Users className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
-          <p className="text-sm font-medium">No participants match these filters</p>
-          <p className="text-xs text-muted-foreground mt-1">Try changing the status or search filters on the left.</p>
+          <p className="text-sm font-medium">{t("rep.noParticipantsMatch")}</p>
+          <p className="text-xs text-muted-foreground mt-1">{t("rep.tryChangingFilters")}</p>
         </div>
       ) : (
         <table className="w-full text-sm min-w-[860px]">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">#</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Participant</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Roll / Seat</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Score (pts)</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Score %</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Result</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-success/80">✓ Correct</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-destructive/80">✗ Wrong</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Skipped</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">Time taken</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colHash")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colParticipant")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colRollSeat")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colScorePts")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colScorePct")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colResult")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-success/80">{t("rep.colCorrect")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-destructive/80">{t("rep.colWrong")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colSkipped")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colTimeTaken")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/40">
@@ -831,13 +830,13 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
                 <td className="px-4 py-3 font-bold text-muted-foreground">{row.rank}</td>
                 <td className="px-4 py-3">
                   <div className="font-semibold">{row.name}</div>
-                  <div className="text-xs text-muted-foreground">{row.email || "No email"}</div>
+                  <div className="text-xs text-muted-foreground">{row.email || t("rep.noEmail")}</div>
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground">
                   {row.rollNumber ? <span>Roll: {row.rollNumber}</span> : null}
                   {row.rollNumber && row.seatNumber ? " · " : null}
                   {row.seatNumber ? <span>Seat: {row.seatNumber}</span> : null}
-                  {!row.rollNumber && !row.seatNumber ? "—" : null}
+                  {!row.rollNumber && !row.seatNumber ? "-" : null}
                 </td>
                 <td className="px-4 py-3 font-bold text-success">{row.score}</td>
                 <td className="px-4 py-3">
@@ -860,7 +859,7 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
         </table>
       )}
       <div className="px-4 py-2 border-t border-border/40 text-xs text-muted-foreground">
-        {rows.length} participant{rows.length !== 1 ? "s" : ""} matched
+        {rows.length} {rows.length !== 1 ? t("rep.participantsMatched") : t("rep.participantMatched")}
       </div>
       <PaginationControls
         page={page}
@@ -874,10 +873,11 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
 }
 
 function ResultBadge({ row, passMark }: { row: QuizReportRow; passMark: number }) {
+  const { t } = useI18n();
   if (!row.completed) {
     return (
       <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        Left
+        {t("rep.resultLeft")}
       </span>
     );
   }
@@ -890,7 +890,7 @@ function ResultBadge({ row, passMark }: { row: QuizReportRow; passMark: number }
           : "bg-destructive/15 text-destructive border border-destructive/30"
       }`}
     >
-      {passed ? "Pass" : "Fail"}
+      {passed ? t("rep.resultPass") : t("rep.resultFail")}
     </span>
   );
 }
@@ -906,12 +906,13 @@ function DistributionBar({
   if (total === 0) return null;
   const pct = (n: number) => (n / total) * 100;
   const topThreshold = Math.min(100, passMark + 25);
+  const { t } = useI18n();
 
   const bands = [
-    { dot: "bg-success", label: `Excellent (≥ ${topThreshold}%)`, desc: "Scored in the top band", value: buckets.top },
-    { dot: "bg-primary/80", label: `Passed (${passMark}–${topThreshold - 1}%)`, desc: "Met the pass mark", value: buckets.pass },
-    { dot: "bg-destructive/80", label: `Below pass (< ${passMark}%)`, desc: "Did not meet the pass mark", value: buckets.fail },
-    { dot: "bg-muted-foreground/40", label: "Did not finish", desc: "Left without submitting", value: buckets.left },
+    { dot: "bg-success", label: `${t("rep.excellent")} (≥ ${topThreshold}%)`, desc: t("rep.scoredTopBand"), value: buckets.top },
+    { dot: "bg-primary/80", label: `${t("rep.passedBand")} (${passMark}–${topThreshold - 1}%)`, desc: t("rep.metPassMark"), value: buckets.pass },
+    { dot: "bg-destructive/80", label: `${t("rep.belowPass")} (< ${passMark}%)`, desc: t("rep.didNotMeetPassMark"), value: buckets.fail },
+    { dot: "bg-muted-foreground/40", label: t("rep.didNotFinish"), desc: t("rep.leftWithoutSubmitting"), value: buckets.left },
   ];
 
   return (
@@ -952,10 +953,11 @@ function Legend({ dot, label, value }: { dot: string; label: string; value: numb
 }
 
 function ReportDetail({ label, value }: { label: string; value: string }) {
+  const { t } = useI18n();
   return (
     <div>
       <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-semibold text-foreground">{value || "Not specified"}</dd>
+      <dd className="mt-0.5 font-semibold text-foreground">{value || t("rep.notSpecified")}</dd>
     </div>
   );
 }
@@ -1000,6 +1002,7 @@ function StudentReportsView({
   const passRate =
     attemptRows.length === 0 ? 0 : Math.round((passed / attemptRows.length) * 100);
   const uniqueStudents = summaryRows.length;
+  const { t } = useI18n();
 
   return (
     <main className="space-y-5">
@@ -1007,15 +1010,13 @@ function StudentReportsView({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Student report
+              {t("rep.studentReport")}
             </div>
             <h2 className="font-display text-2xl font-bold">
-              {mode === "students" ? "All students" : "All student attempts"}
+              {mode === "students" ? t("rep.allStudents") : t("rep.allStudentAttempts")}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {mode === "students"
-                ? "One row per student, rolled up across every quiz they appear in."
-                : "Every attempt with quiz, score, and status."}
+              {mode === "students" ? t("rep.oneRowPerStudent") : t("rep.everyAttempt")}
             </p>
           </div>
           <div className="text-right">
@@ -1023,17 +1024,17 @@ function StudentReportsView({
               {mode === "students" ? uniqueStudents : attemptRows.length}
             </div>
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {mode === "students" ? "students" : "matching attempts"}
+              {mode === "students" ? t("rep.students") : t("rep.matchingAttempts")}
             </div>
           </div>
         </div>
       </div>
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Metric icon={Users} label="Unique students" value={uniqueStudents} desc="Total distinct participants across all quizzes" />
-        <Metric icon={BarChart3} label="Total attempts" value={attemptRows.length} desc="How many times quizzes were started" />
-        <Metric icon={Trophy} label="Submitted" value={completed} desc="Attempts that were fully completed and submitted" />
-        <Metric icon={Target} label="Pass rate" value={`${passRate}%`} desc={`% of attempts scoring ≥ ${passMark}%`} color={passRate >= 60 ? "text-success" : "text-destructive"} />
+        <Metric icon={Users} label={t("rep.uniqueStudents")} value={uniqueStudents} desc={t("rep.uniqueStudentsDesc")} />
+        <Metric icon={BarChart3} label={t("rep.totalAttempts")} value={attemptRows.length} desc={t("rep.totalAttemptsDesc")} />
+        <Metric icon={Trophy} label={t("rep.submittedAttempts")} value={completed} desc={t("rep.submittedAttemptsDesc")} />
+        <Metric icon={Target} label={t("rep.passRate")} value={`${passRate}%`} desc={`% of attempts scoring ≥ ${passMark}%`} color={passRate >= 60 ? "text-success" : "text-destructive"} />
       </div>
 
       {mode === "students" ? (
@@ -1052,6 +1053,7 @@ function StudentSummaryTable({
   rows: StudentSummaryRow[];
   passMark: number;
 }) {
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
 
@@ -1063,22 +1065,22 @@ function StudentSummaryTable({
     <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
       {rows.length === 0 ? (
         <div className="p-8 text-center text-sm text-muted-foreground">
-          No students match these filters.
+          {t("rep.noStudentsMatch")}
         </div>
       ) : (
         <table className="w-full text-sm min-w-[820px]">
           <thead className="bg-secondary/40">
             <tr>
               {[
-                "Student",
-                "Email",
-                "Attempts",
-                "Submitted",
-                "Avg %",
-                "Best %",
-                "Worst %",
-                "Points",
-                "Last attempt",
+                t("rep.colStudent"),
+                t("rep.colEmail"),
+                t("rep.colAttempts"),
+                t("rep.colSubmitted"),
+                t("rep.colAvgPct"),
+                t("rep.colBestPct"),
+                t("rep.colWorstPct"),
+                t("rep.colPoints"),
+                t("rep.colLastAttempt"),
               ].map((h) => (
                 <th
                   key={h}
@@ -1095,7 +1097,7 @@ function StudentSummaryTable({
               return (
                 <tr key={row.key} className="border-t border-border/50">
                   <td className="px-3 py-2 font-semibold">{row.name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{row.email || "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{row.email || "-"}</td>
                   <td className="px-3 py-2">{row.attempts}</td>
                   <td className="px-3 py-2">{row.submitted}</td>
                   <td
@@ -1111,7 +1113,7 @@ function StudentSummaryTable({
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {row.lastAttemptAt
                       ? new Date(row.lastAttemptAt).toLocaleDateString()
-                      : "—"}
+                      : "-"}
                   </td>
                 </tr>
               );
@@ -1139,6 +1141,7 @@ function StudentAttemptsTable({
   passMark: number;
   average: number;
 }) {
+  const { t } = useI18n();
   const [page, setPage] = useState(0);
   const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
 
@@ -1149,12 +1152,12 @@ function StudentAttemptsTable({
   return (
     <>
       <div className="grid gap-3 md:grid-cols-3">
-        <Metric icon={BarChart3} label="Average score" value={`${average}%`} desc="Mean score across all filtered attempts" color={average >= passMark ? "text-success" : "text-destructive"} />
-        <Metric icon={Trophy} label="Highest score" value={`${rows[0]?.percent ?? 0}%`} desc="Best individual score in the filtered set" color="text-success" />
+        <Metric icon={BarChart3} label={t("rep.averageScore")} value={`${average}%`} desc={t("rep.averageScoreDesc")} color={average >= passMark ? "text-success" : "text-destructive"} />
+        <Metric icon={Trophy} label={t("rep.highestScore")} value={`${rows[0]?.percent ?? 0}%`} desc={t("rep.highestScoreDesc")} color="text-success" />
         <Metric
-          icon={Timer} label="Average time" desc="Mean time to finish a quiz attempt"
+          icon={Timer} label={t("rep.averageTime")} desc={t("rep.averageTimeDesc")}
           value={
-            rows.length === 0 ? "—"
+            rows.length === 0 ? "-"
               : formatDuration(
                   rows.reduce((sum, r) => sum + (r.durationSeconds ?? 0), 0) /
                     Math.max(1, rows.filter((r) => r.durationSeconds).length),
@@ -1166,24 +1169,24 @@ function StudentAttemptsTable({
       <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
         {rows.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            No attempts match these filters.
+            {t("rep.noAttemptsMatch")}
           </div>
         ) : (
           <table className="w-full text-sm min-w-[920px]">
             <thead className="bg-secondary/40">
               <tr>
                 {[
-                  "Student",
-                  "Email",
-                  "Quiz",
-                  "Roll",
-                  "Seat",
-                  "Points",
+                  t("rep.colStudent"),
+                  t("rep.colEmail"),
+                  t("rep.colQuiz"),
+                  t("rep.colRoll"),
+                  t("rep.colSeat"),
+                  t("rep.colPoints"),
                   "%",
-                  "Result",
-                  "Correct",
-                  "Wrong",
-                  "Time",
+                  t("rep.colResult"),
+                  t("rep.colCorrect"),
+                  t("rep.colWrong"),
+                  t("rep.colTime"),
                 ].map((h) => (
                   <th
                     key={h}
@@ -1198,15 +1201,15 @@ function StudentAttemptsTable({
               {visibleRows.map((row) => (
                 <tr key={`${row.sessionId}-${row.id}`} className="border-t border-border/50">
                   <td className="px-3 py-2 font-semibold">{row.name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{row.email || "—"}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{row.email || "-"}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium">{row.sessionTitle}</div>
                     <div className="text-xs text-muted-foreground">
                       {row.sessionCategory || new Date(row.sessionCreatedAt).toLocaleDateString()}
                     </div>
                   </td>
-                  <td className="px-3 py-2">{row.rollNumber || "—"}</td>
-                  <td className="px-3 py-2">{row.seatNumber || "—"}</td>
+                  <td className="px-3 py-2">{row.rollNumber || "-"}</td>
+                  <td className="px-3 py-2">{row.seatNumber || "-"}</td>
                   <td className="px-3 py-2 font-bold text-success">{row.score}</td>
                   <td className="px-3 py-2 font-mono">{row.percent}%</td>
                   <td className="px-3 py-2">

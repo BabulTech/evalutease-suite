@@ -17,7 +17,7 @@ export function Placeholder({
         </div>
         <h3 className="font-display text-xl font-semibold">{t("common.comingSoon")}</h3>
         <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-          This area is wired to the backend. The full UI is coming in the next pass — your existing engine will plug in here.
+          This area is wired to the backend. The full UI is coming in the next pass - your existing engine will plug in here.
         </p>
       </div>
     </div>

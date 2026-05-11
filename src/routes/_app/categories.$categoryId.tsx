@@ -142,7 +142,7 @@ function CategoryDetailPage() {
               {category?.name ?? "Category"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Topics let you organise questions further — pick one to add or edit
+              Topics let you organise questions further - pick one to add or edit
               questions.
             </p>
           </div>
@@ -173,7 +173,7 @@ function CategoryDetailPage() {
               <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/60" />
               <p className="mt-3 text-sm font-medium">No topics yet</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Create one — e.g. <span className="text-foreground">World War II</span>,{" "}
+                Create one - e.g. <span className="text-foreground">World War II</span>,{" "}
                 <span className="text-foreground">Class 9</span>, or{" "}
                 <span className="text-foreground">ICS Lecture 1</span>.
               </p>

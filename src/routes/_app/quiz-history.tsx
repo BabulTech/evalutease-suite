@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +79,7 @@ const QUIZ_TYPE_LABELS: Record<string, string> = {
 
 function QuizHistoryPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [sessions, setSessions] = useState<SessionWithStats[]>([]);
   const [sessionTotal, setSessionTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -163,7 +165,7 @@ function QuizHistoryPage() {
     const [attemptsRes, subRes, catRes, profileRes] = await Promise.all([
       supabase
         .from("quiz_attempts")
-        // No participants join here — lightweight for stats only.
+        // No participants join here - lightweight for stats only.
         // Full data (with metadata for roll/seat) is fetched lazily on expand.
         .select(
           "id, session_id, participant_id, participant_name, participant_email, score, total_questions, completed, completed_at",
@@ -301,7 +303,7 @@ function QuizHistoryPage() {
       )
       .join("");
 
-    const html = `<!DOCTYPE html><html><head><title>${s.title} — Report</title>
+    const html = `<!DOCTYPE html><html><head><title>${s.title} - Report</title>
     <style>
       body { font-family: sans-serif; padding: 24px; color: #111; }
       h1 { font-size: 20px; margin-bottom: 4px; }
@@ -314,7 +316,7 @@ function QuizHistoryPage() {
     <h1>${s.title}</h1>
     <div class="meta">
       Teacher: ${teacherName} · School: ${schoolName || "Not specified"} ·
-      Type: ${QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "—"} ·
+      Type: ${QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "-"} ·
       Date: ${new Date(s.created_at).toLocaleDateString()} ·
       Avg Score: ${s.avgPercent}%
     </div>
@@ -374,10 +376,8 @@ function QuizHistoryPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Quiz History</h1>
-          <p className="text-muted-foreground mt-1">
-            Closed quiz sessions with their final participant results. Click any session to expand.
-          </p>
+          <h1 className="font-display text-3xl font-bold tracking-tight">{t("hist.title")}</h1>
+          <p className="text-muted-foreground mt-1">{t("hist.desc")}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -387,7 +387,7 @@ function QuizHistoryPage() {
             onClick={() => setShowFilters((v) => !v)}
           >
             <Filter className="h-3.5 w-3.5" />
-            Filters
+            {t("hist.filters")}
             {hasFilters && (
               <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                 !
@@ -395,7 +395,7 @@ function QuizHistoryPage() {
             )}
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5 print:hidden" onClick={printAll}>
-            <Printer className="h-3.5 w-3.5" /> Print All
+            <Printer className="h-3.5 w-3.5" /> {t("hist.printAll")}
           </Button>
         </div>
       </div>
@@ -404,38 +404,38 @@ function QuizHistoryPage() {
       {showFilters && (
         <div className="rounded-2xl border border-border bg-card/60 p-4 space-y-3 print:hidden">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold">Filter History</span>
+            <span className="text-sm font-semibold">{t("hist.filterHistory")}</span>
             {hasFilters && (
               <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={clearFilters}>
-                <X className="h-3 w-3" /> Clear all
+                <X className="h-3 w-3" /> {t("hist.clearAll")}
               </Button>
             )}
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Quiz Title</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.quizTitle")}</label>
               <Input
-                placeholder="Search title…"
+                placeholder={t("hist.searchTitle")}
                 value={filterTitle}
                 onChange={(e) => setFilterTitle(e.target.value)}
                 className="h-8 text-sm"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Quiz Type</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.quizType")}</label>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
                 className="h-8 w-full rounded-lg border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="">All types</option>
+                <option value="">{t("hist.allTypes")}</option>
                 {Object.entries(QUIZ_TYPE_LABELS).map(([val, label]) => (
                   <option key={val} value={val}>{label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">From date</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.fromDate")}</label>
               <Input
                 type="date"
                 value={filterDateFrom}
@@ -444,7 +444,7 @@ function QuizHistoryPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">To date</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.toDate")}</label>
               <Input
                 type="date"
                 value={filterDateTo}
@@ -455,7 +455,7 @@ function QuizHistoryPage() {
           </div>
           {hasFilters && (
             <p className="text-xs text-muted-foreground">
-              Showing {sessions.length} of {sessionTotal} sessions
+              {t("hist.showing")} {sessions.length} {t("common.of")} {sessionTotal} {t("hist.sessions")}
             </p>
           )}
         </div>
@@ -469,22 +469,20 @@ function QuizHistoryPage() {
 
       {loading ? (
         <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
-          Loading…
+          {t("common.loading")}
         </div>
       ) : sessions.length === 0 && !hasFilters ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
           <Archive className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No completed sessions yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Once you close a live quiz session, it'll move here with the leaderboard.
-          </p>
+          <p className="mt-3 text-sm font-medium">{t("hist.empty")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("hist.emptyHint")}</p>
         </div>
       ) : sessions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
           <Filter className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">No sessions match your filters</p>
+          <p className="mt-3 text-sm font-medium">{t("hist.noMatch")}</p>
           <Button variant="ghost" size="sm" className="mt-2" onClick={clearFilters}>
-            Clear filters
+            {t("hist.clearFilters")}
           </Button>
         </div>
       ) : (
@@ -500,7 +498,7 @@ function QuizHistoryPage() {
             const top = submitted[0];
             const teacherName = getTeacherName(profile, user?.email);
             const schoolName = profile?.organization ?? "";
-            const quizTypeLabel = QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "—";
+            const quizTypeLabel = QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "-";
 
             return (
               <li
@@ -523,7 +521,7 @@ function QuizHistoryPage() {
                       <div className="mt-0.5 text-xs text-muted-foreground flex flex-wrap gap-x-2">
                         <span>
                           {[s.categoryName, s.subcategoryName].filter(Boolean).join(" → ") ||
-                            "Uncategorised"}
+                            t("hist.uncategorised")}
                         </span>
                         {s.topic && (
                           <>
@@ -534,9 +532,9 @@ function QuizHistoryPage() {
                         <span>·</span>
                         <span>{new Date(s.created_at).toLocaleDateString()}</span>
                         <span>·</span>
-                        <span>{submitted.length} submitted</span>
+                        <span>{submitted.length} {t("hist.submitted")}</span>
                         <span>·</span>
-                        <span>{s.avgPercent}% avg</span>
+                        <span>{s.avgPercent}% {t("hist.avg")}</span>
                       </div>
                     </div>
                   </div>
@@ -554,17 +552,15 @@ function QuizHistoryPage() {
                 {isOpen && (
                   <div className="border-t border-border p-4" id={`history-report-${s.id}`}>
                     {isLoadingExpand && (
-                      <p className="mb-3 text-xs text-muted-foreground">Loading full report…</p>
+                      <p className="mb-3 text-xs text-muted-foreground">{t("hist.loadingReport")}</p>
                     )}
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
                       <div>
-                        <div className="text-xs font-semibold">Final report</div>
-                        <p className="text-xs text-muted-foreground">
-                          Ranked by points — email, roll/seat, attempted, correct, wrong.
-                        </p>
+                        <div className="text-xs font-semibold">{t("hist.finalReport")}</div>
+                        <p className="text-xs text-muted-foreground">{t("hist.reportDesc")}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Teacher: {teacherName} · School: {schoolName || "Not specified"} · Type:{" "}
-                          {quizTypeLabel} · Subject: {subjectLabel(s)}
+                          {t("hist.teacher")}: {teacherName} · {t("hist.school")}: {schoolName || t("hist.notSpecified")} · {t("hist.type")}:{" "}
+                          {quizTypeLabel} · {t("hist.subject")}: {subjectLabel(s)}
                         </p>
                       </div>
                       <div className="flex gap-2" ref={downloadRef}>
@@ -575,7 +571,7 @@ function QuizHistoryPage() {
                           onClick={() => printQuiz(s, fullAttempts)}
                           className="gap-1.5"
                         >
-                          <Printer className="h-3.5 w-3.5" /> Print
+                          <Printer className="h-3.5 w-3.5" /> {t("hist.print")}
                         </Button>
 
                         {/* Download dropdown */}
@@ -587,7 +583,7 @@ function QuizHistoryPage() {
                             }
                             className="gap-1.5 bg-gradient-primary text-primary-foreground"
                           >
-                            <Download className="h-3.5 w-3.5" /> Download
+                            <Download className="h-3.5 w-3.5" /> {t("hist.download")}
                             <ChevronDown className="h-3 w-3 ml-0.5" />
                           </Button>
                           {downloadOpenId === s.id && (
@@ -632,7 +628,7 @@ function QuizHistoryPage() {
 
                     {submitted.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
-                        No participants completed this quiz.
+                        {t("hist.noParticipants")}
                       </p>
                     ) : (
                       <>
@@ -655,21 +651,21 @@ function QuizHistoryPage() {
                               <div className="text-sm font-semibold truncate">{a.name}</div>
                               <div className="text-[10px] text-muted-foreground truncate">
                                 {[
-                                  a.email || "No email",
-                                  a.rollNumber ? `Roll ${a.rollNumber}` : "",
-                                  a.seatNumber ? `Seat ${a.seatNumber}` : "",
-                                  `${correct} correct`,
-                                  `${wrong} wrong`,
-                                  `${skipped} unattempted`,
+                                  a.email || t("hist.noEmail"),
+                                  a.rollNumber ? `${t("hist.rollN")} ${a.rollNumber}` : "",
+                                  a.seatNumber ? `${t("hist.seatN")} ${a.seatNumber}` : "",
+                                  `${correct} ${t("hist.correct")}`,
+                                  `${wrong} ${t("hist.wrong")}`,
+                                  `${skipped} ${t("hist.unattempted")}`,
                                 ]
                                   .filter(Boolean)
                                   .join(" · ")}
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="text-sm font-bold text-success">{a.score} pts</div>
+                              <div className="text-sm font-bold text-success">{a.score} {t("hist.pts")}</div>
                               <div className="text-[10px] text-muted-foreground">
-                                {attempted}/{a.totalQuestions} attempted
+                                {attempted}/{a.totalQuestions} {t("hist.attempted")}
                               </div>
                               {a.completedAt && (
                                 <div className="text-[10px] text-muted-foreground">

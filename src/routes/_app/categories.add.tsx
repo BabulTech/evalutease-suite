@@ -5,6 +5,7 @@ import {
   ArrowLeft, FileEdit, FolderPlus, Plus, ScanLine, Sparkles, Upload, X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,10 +42,11 @@ function QuickCreateDialog({
   open: boolean; onClose: () => void; title: string; placeholder: string;
   onConfirm: (name: string) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!value.trim()) { toast.error("Name is required"); return; }
+    if (!value.trim()) { toast.error(t("cat.categoryName") + " " + t("common.required")); return; }
     setBusy(true);
     try { await onConfirm(value.trim()); setValue(""); onClose(); } finally { setBusy(false); }
   };
@@ -53,15 +55,15 @@ function QuickCreateDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div>
-          <Label className="mb-1.5">Name</Label>
+          <Label className="mb-1.5">{t("cat.categoryName")}</Label>
           <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder}
             autoFocus onKeyDown={(e) => { if (e.key === "Enter") void submit(); }} />
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => { setValue(""); onClose(); }} disabled={busy}>Cancel</Button>
+          <Button variant="ghost" onClick={() => { setValue(""); onClose(); }} disabled={busy}>{t("common.cancel")}</Button>
           <Button onClick={submit} disabled={busy || !value.trim()}
             className="bg-gradient-primary text-primary-foreground shadow-glow">
-            {busy ? "Creating…" : "Create"}
+            {busy ? t("cat.creating") : t("common.create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -72,6 +74,7 @@ function QuickCreateDialog({
 /* ── Main page ── */
 function AddQuestionPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   const [cats, setCats] = useState<Cat[]>([]);
@@ -102,7 +105,7 @@ function AddQuestionPage() {
     const { data, error } = await supabase.from("question_categories")
       .insert({ owner_id: user.id, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Category "${name}" created`);
+    toast.success(t("cat.categoryCreated").replace("{name}", name));
     setCats((prev) => [...prev, { id: data.id, name, icon: null }]);
     setSelectedCat(data.id);
     setSelectedSub("");
@@ -113,14 +116,14 @@ function AddQuestionPage() {
     const { data, error } = await supabase.from("question_subcategories")
       .insert({ owner_id: user.id, category_id: selectedCat, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
-    toast.success(`Sub-category "${name}" created`);
+    toast.success(t("cat.topicCreated").replace("{name}", name));
     setSubs((prev) => [...prev, { id: data.id, category_id: selectedCat, name }]);
     setSelectedSub(data.id);
   };
 
   const saveDrafts = async (drafts: DraftQuestion[], source: QuestionSource) => {
     if (!user || !selectedCat || !selectedSub) {
-      toast.error("Select a category and sub-category first");
+      toast.error(t("add.selectCatTopicFirst"));
       return;
     }
     setSaving(true);
@@ -134,7 +137,7 @@ function AddQuestionPage() {
     const { error } = await supabase.from("questions").insert(rows);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(`${rows.length} question${rows.length === 1 ? "" : "s"} saved`);
+    toast.success(`${rows.length} ${rows.length === 1 ? t("q.count") : t("q.counts")} ${t("q.saved")}`);
   };
 
   const selectedCatName = cats.find((c) => c.id === selectedCat)?.name ?? "";
@@ -150,26 +153,24 @@ function AddQuestionPage() {
           onClick={() => navigate({ to: "/categories" })}
           className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-4"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to questions
+          <ArrowLeft className="h-3.5 w-3.5" /> {t("add.backToQuestions")}
         </button>
-        <h1 className="font-display text-3xl font-bold tracking-tight">Add Questions</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Choose a category and sub-category, then add questions manually, by AI, by scan, or by uploading a file.
-        </p>
+        <h1 className="font-display text-3xl font-bold tracking-tight">{t("add.title")}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("add.desc")}</p>
       </div>
 
-      {/* Step 1 — Group selector */}
+      {/* Step 1 - Group selector */}
       <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Step 1 — Choose category
+          {t("add.step1")}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label className="mb-1.5 text-sm">Category</Label>
+            <Label className="mb-1.5 text-sm">{t("cat.category")}</Label>
             <div className="flex gap-1">
               <Select value={selectedCat} onValueChange={(v) => { setSelectedCat(v); setSelectedSub(""); }}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder={t("cat.selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -183,18 +184,18 @@ function AddQuestionPage() {
           </div>
           <div>
             <Label className="mb-1.5 text-sm">
-              Sub-category <span className="text-muted-foreground font-normal text-xs">(required)</span>
+              {t("cat.topic")} <span className="text-muted-foreground font-normal text-xs">({t("common.required")})</span>
             </Label>
             <div className="flex gap-1">
               <Select value={selectedSub} onValueChange={setSelectedSub} disabled={!selectedCat}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={selectedCat ? "Select sub-category" : "Pick category first"} />
+                  <SelectValue placeholder={selectedCat ? t("cat.selectTopic") : t("cat.pickCategoryFirst")} />
                 </SelectTrigger>
                 <SelectContent>
                   {filteredSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="New sub-category"
+              <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title="New topic"
                 disabled={!selectedCat} onClick={() => setSubDialog(true)}>
                 <Plus className="h-4 w-4" />
               </Button>
@@ -207,36 +208,36 @@ function AddQuestionPage() {
             <span className="font-semibold">{selectedCatName}</span>
             <span className="text-muted-foreground">→</span>
             <span className="font-semibold">{selectedSubName}</span>
-            <span className="ml-auto text-success">✓ Ready</span>
+            <span className="ml-auto text-success">✓ {t("add.ready")}</span>
           </div>
         )}
       </div>
 
-      {/* Step 2 — Tabs */}
+      {/* Step 2 - Tabs */}
       <div className="rounded-2xl border border-border bg-card/50 p-5">
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-          Step 2 — Add method
+          {t("add.step2")}
         </div>
 
         {!ready && (
           <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-warning mb-4">
-            ⚠ Select a category and sub-category above before adding questions.
+            ⚠ {t("add.selectWarning")}
           </div>
         )}
 
         <Tabs defaultValue="manual">
           <TabsList className="mb-6 w-full grid grid-cols-4">
             <TabsTrigger value="manual" className="gap-1.5">
-              <FileEdit className="h-3.5 w-3.5" /><span className="hidden sm:inline">Manual</span>
+              <FileEdit className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("q.tabManual")}</span>
             </TabsTrigger>
             <TabsTrigger value="scan" className="gap-1.5">
-              <ScanLine className="h-3.5 w-3.5" /><span className="hidden sm:inline">Scan</span>
+              <ScanLine className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("q.tabScan")}</span>
             </TabsTrigger>
             <TabsTrigger value="ai" className="gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" /><span className="hidden sm:inline">AI Generate</span>
+              <Sparkles className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("q.tabAI")}</span>
             </TabsTrigger>
             <TabsTrigger value="upload" className="gap-1.5">
-              <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">Upload</span>
+              <Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("q.tabUpload")}</span>
             </TabsTrigger>
           </TabsList>
 
@@ -262,15 +263,16 @@ function AddQuestionPage() {
       </div>
 
       <QuickCreateDialog open={catDialog} onClose={() => setCatDialog(false)}
-        title="New category" placeholder="e.g. Science, History"
+        title={t("cat.newCategory")} placeholder={t("cat.namePlaceholder")}
         onConfirm={createCat} />
       <QuickCreateDialog open={subDialog} onClose={() => setSubDialog(false)}
-        title="New sub-category" placeholder="e.g. Physics, World War II"
+        title={t("cat.newTopic")} placeholder={t("cat.namePlaceholder")}
         onConfirm={createSub} />
     </div>
   );
 }
 
 function TabLoading() {
-  return <div className="rounded-xl border border-border bg-card/30 p-6 text-sm text-muted-foreground">Loading...</div>;
+  const { t } = useI18n();
+  return <div className="rounded-xl border border-border bg-card/30 p-6 text-sm text-muted-foreground">{t("common.loading")}</div>;
 }

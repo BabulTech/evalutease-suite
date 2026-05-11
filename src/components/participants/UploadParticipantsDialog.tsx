@@ -22,7 +22,7 @@ const MAX_BYTES = 1024 * 1024;
 
 type Props = {
   trigger: ReactNode;
-  /** Called once for the whole batch — implementer should bulk insert. */
+  /** Called once for the whole batch - implementer should bulk insert. */
   onSave: (drafts: ParticipantDraft[]) => Promise<void>;
 };
 

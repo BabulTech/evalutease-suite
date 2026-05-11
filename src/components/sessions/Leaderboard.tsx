@@ -74,7 +74,7 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
     );
   }
 
-  // Recharts data — keep names short so they fit on the y-axis.
+  // Recharts data - keep names short so they fit on the y-axis.
   const data = topChartRows.map((e, i) => ({
     rank: i + 1,
     name: e.name.length > 18 ? e.name.slice(0, 16) + "…" : e.name,
@@ -166,7 +166,7 @@ export function Leaderboard({ entries, mode, emptyHint }: Props) {
       </ResponsiveContainer>
       </div>
 
-      {/* Detailed table — also serves as the print-friendly view. */}
+      {/* Detailed table - also serves as the print-friendly view. */}
       <div className="rounded-2xl border border-border bg-card/40 overflow-hidden">
         <div className="border-b border-border/50 p-3">
           <Input
