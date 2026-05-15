@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownAZ,
   BarChart3,
@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,7 @@ const SORT_KEYS: Record<SortOption, string> = {
 
 function ReportsPage() {
   const { user } = useAuth();
+  const { plan, credits, reload: reloadPlan } = usePlan();
   const { t } = useI18n();
   const [sessions, setSessions] = useState<ReportSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -366,8 +368,24 @@ function ReportsPage() {
     sort,
   });
 
-  const exportCsv = () => {
+  const deductExportCredit = async (): Promise<boolean> => {
+    const cost = plan?.credit_cost_export ?? 0;
+    if (!cost || !user) return true;
+    if (credits.balance < cost) {
+      toast.error(`Need ${cost} credits to export. You have ${credits.balance}. Buy more in Billing.`);
+      return false;
+    }
+    const { data: ok } = await supabase.rpc("deduct_credits", {
+      p_user_id: user.id, p_amount: cost, p_type: "extra_quiz",
+      p_description: `Report export: ${selected?.title ?? ""}`,
+    });
+    if (ok) reloadPlan();
+    return !!ok;
+  };
+
+  const exportCsv = async () => {
     if (!selected) return;
+    if (!(await deductExportCredit())) return;
     downloadQuizReportCsv(
       {
         title: selected.title,
@@ -385,31 +403,35 @@ function ReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight flex items-center gap-2">
-            <BarChart3 className="h-7 w-7 text-primary" /> {t("rep.title")}
-          </h1>
-          <p className="text-muted-foreground mt-1">{t("rep.desc")}</p>
+    <div className="space-y-4">
+      {/* Hero header */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <BarChart3 className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">{t("rep.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t("rep.desc")}</p>
+          </div>
         </div>
         {selected && reportMode === "quiz" && (
-          <div className="flex gap-2 print:hidden">
-            <Button variant="outline" onClick={() => window.print()} className="gap-1.5">
-              <FileText className="h-4 w-4" /> PDF
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" onClick={async () => { if (await deductExportCredit()) window.print(); }} className="gap-1.5 h-10">
+              <FileText className="h-4 w-4" /> PDF{plan?.credit_cost_export ? ` (${plan.credit_cost_export} cr)` : ""}
             </Button>
             <Button
-              onClick={exportCsv}
-              className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
+              onClick={() => void exportCsv()}
+              className="gap-1.5 h-10 bg-gradient-primary text-primary-foreground shadow-glow"
             >
-              <Download className="h-4 w-4" /> Excel ({filteredRows.length})
+              <Download className="h-4 w-4" /> Excel ({filteredRows.length}){plan?.credit_cost_export ? ` · ${plan.credit_cost_export} cr` : ""}
             </Button>
           </div>
         )}
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">
           {t("common.loading")}
         </div>
       ) : sessions.length === 0 ? (
@@ -419,8 +441,8 @@ function ReportsPage() {
           <p className="mt-1 text-xs text-muted-foreground">{t("rep.emptyHint")}</p>
         </div>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-          <aside className="space-y-3 print:hidden">
+        <div className="grid gap-5 lg:grid-cols-[320px_1fr] min-w-0">
+          <aside className="space-y-3 print:hidden min-w-0">
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
@@ -472,34 +494,53 @@ function ReportsPage() {
               </FilterField>
 
               <FilterField icon={CalendarRange} label={t("rep.dateRange")} hint={t("rep.dateRangeHint")}>
-                <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(DATE_RANGE_KEYS) as DateRange[]).map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {t(DATE_RANGE_KEYS[value])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(DATE_RANGE_KEYS) as DateRange[]).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setDateRange(value)}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium min-h-[28px] transition-colors ${
+                        dateRange === value
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {t(DATE_RANGE_KEYS[value])}
+                    </button>
+                  ))}
+                </div>
               </FilterField>
 
               <FilterField icon={ListFilter} label={t("rep.subjectFilter")} hint={t("rep.subjectHint")}>
-                <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder={t("rep.allSubjects")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("rep.allSubjects")}</SelectItem>
-                    {subjectOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-wrap gap-1.5">
+                  {(["all", ...subjectOptions.slice(0, 6)] as string[]).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setSubjectFilter(opt)}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium min-h-[28px] transition-colors max-w-[120px] truncate ${
+                        subjectFilter === opt
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {opt === "all" ? t("rep.allSubjects") : opt}
+                    </button>
+                  ))}
+                  {subjectOptions.length > 6 && (
+                    <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+                      <SelectTrigger className="h-7 w-auto px-2 text-xs rounded-full border-dashed">
+                        <SelectValue placeholder="More…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subjectOptions.slice(6).map((opt) => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </FilterField>
 
               <FilterField icon={Target} label={`${t("rep.passMark")} - ${passMark}%`} hint={t("rep.passMarkHint")}>
@@ -540,18 +581,22 @@ function ReportsPage() {
               </FilterField>
 
               <FilterField icon={ArrowDownAZ} label={t("rep.sortBy")} hint={t("rep.sortByHint")}>
-                <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(SORT_KEYS) as SortOption[]).map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {t(SORT_KEYS[value])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {(Object.keys(SORT_KEYS) as SortOption[]).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setSort(value)}
+                      className={`inline-flex items-center justify-center rounded-lg border px-2 py-1.5 text-[11px] font-medium min-h-[30px] transition-colors text-center ${
+                        sort === value
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {t(SORT_KEYS[value])}
+                    </button>
+                  ))}
+                </div>
               </FilterField>
 
               {reportMode === "student" && (
@@ -633,7 +678,7 @@ function ReportsPage() {
               passMark={passMark}
             />
           ) : selected ? (
-            <main className="space-y-6" id="report-print-area">
+            <main className="space-y-6 min-w-0 overflow-hidden" id="report-print-area">
               {attemptsLoading && (
                 <div className="rounded-2xl border border-border bg-card/40 p-4 text-sm text-muted-foreground">
                   {t("rep.loadingAttempts")}
@@ -739,12 +784,12 @@ function QuizReportHeader({
           <p className="text-xs text-muted-foreground">
             {t("rep.heldOn")} {new Date(session.created_at).toLocaleString()} {categoryLabel(session) ? `· ${categoryLabel(session)}` : ""}
           </p>
-          <dl className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 md:grid-cols-4">
+          <div className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 md:grid-cols-4">
             <ReportDetail label={t("rep.teacherLabel")} value={teacherName} />
             <ReportDetail label={t("rep.schoolOrg")} value={schoolName || t("rep.notSpecified")} />
             <ReportDetail label={t("rep.subjectLabel")} value={subjectLabel(session)} />
             <ReportDetail label={t("rep.topicLabel")} value={session.topic || t("rep.notSpecified")} />
-          </dl>
+          </div>
         </div>
         {top && (
           <div className="rounded-2xl border border-warning/30 bg-warning/5 px-5 py-4 text-center shrink-0">
@@ -843,8 +888,8 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{row.percent}%</span>
                     <div className="w-16 h-1.5 rounded-full bg-muted/30 hidden sm:block">
-                      <div className="h-full rounded-full transition-all"
-                        style={{ width: `${row.percent}%`, background: row.percent >= passMark ? "#34d399" : "#f87171" }} />
+                      <div className={`pct-bar h-full rounded-full transition-all ${row.percent >= passMark ? "bg-success" : "bg-destructive"}`}
+                        style={{ "--pct": `${row.percent}%` } as React.CSSProperties} />
                     </div>
                   </div>
                 </td>
@@ -919,10 +964,16 @@ function DistributionBar({
     <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
       {/* Bar */}
       <div className="h-4 w-full overflow-hidden rounded-full bg-muted/30 flex gap-0.5">
-        {bands.map((b) => pct(b.value) > 0 && (
-          <div key={b.label} className={`h-full ${b.dot} first:rounded-l-full last:rounded-r-full transition-all`}
-            style={{ width: `${pct(b.value)}%` }} title={`${b.label}: ${b.value}`} />
-        ))}
+        {bands.map((b) =>
+          pct(b.value) > 0 ? (
+            <div
+              key={b.label}
+              className={`pct-bar h-full ${b.dot} first:rounded-l-full last:rounded-r-full transition-all`}
+              style={{ "--pct": `${pct(b.value)}%` } as React.CSSProperties}
+              title={`${b.label}: ${b.value}`}
+            />
+          ) : null
+        )}
       </div>
       {/* Legend */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -956,8 +1007,8 @@ function ReportDetail({ label, value }: { label: string; value: string }) {
   const { t } = useI18n();
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-semibold text-foreground">{value || t("rep.notSpecified")}</dd>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-semibold text-foreground">{value || t("rep.notSpecified")}</p>
     </div>
   );
 }
@@ -1005,7 +1056,7 @@ function StudentReportsView({
   const { t } = useI18n();
 
   return (
-    <main className="space-y-5">
+    <main className="space-y-5 min-w-0 overflow-hidden">
       <div className="rounded-2xl border border-border bg-card/60 p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1483,11 +1534,11 @@ function buildFilterSummary(args: {
   sort: SortOption;
 }) {
   const parts: string[] = [];
-  if (args.dateRange !== "all") parts.push(DATE_RANGE_LABEL[args.dateRange]);
+  if (args.dateRange !== "all") parts.push(DATE_RANGE_KEYS[args.dateRange]);
   if (args.subjectFilter !== "all") parts.push(`Subject: ${args.subjectFilter}`);
   if (args.statusFilter !== "all") parts.push(`Status: ${args.statusFilter}`);
   parts.push(`Pass mark: ${args.passMark}%`);
   if (args.studentQuery.trim()) parts.push(`Search: ${args.studentQuery.trim()}`);
-  if (args.sort !== "rank") parts.push(`Sort: ${SORT_LABEL[args.sort]}`);
+  if (args.sort !== "rank") parts.push(`Sort: ${SORT_KEYS[args.sort]}`);
   return parts.join(" · ");
 }

@@ -12,18 +12,20 @@ import {
 } from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n";
 import {
-  type DraftQuestion,
+  type McqDraft,
   type Difficulty,
   MAX_QUESTION_LENGTH,
   MAX_OPTION_LENGTH,
-  OPTION_COUNT,
   labelFor,
 } from "./types";
 
+// Phase 1: this editor still handles MCQ only. Future type-specific
+// editors (TrueFalseEditor, ShortAnswerEditor, LongAnswerEditor)
+// will live in their own files and the parent will route by draft.type.
 type Props = {
-  draft: DraftQuestion;
+  draft: McqDraft;
   index?: number;
-  onChange: (next: DraftQuestion) => void;
+  onChange: (next: McqDraft) => void;
   onRemove?: () => void;
   compact?: boolean;
 };

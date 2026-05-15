@@ -25,13 +25,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -112,45 +105,83 @@ function GroupSelector({
 }) {
   const { t } = useI18n();
   const visibleSubs = subs.filter((s) => s.type_id === typeId);
+  const selectedType = types.find((t) => t.id === typeId);
+  const selectedSub = visibleSubs.find((s) => s.id === subId);
+
   return (
     <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("ptAdd.step1")}</div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label className="mb-1.5 text-sm">{t("ptAdd.typeLabel")}</Label>
-          <div className="flex gap-1">
-            <Select value={typeId || "__none__"} onValueChange={(v) => onTypeChange(v === "__none__" ? "" : v)}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder={t("ptAdd.selectType")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{t("ptAdd.noneType")}</SelectItem>
-                {types.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title={t("ptAdd.newType")} onClick={onNewType}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+      {/* Step label + destination pill */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">1</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("ptAdd.step1")}</span>
         </div>
-        <div>
-          <Label className="mb-1.5 text-sm">{t("ptAdd.groupLabel")} <span className="text-muted-foreground font-normal">({t("ptAdd.groupOptional")})</span></Label>
-          <div className="flex gap-1">
-            <Select value={subId || "__none__"} onValueChange={(v) => onSubChange(v === "__none__" ? "" : v)} disabled={!typeId}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder={typeId ? t("ptAdd.selectGroup") : t("ptAdd.pickTypeFirst")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{t("ptAdd.noneGroup")}</SelectItem>
-                {visibleSubs.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0" title={t("ptAdd.newGroup")} disabled={!typeId} onClick={onNewSub}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+        {selectedType && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+            <Check className="h-3 w-3" /> {selectedType.name}{selectedSub ? ` → ${selectedSub.name}` : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Type chips */}
+      <div>
+        <Label className="mb-2 text-xs text-muted-foreground font-medium">{t("ptAdd.typeLabel")}</Label>
+        <div className="flex flex-wrap gap-2">
+          {types.map((type) => (
+            <button
+              key={type.id}
+              type="button"
+              onClick={() => onTypeChange(type.id === typeId ? "" : type.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                typeId === type.id
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {type.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onNewType}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors min-h-[32px]"
+          >
+            <Plus className="h-3 w-3" /> {t("ptAdd.newType")}
+          </button>
         </div>
       </div>
+
+      {/* Group chips — only show after type selected */}
+      {typeId && (
+        <div>
+          <Label className="mb-2 text-xs text-muted-foreground font-medium">
+            {t("ptAdd.groupLabel")} <span className="font-normal">({t("ptAdd.groupOptional")})</span>
+          </Label>
+          <div className="flex flex-wrap gap-2">
+            {visibleSubs.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => onSubChange(sub.id === subId ? "" : sub.id)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                  subId === sub.id
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                }`}
+              >
+                {sub.name}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={onNewSub}
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors min-h-[32px]"
+            >
+              <Plus className="h-3 w-3" /> {t("ptAdd.newGroup")}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -227,22 +258,38 @@ function AddParticipantPage() {
     return { email: data.email, token: data.token, url: `${origin}/invite/${data.token}` };
   };
 
+  const [method, setMethod] = useState<"manual" | "invite" | "upload" | "scan">("manual");
+
+  const METHODS: { value: "manual" | "invite" | "upload" | "scan"; icon: React.ReactNode; label: string; desc: string }[] = [
+    { value: "manual", icon: <UserPlus className="h-5 w-5" />, label: t("ptAdd.tabManual"), desc: "Fill in details one at a time" },
+    { value: "invite", icon: <Mail className="h-5 w-5" />, label: t("ptAdd.tabInvite"), desc: "Send a self-join link or QR" },
+    { value: "upload", icon: <Upload className="h-5 w-5" />, label: t("ptAdd.tabUpload"), desc: "Bulk import from CSV file" },
+    { value: "scan", icon: <ScanLine className="h-5 w-5" />, label: t("ptAdd.tabScan"), desc: "Extract from a photo or scan" },
+  ];
+
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Back + header */}
+    <div className="max-w-3xl mx-auto space-y-5">
+      {/* Back + hero header */}
       <div>
         <button
           type="button"
           onClick={() => navigate({ to: "/participant-types" })}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-3"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> {t("ptAdd.backTo")}
         </button>
-        <h1 className="font-display text-3xl font-bold tracking-tight">{t("ptAdd.title")}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t("ptAdd.desc")}</p>
+        <div className="rounded-2xl border border-border bg-card/60 p-5 flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <UserPlus className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="font-display text-xl font-bold tracking-tight">{t("ptAdd.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t("ptAdd.desc")}</p>
+          </div>
+        </div>
       </div>
 
-      {/* Group selector */}
+      {/* Step 1 — Group selector */}
       <GroupSelector
         types={types} subs={subs}
         typeId={typeId} subId={subId}
@@ -252,33 +299,48 @@ function AddParticipantPage() {
         onNewSub={() => setCreateSubOpen(true)}
       />
 
-      {/* Tabs */}
-      <div className="rounded-2xl border border-border bg-card/50 p-5">
-        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">{t("ptAdd.step2")}</div>
-        <Tabs defaultValue="manual">
-          <TabsList className="mb-6 w-full grid grid-cols-4">
-            <TabsTrigger value="manual" className="gap-1.5"><UserPlus className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabManual")}</span></TabsTrigger>
-            <TabsTrigger value="invite" className="gap-1.5"><Mail className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabInvite")}</span></TabsTrigger>
-            <TabsTrigger value="upload" className="gap-1.5"><Upload className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabUpload")}</span></TabsTrigger>
-            <TabsTrigger value="scan" className="gap-1.5"><ScanLine className="h-3.5 w-3.5" /><span className="hidden sm:inline">{t("ptAdd.tabScan")}</span></TabsTrigger>
-          </TabsList>
+      {/* Step 2 — Method cards */}
+      <div className={`rounded-2xl border border-border bg-card/50 p-5 space-y-4 transition-opacity ${!typeId ? "opacity-50 pointer-events-none" : ""}`}>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">2</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("ptAdd.step2")}</span>
+        </div>
 
-          <TabsContent value="manual">
+        {/* Method cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {METHODS.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setMethod(m.value)}
+              className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-all min-h-[88px] ${
+                method === m.value
+                  ? "border-primary bg-primary/10 text-primary shadow-glow"
+                  : "border-border bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              {m.icon}
+              <span className="text-xs font-semibold leading-tight">{m.label}</span>
+              <span className="text-[10px] leading-tight opacity-70 hidden sm:block">{m.desc}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Active method content */}
+        <div className="pt-2 border-t border-border">
+          {method === "manual" && (
             <ManualTab typeId={typeId} onSave={async (d) => { await insertOne(d); toast.success(t("pt.participantAdded").replace("{name}", d.name)); }} />
-          </TabsContent>
-
-          <TabsContent value="invite">
+          )}
+          {method === "invite" && (
             <InviteTab subId={subId} onGenerate={generateInvite} />
-          </TabsContent>
-
-          <TabsContent value="upload">
+          )}
+          {method === "upload" && (
             <UploadTab typeId={typeId} onSave={insertMany} />
-          </TabsContent>
-
-          <TabsContent value="scan">
+          )}
+          {method === "scan" && (
             <ScanTab typeId={typeId} onSave={insertMany} />
-          </TabsContent>
-        </Tabs>
+          )}
+        </div>
       </div>
 
       {/* Quick-create dialogs */}
@@ -323,14 +385,23 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
-          <Label className="mb-1.5">{t("ptAdd.participantType")}</Label>
-          <Select value={ptype || "__none__"} onValueChange={(v) => set("participant_type", v === "__none__" ? "" : v as ParticipantType)}>
-            <SelectTrigger><SelectValue placeholder={t("ptAdd.selectRole")} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">{t("ptAdd.notSpecified")}</SelectItem>
-              {TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <Label className="mb-2 text-xs text-muted-foreground font-medium">{t("ptAdd.participantType")}</Label>
+          <div className="flex flex-wrap gap-2">
+            {TYPE_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => set("participant_type", ptype === o.value ? "" : o.value as ParticipantType)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                  ptype === o.value
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                }`}
+              >
+                {o.emoji} {o.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="md:col-span-2">
@@ -474,6 +545,7 @@ function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Pro
           <div className="w-full max-w-md rounded-xl border border-border bg-card/40 p-3 flex items-center gap-2">
             <input
               readOnly
+              aria-label="Invite link"
               value={invite.url}
               onFocus={(e) => e.currentTarget.select()}
               className="flex-1 min-w-0 bg-muted/30 rounded-md px-3 py-2 font-mono text-xs outline-none"
@@ -547,15 +619,16 @@ function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Partic
         Upload a CSV or Excel-exported CSV. Recognised columns: <span className="font-mono text-foreground text-xs">name</span>, <span className="font-mono text-foreground text-xs">email</span>, <span className="font-mono text-foreground text-xs">mobile</span>, <span className="font-mono text-foreground text-xs">roll_number</span>, <span className="font-mono text-foreground text-xs">class</span>, <span className="font-mono text-foreground text-xs">organization</span>. Only <span className="font-mono text-foreground text-xs">name</span> is required.
       </p>
 
+      <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="hidden" aria-label="Upload CSV file" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
       <div
         className="rounded-2xl border-2 border-dashed border-border hover:border-primary/40 bg-card/30 p-8 text-center cursor-pointer transition-colors"
         onClick={() => fileRef.current?.click()}
         role="button"
+        aria-label={filename ? `Loaded: ${filename}` : t("ptAdd.chooseFile")}
       >
         <FileText className="mx-auto h-10 w-10 text-muted-foreground/60" />
         <div className="mt-3 text-sm font-medium">{filename ? `Loaded: ${filename}` : t("ptAdd.chooseFile")}</div>
         <div className="mt-1 text-xs text-muted-foreground">{t("ptAdd.dragDrop")}</div>
-        <input ref={fileRef} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
       </div>
 
       <div>
@@ -652,10 +725,12 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t("ptAdd.scanDesc")}</p>
 
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" aria-label="Upload image for scanning" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
       <div
         className="rounded-2xl border-2 border-dashed border-border hover:border-primary/40 bg-card/30 p-6 text-center cursor-pointer transition-colors"
         onClick={() => fileRef.current?.click()}
         role="button"
+        aria-label={imageUrl ? imageName : t("ptAdd.clickImage")}
       >
         {imageUrl ? (
           <img src={imageUrl} alt={imageName} className="mx-auto max-h-48 rounded-xl object-contain" />
@@ -666,7 +741,6 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
             <div className="mt-1 text-xs text-muted-foreground">{t("ptAdd.imgFormats")}</div>
           </>
         )}
-        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] ?? null)} />
       </div>
 
       {imageUrl && (

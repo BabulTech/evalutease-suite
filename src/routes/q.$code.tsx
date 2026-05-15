@@ -83,7 +83,16 @@ function PublicQuizPage() {
     return {
       session: payload.session,
       registration_fields: normalizeRegistrationFields(payload.registration_fields),
-      questions: payload.questions ?? [],
+      // Default missing/unknown type to "mcq" so old sessions keep working
+      // until the player payload migration is run.
+      questions: (payload.questions ?? []).map((q) => ({
+        ...q,
+        type:
+          q.type === "mcq" || q.type === "true_false"
+              || q.type === "short_answer" || q.type === "long_answer"
+            ? q.type
+            : "mcq",
+      })),
     };
   }, []);
 
@@ -613,9 +622,13 @@ function mapJoinError(code: string): string {
     case "session_closed":
       return "This session has already finished.";
     case "not_invited":
-      return "Sorry, this email is not on the invited roster. Check with the host.";
+      return "Sorry, your details are not on the invited roster. Check with the host.";
+    case "identifier_required":
+      return "This private quiz requires your email, mobile, or roll number to verify identity.";
     case "email_required":
       return "This private quiz requires the same email your teacher added to the roster.";
+    case "session_not_active":
+      return "The quiz has not started yet. Please wait for the host to begin.";
     case "name_required":
       return "Name is required to join.";
     default:

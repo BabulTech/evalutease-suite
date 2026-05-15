@@ -43,7 +43,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
           "id, full_name, avatar_url, logo_url, first_name, last_name, organization, mobile, country"
         )
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching profile:", error);
@@ -51,7 +51,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setProfile(data as UserProfile);
+      // Row may be null for newly-signed-up users before the trigger
+      // populates profiles. That's not an error — just leave profile null.
+      setProfile((data as UserProfile | null) ?? null);
     } catch (err) {
       console.error("Profile fetch error:", err);
       toast.error("An error occurred while loading your profile");

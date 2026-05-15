@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Star,
   MessageSquare,
@@ -26,8 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_app/reviews")({
   component: ReviewsPage,
@@ -191,63 +189,67 @@ function ReviewsPage() {
   const quizzesWithFeedback = new Set(feedbacks.map((f) => f.session_id)).size;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Star className="h-7 w-7 text-warning" /> {t("rev.title")}
-        </h1>
-        <p className="text-muted-foreground mt-1">{t("rev.desc")}</p>
+    <div className="space-y-4">
+      {/* Hero header */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center gap-4">
+        <div className="h-12 w-12 rounded-2xl bg-warning/15 border border-warning/25 flex items-center justify-center text-warning shadow-glow shrink-0">
+          <Star className="h-6 w-6" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">{t("rev.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t("rev.desc")}</p>
+        </div>
       </div>
 
-      {/* Summary cards - all real data */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all duration-300">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <MessageSquare className="h-3.5 w-3.5" /> {t("rev.totalReviews")}
-          </div>
-          <div className="font-display text-3xl font-bold">{totalReviews}</div>
-        </div>
-        <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all duration-300">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <Star className="h-3.5 w-3.5 text-warning" /> {t("rev.avgRating")}
-          </div>
-          <div className="font-display text-3xl font-bold text-warning">
-            {avgRating ?? "-"}
-            {avgRating && <span className="text-lg text-muted-foreground">/5</span>}
+      {/* Stats strip */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+          <div className="font-display text-2xl font-bold text-foreground">{totalReviews}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1 flex items-center justify-center gap-1">
+            <MessageSquare className="h-3 w-3" /> {t("rev.totalReviews")}
           </div>
         </div>
-        <div className="group rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all duration-300">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            <Users className="h-3.5 w-3.5" /> {t("rev.quizzesReviewed")}
+        <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+          <div className="font-display text-2xl font-bold text-warning">
+            {avgRating ?? "—"}
+            {avgRating && <span className="text-base font-normal text-muted-foreground">/5</span>}
           </div>
-          <div className="font-display text-3xl font-bold">{quizzesWithFeedback}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1 flex items-center justify-center gap-1">
+            <Star className="h-3 w-3 text-warning" /> {t("rev.avgRating")}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+          <div className="font-display text-2xl font-bold text-primary">{quizzesWithFeedback}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1 flex items-center justify-center gap-1">
+            <Users className="h-3 w-3" /> {t("rev.quizzesReviewed")}
+          </div>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted/40 w-fit flex-wrap">
         {([
-          { key: "feedback",    labelKey: "rev.tabFeedback" },
-          { key: "performance", labelKey: "rev.tabPerformance" },
-          { key: "appreview",   labelKey: "rev.tabAppReview" },
-        ] as const).map(({ key, labelKey }) => (
+          { key: "feedback",    labelKey: "rev.tabFeedback",    icon: MessageSquare },
+          { key: "performance", labelKey: "rev.tabPerformance", icon: BarChart3 },
+          { key: "appreview",   labelKey: "rev.tabAppReview",   icon: Send },
+        ] as const).map(({ key, labelKey, icon: Icon }) => (
           <button
             key={key}
             type="button"
             onClick={() => setActiveTab(key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all min-h-[36px] ${
               activeTab === key
                 ? "bg-card shadow text-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t(labelKey)}
+            <Icon className="h-3.5 w-3.5" /> {t(labelKey)}
           </button>
         ))}
       </div>
 
       {loading && activeTab !== "appreview" ? (
-        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">
           {t("common.loading")}
         </div>
       ) : activeTab === "feedback" ? (
@@ -398,8 +400,8 @@ function PerformanceTab({ stats }: { stats: SessionStat[] }) {
               <div className="mt-3">
                 <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${barColor(s.avg_pct)}`}
-                    style={{ width: `${s.avg_pct}%` }}
+                    className={`pct-bar h-full rounded-full transition-all ${barColor(s.avg_pct)}`}
+                    style={{ "--pct": `${s.avg_pct}%` } as React.CSSProperties}
                   />
                 </div>
               </div>
@@ -422,6 +424,13 @@ const FEEDBACK_TYPES = [
 ] as const;
 
 const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+
+const PRIORITY_CLS: Record<string, { active: string }> = {
+  low:      { active: "border-success/50 bg-success/15 text-success" },
+  medium:   { active: "border-primary/50 bg-primary/15 text-primary" },
+  high:     { active: "border-warning/50 bg-warning/15 text-warning" },
+  critical: { active: "border-destructive/50 bg-destructive/15 text-destructive" },
+};
 
 type AppFeedbackRow = {
   id: string;
@@ -492,34 +501,44 @@ function AppReviewTab({ userId }: { userId: string }) {
           <p className="text-xs text-muted-foreground mt-1">{t("rev.shareFeedbackDesc")}</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3">
           <div>
-            <Label className="text-xs mb-1.5 block">{t("rev.feedbackType")}</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FEEDBACK_TYPES.map(({ value, label, icon: Icon }) => (
-                  <SelectItem key={value} value={value}>
-                    <span className="flex items-center gap-1.5"><Icon className="h-3.5 w-3.5" />{label}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs mb-2 block">{t("rev.feedbackType")}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {FEEDBACK_TYPES.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setType(value)}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium min-h-[36px] transition-colors ${
+                    type === value
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" /> {label}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
-            <Label className="text-xs mb-1.5 block">{t("rev.priority")}</Label>
-            <Select value={priority} onValueChange={setPriority}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITIES.map((p) => (
-                  <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-xs mb-2 block">{t("rev.priority")}</Label>
+            <div className="flex gap-2 flex-wrap">
+              {PRIORITIES.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriority(p)}
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium min-h-[28px] capitalize transition-colors ${
+                    priority === p
+                      ? PRIORITY_CLS[p].active
+                      : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -586,9 +605,9 @@ function AppReviewTab({ userId }: { userId: string }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-semibold truncate">{s.title}</span>
-                        <Badge className={`${statusCls(s.status)} border-0 text-[10px] gap-0.5 capitalize`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${statusCls(s.status)}`}>
                           {statusIcon(s.status)} {s.status.replace("_", " ")}
-                        </Badge>
+                        </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{s.body}</p>
                     </div>

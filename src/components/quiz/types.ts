@@ -14,9 +14,12 @@ export type SessionPublic = {
   total_questions: number;
 };
 
+export type QuizQuestionType = "mcq" | "true_false" | "short_answer" | "long_answer";
+
 export type QuizQuestion = {
   id: string;
   text: string;
+  type: QuizQuestionType;
   options: string[];
   position: number;
   time_seconds: number;

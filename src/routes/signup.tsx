@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -10,13 +10,12 @@ import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { AuthShell } from "./login";
 import { Logo } from "@/components/Logo";
-import { Check, Zap, Star, Building2, ChevronRight, ChevronLeft } from "lucide-react";
+import { Check, Zap, Star, Building2, ChevronRight, ChevronLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
 });
 
-// ── Plans ──────────────────────────────────────────────────────────────────────
 const PLANS = [
   {
     slug: "free",
@@ -27,7 +26,7 @@ const PLANS = [
     color: "text-muted-foreground",
     border: "border-border hover:border-primary/40",
     badge: null,
-    features: ["5 quizzes / day", "30 participants / session", "100 questions", "Basic analytics"],
+    features: ["5 quizzes / day", "30 participants / session", "100 questions"],
   },
   {
     slug: "pro",
@@ -38,7 +37,7 @@ const PLANS = [
     color: "text-primary",
     border: "border-primary/60 shadow-[0_0_20px_rgba(34,197,94,0.15)]",
     badge: "Most Popular",
-    features: ["Unlimited quizzes", "500 participants / session", "Unlimited questions", "Advanced analytics", "AI question generator", "Custom branding"],
+    features: ["Unlimited quizzes", "500 participants / session", "AI question generator"],
   },
   {
     slug: "enterprise",
@@ -49,11 +48,10 @@ const PLANS = [
     color: "text-yellow-400",
     border: "border-yellow-400/40 hover:border-yellow-400/70",
     badge: null,
-    features: ["Everything in Pro", "5,000 participants / session", "Dedicated support", "SSO / SAML", "API access", "Custom integrations"],
+    features: ["Everything in Pro", "5,000 participants", "Dedicated support"],
   },
 ] as const;
 
-// ── Form schema ────────────────────────────────────────────────────────────────
 const schema = z.object({
   firstName: z.string().trim().min(1, "First name required").max(60),
   lastName:  z.string().trim().min(1, "Last name required").max(60),
@@ -63,7 +61,6 @@ const schema = z.object({
   role:      z.string().min(1, "Please select your role"),
   useCases:  z.array(z.string()).min(1, "Select at least one use case"),
   referral:  z.string().min(1, "Please select how you heard about us"),
-  // role-specific
   school:       z.string().trim().max(120).optional(),
   gradeYear:    z.string().trim().max(60).optional(),
   fieldOfStudy: z.string().trim().max(120).optional(),
@@ -89,6 +86,49 @@ const INDUSTRIES = ["Education", "Technology", "Healthcare", "Finance", "Retail"
 const TEAM_SIZES = ["Just me", "2–10", "11–50", "51–200", "200+"] as const;
 const GRADE_YEARS = ["Grade 1–5", "Grade 6–8", "Grade 9–10", "Grade 11–12", "Undergraduate", "Postgraduate", "PhD", "Other"] as const;
 
+type FieldErrors = Partial<Record<string, string>>;
+
+function ChipButton({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-[44px] px-4 py-2 rounded-xl text-sm font-medium border transition-all flex items-center gap-1.5 ${
+        active
+          ? "bg-primary text-primary-foreground border-primary shadow-glow"
+          : "bg-secondary/40 border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+      }`}
+    >
+      {active && <Check size={12} />}{children}
+    </button>
+  );
+}
+
+function RoleButton({
+  active, onClick, children,
+}: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-[48px] flex-1 rounded-xl border text-sm font-semibold transition-all px-3 py-2 ${
+        active
+          ? "bg-primary text-primary-foreground border-primary shadow-glow"
+          : "bg-secondary/30 border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return <p className="text-xs text-destructive mt-1">{msg}</p>;
+}
+
 function SignupPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -102,11 +142,20 @@ function SignupPage() {
     companyName: "", industry: "", teamSize: "",
     otherDetails: "",
   });
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (step === 2) firstNameRef.current?.focus();
+  }, [step]);
 
   const set = (k: keyof Omit<typeof form, "useCases">) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm({ ...form, [k]: e.target.value });
+      if (errors[k]) setErrors(prev => ({ ...prev, [k]: undefined }));
+    };
 
   const toggleUseCase = (val: string) =>
     setForm(f => ({
@@ -120,6 +169,13 @@ function SignupPage() {
     e.preventDefault();
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
+      const fe: FieldErrors = {};
+      parsed.error.issues.forEach(i => {
+        const key = String(i.path[0]);
+        if (!fe[key]) fe[key] = i.message;
+      });
+      setErrors(fe);
+      // show first error as toast for accessibility
       toast.error(parsed.error.issues[0].message);
       return;
     }
@@ -138,7 +194,6 @@ function SignupPage() {
           use_cases:     parsed.data.useCases,
           referral:      parsed.data.referral,
           selected_plan: selectedPlan,
-          // role-specific
           school:        parsed.data.school,
           grade_year:    parsed.data.gradeYear,
           field_of_study:parsed.data.fieldOfStudy,
@@ -170,23 +225,20 @@ function SignupPage() {
 
   return (
     <AuthShell>
-      {/* Header */}
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <h1 className="font-display text-3xl font-bold">{t("auth.signup")}</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {step === 1 ? t("signup.choosePlan") : t("signup.completeProfile")}
-          </p>
-        </div>
+      {/* Logo */}
+      <div className="flex justify-center mb-5">
         <Logo size="sm" />
       </div>
 
-      {/* Login / Signup tabs */}
-      <div className="grid grid-cols-2 gap-2 mb-5 p-1 bg-secondary/50 rounded-xl">
-        <Link to="/login" className="rounded-lg py-2.5 text-sm font-semibold text-muted-foreground hover:text-foreground text-center">
+      {/* Tab switcher */}
+      <div className="grid grid-cols-2 gap-1.5 mb-5 p-1 bg-secondary/50 rounded-2xl">
+        <Link
+          to="/login"
+          className="rounded-xl py-3 text-sm font-semibold text-muted-foreground hover:text-foreground text-center transition-colors"
+        >
           {t("auth.signin")}
         </Link>
-        <button className="rounded-lg py-2.5 text-sm font-semibold bg-primary text-primary-foreground shadow-glow">
+        <button className="rounded-xl py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-glow">
           {t("auth.signup")}
         </button>
       </div>
@@ -195,20 +247,24 @@ function SignupPage() {
       <div className="flex items-center gap-2 mb-6">
         {[1, 2].map(s => (
           <div key={s} className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
               step >= s ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
             }`}>
-              {step > s ? <Check size={13} /> : s}
+              {step > s ? <Check size={14} /> : s}
             </div>
-            {s < 2 && <div className={`h-px flex-1 w-8 transition-all ${step > 1 ? "bg-primary" : "bg-border"}`} />}
+            {s < 2 && <div className={`h-px flex-1 w-10 transition-all ${step > 1 ? "bg-primary" : "bg-border"}`} />}
           </div>
         ))}
-        <span className="ml-2 text-xs text-muted-foreground">Step {step} of 2</span>
+        <span className="ml-2 text-xs text-muted-foreground">
+          {step === 1 ? "Choose Plan" : "Your Profile"}
+        </span>
       </div>
 
       {/* ── STEP 1: Plan selection ── */}
       {step === 1 && (
         <div className="space-y-3">
+          <p className="text-sm text-muted-foreground -mt-2 mb-1">{t("signup.choosePlan")}</p>
+
           {PLANS.map(plan => {
             const Icon = plan.icon;
             const active = selectedPlan === plan.slug;
@@ -217,7 +273,7 @@ function SignupPage() {
                 key={plan.slug}
                 type="button"
                 onClick={() => setSelectedPlan(plan.slug)}
-                className={`w-full text-left rounded-2xl border p-4 transition-all relative ${plan.border} ${
+                className={`w-full text-left rounded-2xl border p-4 transition-all relative min-h-[72px] ${plan.border} ${
                   active ? "bg-primary/5 ring-2 ring-primary/40" : "bg-secondary/20 hover:bg-secondary/40"
                 }`}
               >
@@ -226,27 +282,27 @@ function SignupPage() {
                     {plan.badge}
                   </span>
                 )}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg bg-secondary/60 ${plan.color}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`p-2 rounded-lg bg-secondary/60 shrink-0 ${plan.color}`}>
                       <Icon size={18} />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{plan.name}</span>
                         <span className={`font-bold text-base ${plan.color}`}>{plan.price}</span>
                         <span className="text-xs text-muted-foreground">{plan.period}</span>
                       </div>
                       <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                        {plan.features.slice(0, 3).map(f => (
+                        {plan.features.map(f => (
                           <li key={f} className="text-[11px] text-muted-foreground flex items-center gap-1">
-                            <Check size={10} className="text-primary/70" />{f}
+                            <Check size={10} className="text-primary/70 shrink-0" />{f}
                           </li>
                         ))}
                       </ul>
                     </div>
                   </div>
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ml-2 transition-all ${
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
                     active ? "border-primary bg-primary" : "border-border"
                   }`}>
                     {active && <Check size={10} className="text-primary-foreground" />}
@@ -258,7 +314,7 @@ function SignupPage() {
 
           <Button
             type="button"
-            className="w-full h-11 bg-gradient-primary font-semibold shadow-glow mt-2"
+            className="w-full h-12 bg-gradient-primary font-semibold shadow-glow mt-2 text-base"
             onClick={() => setStep(2)}
           >
             Continue with {PLANS.find(p => p.slug === selectedPlan)?.name}
@@ -271,7 +327,13 @@ function SignupPage() {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          <Button type="button" variant="outline" className="w-full h-11 gap-3 bg-secondary/40 hover:bg-secondary" onClick={onGoogle} disabled={loading}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-12 gap-3 bg-secondary/40 hover:bg-secondary text-base"
+            onClick={onGoogle}
+            disabled={loading}
+          >
             <GoogleIcon />
             <span className="font-semibold">{t("auth.continueGoogle")}</span>
           </Button>
@@ -285,186 +347,287 @@ function SignupPage() {
 
       {/* ── STEP 2: Profile form ── */}
       {step === 2 && (
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={onSubmit} className="space-y-4">
+          {/* Name row — stacked on mobile */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="mb-1.5 text-xs">{t("auth.firstName")}</Label>
-              <Input value={form.firstName} onChange={set("firstName")} placeholder="Ali" className="h-9 text-sm" />
+              <Label htmlFor="firstName" className="mb-1.5 text-xs">{t("auth.firstName")}</Label>
+              <Input
+                id="firstName"
+                ref={firstNameRef}
+                value={form.firstName}
+                onChange={set("firstName")}
+                placeholder="Ali"
+                className={`h-12 text-base ${errors.firstName ? "border-destructive" : ""}`}
+                autoComplete="given-name"
+                aria-invalid={!!errors.firstName}
+                aria-describedby={errors.firstName ? "err-firstName" : undefined}
+              />
+              <FieldError msg={errors.firstName} />
             </div>
             <div>
-              <Label className="mb-1.5 text-xs">{t("auth.lastName")}</Label>
-              <Input value={form.lastName} onChange={set("lastName")} placeholder="Khan" className="h-9 text-sm" />
+              <Label htmlFor="lastName" className="mb-1.5 text-xs">{t("auth.lastName")}</Label>
+              <Input
+                id="lastName"
+                value={form.lastName}
+                onChange={set("lastName")}
+                placeholder="Khan"
+                className={`h-12 text-base ${errors.lastName ? "border-destructive" : ""}`}
+                autoComplete="family-name"
+                aria-invalid={!!errors.lastName}
+              />
+              <FieldError msg={errors.lastName} />
             </div>
           </div>
 
-          {/* Role dropdown */}
+          {/* Role — button grid (Fitts' Law, no dropdown scan) */}
           <div>
-            <Label className="mb-1.5 text-xs">{t("signup.iAm")}</Label>
-            <select
-              value={form.role}
-              onChange={set("role")}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              <option value="" disabled>{t("signup.selectRole")}</option>
-              {ROLES.map(r => <option key={r} value={r}>{t(`signup.role.${r.toLowerCase()}`)}</option>)}
-            </select>
+            <Label className="mb-2 text-xs block">{t("signup.iAm")}</Label>
+            <div className="flex gap-2 flex-wrap">
+              {ROLES.map(r => (
+                <RoleButton
+                  key={r}
+                  active={form.role === r}
+                  onClick={() => {
+                    setForm(f => ({ ...f, role: r }));
+                    if (errors.role) setErrors(prev => ({ ...prev, role: undefined }));
+                  }}
+                >
+                  {t(`signup.role.${r.toLowerCase()}`)}
+                </RoleButton>
+              ))}
+            </div>
+            <FieldError msg={errors.role} />
           </div>
 
+          {/* Mobile */}
           <div>
-            <Label className="mb-1.5 text-xs">{t("auth.mobile")}</Label>
-            <Input value={form.mobile} onChange={set("mobile")} type="tel" placeholder="+92 300..." className="h-9 text-sm" />
+            <Label htmlFor="mobile" className="mb-1.5 text-xs">{t("auth.mobile")} <span className="text-muted-foreground">(optional)</span></Label>
+            <Input
+              id="mobile"
+              value={form.mobile}
+              onChange={set("mobile")}
+              type="tel"
+              inputMode="tel"
+              placeholder="+92 300 0000000"
+              className="h-12 text-base"
+              autoComplete="tel"
+            />
           </div>
 
-          {/* ── Role-specific fields ── */}
+          {/* Role-specific fields */}
           {form.role === "Student" && (
-            <div className="space-y-3 p-3 rounded-xl bg-primary/5 border border-primary/15">
+            <div className="space-y-3 p-4 rounded-2xl bg-primary/5 border border-primary/15">
               <p className="text-xs font-semibold text-primary uppercase tracking-wide">{t("signup.student.details")}</p>
               <div>
                 <Label className="mb-1.5 text-xs">School / University</Label>
-                <Input value={form.school} onChange={set("school")} placeholder="e.g. University of Karachi" className="h-9 text-sm" />
+                <Input value={form.school} onChange={set("school")} placeholder="University of Karachi" className="h-12 text-base" autoComplete="organization" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1.5 text-xs">Grade / Year</Label>
-                  <select value={form.gradeYear} onChange={set("gradeYear")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
-                    <option value="" disabled>Select</option>
-                    {GRADE_YEARS.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
+              <div>
+                <Label className="mb-2 text-xs block">Grade / Year</Label>
+                <div className="flex flex-wrap gap-2">
+                  {GRADE_YEARS.map(g => (
+                    <ChipButton
+                      key={g}
+                      active={form.gradeYear === g}
+                      onClick={() => setForm(f => ({ ...f, gradeYear: g }))}
+                    >
+                      {g}
+                    </ChipButton>
+                  ))}
                 </div>
-                <div>
-                  <Label className="mb-1.5 text-xs">Field of Study</Label>
-                  <Input value={form.fieldOfStudy} onChange={set("fieldOfStudy")} placeholder="e.g. Computer Science" className="h-9 text-sm" />
-                </div>
+              </div>
+              <div>
+                <Label className="mb-1.5 text-xs">Field of Study</Label>
+                <Input value={form.fieldOfStudy} onChange={set("fieldOfStudy")} placeholder="e.g. Computer Science" className="h-12 text-base" />
               </div>
             </div>
           )}
 
           {form.role === "Teacher" && (
-            <div className="space-y-3 p-3 rounded-xl bg-blue-500/5 border border-blue-500/15">
+            <div className="space-y-3 p-4 rounded-2xl bg-blue-500/5 border border-blue-500/15">
               <p className="text-xs font-semibold text-blue-400 uppercase tracking-wide">{t("signup.teacher.details")}</p>
               <div>
                 <Label className="mb-1.5 text-xs">Institution / School Name</Label>
-                <Input value={form.institution} onChange={set("institution")} placeholder="e.g. Beaconhouse School" className="h-9 text-sm" />
+                <Input value={form.institution} onChange={set("institution")} placeholder="Beaconhouse School" className="h-12 text-base" autoComplete="organization" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="mb-1.5 text-xs">Subject Taught</Label>
-                  <Input value={form.subjectTaught} onChange={set("subjectTaught")} placeholder="e.g. Mathematics" className="h-9 text-sm" />
+                  <Input value={form.subjectTaught} onChange={set("subjectTaught")} placeholder="Mathematics" className="h-12 text-base" />
                 </div>
                 <div>
                   <Label className="mb-1.5 text-xs">Years of Experience</Label>
-                  <Input value={form.yearsExp} onChange={set("yearsExp")} type="number" min="0" max="50" placeholder="e.g. 5" className="h-9 text-sm" />
+                  <Input value={form.yearsExp} onChange={set("yearsExp")} type="number" inputMode="numeric" min="0" max="50" placeholder="5" className="h-12 text-base" />
                 </div>
               </div>
             </div>
           )}
 
           {form.role === "Employer" && (
-            <div className="space-y-3 p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/15">
+            <div className="space-y-3 p-4 rounded-2xl bg-yellow-500/5 border border-yellow-500/15">
               <p className="text-xs font-semibold text-yellow-400 uppercase tracking-wide">{t("signup.employer.details")}</p>
               <div>
                 <Label className="mb-1.5 text-xs">Company Name</Label>
-                <Input value={form.companyName} onChange={set("companyName")} placeholder="e.g. Acme Corp" className="h-9 text-sm" />
+                <Input value={form.companyName} onChange={set("companyName")} placeholder="Acme Corp" className="h-12 text-base" autoComplete="organization" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1.5 text-xs">Industry</Label>
-                  <select value={form.industry} onChange={set("industry")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
-                    <option value="" disabled>Select</option>
-                    {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-                  </select>
+              <div>
+                <Label className="mb-2 text-xs block">Industry</Label>
+                <div className="flex flex-wrap gap-2">
+                  {INDUSTRIES.map(ind => (
+                    <ChipButton
+                      key={ind}
+                      active={form.industry === ind}
+                      onClick={() => setForm(f => ({ ...f, industry: ind }))}
+                    >
+                      {ind}
+                    </ChipButton>
+                  ))}
                 </div>
-                <div>
-                  <Label className="mb-1.5 text-xs">Team Size</Label>
-                  <select value={form.teamSize} onChange={set("teamSize")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
-                    <option value="" disabled>Select</option>
-                    {TEAM_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+              </div>
+              <div>
+                <Label className="mb-2 text-xs block">Team Size</Label>
+                <div className="flex flex-wrap gap-2">
+                  {TEAM_SIZES.map(sz => (
+                    <ChipButton
+                      key={sz}
+                      active={form.teamSize === sz}
+                      onClick={() => setForm(f => ({ ...f, teamSize: sz }))}
+                    >
+                      {sz}
+                    </ChipButton>
+                  ))}
                 </div>
               </div>
             </div>
           )}
 
           {form.role === "Other" && (
-            <div className="space-y-2 p-3 rounded-xl bg-purple-500/5 border border-purple-500/15">
+            <div className="space-y-2 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/15">
               <p className="text-xs font-semibold text-purple-400 uppercase tracking-wide">{t("signup.other.details")}</p>
               <textarea
                 value={form.otherDetails}
                 onChange={set("otherDetails")}
                 rows={3}
                 placeholder="Describe how you plan to use EvaluTease..."
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                className="w-full rounded-xl border border-input bg-background px-3 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
               />
             </div>
           )}
 
+          {/* Email */}
           <div>
-            <Label className="mb-1.5 text-xs">{t("auth.email")}</Label>
-            <Input value={form.email} onChange={set("email")} type="email" placeholder="you@example.com" className="h-9 text-sm" />
+            <Label htmlFor="email" className="mb-1.5 text-xs">{t("auth.email")}</Label>
+            <Input
+              id="email"
+              value={form.email}
+              onChange={set("email")}
+              type="email"
+              inputMode="email"
+              placeholder="you@example.com"
+              className={`h-12 text-base ${errors.email ? "border-destructive" : ""}`}
+              autoComplete="email"
+              aria-invalid={!!errors.email}
+            />
+            <FieldError msg={errors.email} />
           </div>
 
+          {/* Password with show/hide */}
           <div>
-            <Label className="mb-1.5 text-xs">{t("auth.password")}</Label>
-            <Input value={form.password} onChange={set("password")} type="password" placeholder="••••••••" className="h-9 text-sm" />
+            <Label htmlFor="password" className="mb-1.5 text-xs">{t("auth.password")}</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                value={form.password}
+                onChange={set("password")}
+                type={showPassword ? "text" : "password"}
+                placeholder="Min. 6 characters"
+                className={`h-12 text-base pr-12 ${errors.password ? "border-destructive" : ""}`}
+                autoComplete="new-password"
+                aria-invalid={!!errors.password}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            <FieldError msg={errors.password} />
           </div>
 
-          {/* Use cases multi-select */}
+          {/* Use cases — chips (Fitts' Law 44px) */}
           <div>
             <Label className="mb-2 text-xs block">{t("signup.useFor")}</Label>
             <div className="flex flex-wrap gap-2">
-              {USE_CASES.map(uc => {
-                const active = form.useCases.includes(uc);
-                const label = t(`signup.useCase.${uc.toLowerCase()}`);
-                return (
-                  <button
-                    key={uc}
-                    type="button"
-                    onClick={() => toggleUseCase(uc)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      active
-                        ? "bg-primary text-primary-foreground border-primary shadow-glow"
-                        : "bg-secondary/40 border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                    }`}
-                  >
-                    {active && <Check size={10} className="inline mr-1" />}{label}
-                  </button>
-                );
-              })}
+              {USE_CASES.map(uc => (
+                <ChipButton
+                  key={uc}
+                  active={form.useCases.includes(uc)}
+                  onClick={() => toggleUseCase(uc)}
+                >
+                  {t(`signup.useCase.${uc.toLowerCase()}`)}
+                </ChipButton>
+              ))}
             </div>
+            <FieldError msg={errors.useCases} />
           </div>
 
-          {/* Referral dropdown */}
+          {/* Referral — chips (no dropdown scan) */}
           <div>
-            <Label className="mb-1.5 text-xs">{t("signup.hearAbout")}</Label>
-            <select
-              value={form.referral}
-              onChange={set("referral")}
-              className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              <option value="" disabled>Select an option</option>
-              {REFERRALS.map(r => <option key={r} value={r}>{t(REFERRAL_KEYS[r] ?? r)}</option>)}
-            </select>
+            <Label className="mb-2 text-xs block">{t("signup.hearAbout")}</Label>
+            <div className="flex flex-wrap gap-2">
+              {REFERRALS.map(r => (
+                <ChipButton
+                  key={r}
+                  active={form.referral === r}
+                  onClick={() => {
+                    setForm(f => ({ ...f, referral: r }));
+                    if (errors.referral) setErrors(prev => ({ ...prev, referral: undefined }));
+                  }}
+                >
+                  {t(REFERRAL_KEYS[r] ?? r)}
+                </ChipButton>
+              ))}
+            </div>
+            <FieldError msg={errors.referral} />
           </div>
 
           {/* Selected plan badge */}
-          <div className="flex items-center gap-2 p-2.5 rounded-xl bg-primary/5 border border-primary/20">
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
             <span className="text-xs text-muted-foreground">{t("signup.selectedPlan")}:</span>
             <span className="text-xs font-bold text-primary">
-              {PLANS.find(p => p.slug === selectedPlan)?.name} - {PLANS.find(p => p.slug === selectedPlan)?.price}
+              {PLANS.find(p => p.slug === selectedPlan)?.name} — {PLANS.find(p => p.slug === selectedPlan)?.price}
             </span>
-            <button type="button" onClick={() => setStep(1)} className="ml-auto text-xs text-primary hover:underline">Change</button>
+            <button type="button" onClick={() => setStep(1)} className="ml-auto text-xs text-primary hover:underline min-h-[32px] px-2">
+              Change
+            </button>
           </div>
 
-          <div className="flex gap-2 pt-1">
-            <Button type="button" variant="outline" className="h-11 px-4" onClick={() => setStep(1)}>
-              <ChevronLeft size={16} />
+          <div className="flex gap-3 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-12 shrink-0 p-0"
+              onClick={() => setStep(1)}
+              aria-label="Go back"
+            >
+              <ChevronLeft size={18} />
             </Button>
-            <Button type="submit" disabled={loading} className="flex-1 h-11 bg-gradient-primary font-semibold shadow-glow hover:opacity-90">
-              {loading ? t("common.loading") : t("signup.createAccount")}
+            <Button
+              type="submit"
+              disabled={loading}
+              className="flex-1 h-12 bg-gradient-primary font-semibold shadow-glow hover:opacity-90 text-base"
+            >
+              {loading ? (
+                <><Loader2 size={18} className="animate-spin mr-2" />Creating…</>
+              ) : t("signup.createAccount")}
             </Button>
           </div>
 
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground pb-2">
             {t("auth.haveAccount")}{" "}
             <Link to="/login" className="text-primary font-semibold hover:underline">{t("auth.signin")}</Link>
           </p>

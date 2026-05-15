@@ -10,6 +10,7 @@ import {
   PlayCircle, MessageSquare, AlertTriangle, Lightbulb, Bug, HelpCircle,
   Eye, Reply, X, ChevronRight, Globe, Clock, Trophy, Layers, Trash2, Plus,
   Tag, Percent, Hash, ToggleLeft, ToggleRight, Copy, Check,
+  Coins, Wallet, TrendingDown, MinusCircle, PlusCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -27,8 +28,6 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
 // ─── helpers ────────────────────────────────────────────────
-const fmt$ = (cents: number) =>
-  `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const fmtDateShort = (iso: string) =>
@@ -41,17 +40,16 @@ const ago = (iso: string) => {
 };
 
 function planBadge(slug: string) {
-  const cfg: Record<string, string> = {
-    enterprise: "bg-warning/15 text-warning",
-    pro: "bg-primary/15 text-primary",
-    free: "bg-muted/40 text-muted-foreground",
-  };
+  const isEnterprise = slug.startsWith("enterprise");
+  const isFree = slug.endsWith("starter");
+  const cls = isEnterprise ? "bg-warning/15 text-warning" : isFree ? "bg-muted/40 text-muted-foreground" : "bg-primary/15 text-primary";
+  const label = slug.replace("individual_", "").replace("enterprise_", "Org ").replace("_", " ");
   return (
-    <Badge className={`${cfg[slug] ?? cfg.free} border-0 text-[10px] capitalize`}>
-      {slug === "enterprise" ? <Building2 className="h-3 w-3 mr-0.5 inline" /> :
-       slug === "pro" ? <Star className="h-3 w-3 mr-0.5 inline" /> :
-       <Zap className="h-3 w-3 mr-0.5 inline" />}
-      {slug}
+    <Badge className={`${cls} border-0 text-[10px] capitalize`}>
+      {isEnterprise ? <Building2 className="h-3 w-3 mr-0.5 inline" /> :
+       isFree ? <Zap className="h-3 w-3 mr-0.5 inline" /> :
+       <Star className="h-3 w-3 mr-0.5 inline" />}
+      {label}
     </Badge>
   );
 }
@@ -75,10 +73,10 @@ function StatCard({ label, value, sub, icon: Icon, trend, color = "text-primary"
   icon: React.ElementType; trend?: number; color?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-5 hover:shadow-glow hover:scale-[1.02] hover:border-primary/40 transition-all duration-300 cursor-default">
+    <div className="min-h-[112px] rounded-xl md:rounded-2xl border border-border bg-card/60 p-4 md:p-5 hover:shadow-glow hover:border-primary/40 md:hover:scale-[1.02] transition-all duration-300 cursor-default">
       <div className="flex items-start justify-between">
-        <div className="rounded-xl p-2.5 bg-primary/10">
-          <Icon className={`h-5 w-5 ${color}`} />
+        <div className="rounded-lg md:rounded-xl p-2 bg-primary/10">
+          <Icon className={`h-4 w-4 md:h-5 md:w-5 ${color}`} />
         </div>
         {trend !== undefined && (
           <span className={`flex items-center gap-0.5 text-xs font-semibold ${trend >= 0 ? "text-success" : "text-destructive"}`}>
@@ -88,8 +86,8 @@ function StatCard({ label, value, sub, icon: Icon, trend, color = "text-primary"
         )}
       </div>
       <div className="mt-3">
-        <div className="font-display text-2xl font-bold">{value}</div>
-        <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+        <div className="font-display text-xl md:text-2xl font-bold leading-tight break-words">{value}</div>
+        <div className="text-[11px] md:text-xs text-muted-foreground mt-1 leading-snug">{label}</div>
         {sub && <div className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</div>}
       </div>
     </div>
@@ -114,9 +112,9 @@ function SkeletonRows({ cols, n = 5 }: { cols: number; n?: number }) {
 // ─── table shell ─────────────────────────────────────────────
 function TableShell({ children, footer }: { children: React.ReactNode; footer?: string }) {
   return (
-    <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">{children}</table>
+    <div className="rounded-xl md:rounded-2xl border border-border bg-card/60 overflow-hidden">
+      <div className="overflow-x-auto overscroll-x-contain">
+        <table className="w-full min-w-[720px] text-sm">{children}</table>
       </div>
       {footer && (
         <div className="px-4 py-2.5 border-t border-border/40 bg-muted/10 text-xs text-muted-foreground">
@@ -150,9 +148,22 @@ const NAV: NavItem[] = [
   { key: "reviews",      label: "Reviews",         icon: Star },
   { key: "appfeedback",  label: "App Feedback",    icon: MessageSquare },
   { key: "plans",        label: "Plans",           icon: CreditCard },
+  { key: "credits",      label: "Credits",         icon: Coins },
   { key: "promocodes",   label: "Promo Codes",     icon: Tag },
   { key: "finance",      label: "Finance",         icon: DollarSign },
 ];
+
+const NAV_GROUPS = [
+  { key: "overview", label: "Overview", icon: LayoutDashboard, sections: ["overview"] },
+  { key: "people", label: "People", icon: Users, sections: ["users", "participants"] },
+  { key: "content", label: "Content", icon: PlayCircle, sections: ["quizzes", "categories"] },
+  { key: "feedback", label: "Feedback", icon: MessageSquare, sections: ["reviews", "appfeedback"] },
+  { key: "money", label: "Money", icon: Wallet, sections: ["plans", "credits", "promocodes", "finance"] },
+] as const;
+
+function getNavGroup(section: string) {
+  return NAV_GROUPS.find((group) => (group.sections as readonly string[]).includes(section)) ?? NAV_GROUPS[0];
+}
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN ADMIN PAGE
@@ -169,12 +180,12 @@ function AdminPage() {
     if (!user) { void navigate({ to: "/login" }); return; }
     supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle()
       .then(({ data }) => {
-        if (!data) { toast.error("Access denied - admins only"); void navigate({ to: "/dashboard" }); }
-        else setIsAdmin(true);
+        if (!data) { toast.error("Access denied - admins only"); void navigate({ to: "/dashboard" }); return; }
+        setIsAdmin(true);
+        // Only fetch after admin role is confirmed
+        supabase.from("app_feedback").select("id", { count: "exact", head: true }).eq("status", "open")
+          .then(({ count }) => setFeedbackBadge(count ?? 0));
       });
-    // count open app feedback
-    supabase.from("app_feedback").select("id", { count: "exact", head: true }).eq("status", "open")
-      .then(({ count }) => setFeedbackBadge(count ?? 0));
   }, [user, navigate]);
 
   if (isAdmin === null) return (
@@ -186,32 +197,66 @@ function AdminPage() {
   const navItems: NavItem[] = NAV.map((n) =>
     n.key === "appfeedback" && feedbackBadge > 0 ? { ...n, badge: feedbackBadge } : n
   );
+  const activeItem = navItems.find((item) => item.key === section) ?? navItems[0];
+  const activeGroup = getNavGroup(section);
+  const mobileSubNav = activeGroup.sections
+    .map((key) => navItems.find((item) => item.key === key))
+    .filter(Boolean) as NavItem[];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Top bar */}
-      <header className="border-b border-border bg-card/90 backdrop-blur sticky top-0 z-50 px-4 py-3 flex items-center gap-3 shrink-0">
+      <header className="border-b border-border bg-card/90 backdrop-blur sticky top-0 z-50 px-3 sm:px-4 py-3 flex items-center gap-3 shrink-0">
         <button type="button" onClick={() => setSidebarOpen((v) => !v)}
-          className="rounded-xl p-1.5 hover:bg-muted/40 transition-colors text-muted-foreground">
+          title={sidebarOpen ? "Collapse navigation" : "Expand navigation"}
+          className="hidden md:inline-flex rounded-xl p-1.5 hover:bg-muted/40 transition-colors text-muted-foreground">
           <Layers className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div className="rounded-xl bg-gradient-primary p-1.5 shadow-glow">
             <Shield className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="font-display font-bold">Admin Dashboard</span>
-          <Badge className="bg-destructive/15 text-destructive border-0 text-[10px]">ADMIN</Badge>
+          <div className="min-w-0">
+            <span className="block font-display font-bold leading-tight truncate">Admin Dashboard</span>
+            <span className="block md:hidden text-[11px] text-muted-foreground truncate">{activeItem.label}</span>
+          </div>
+          <Badge className="hidden sm:inline-flex bg-destructive/15 text-destructive border-0 text-[10px]">ADMIN</Badge>
         </div>
         <div className="ml-auto">
-          <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/dashboard" })}>
+          <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/dashboard" })} className="h-9 px-2 sm:px-3">
             ← Back to App
           </Button>
         </div>
       </header>
 
+      <div className="md:hidden sticky top-[57px] z-40 border-b border-border bg-background/95 backdrop-blur px-3 py-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {mobileSubNav.map(({ key, label, icon: Icon, badge }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSection(key)}
+              className={`min-h-11 shrink-0 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors inline-flex items-center gap-2 ${
+                section === key
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border bg-card/50 text-muted-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+              {badge ? (
+                <span className="rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
+                  {badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
-        <aside className={`${sidebarOpen ? "w-52" : "w-14"} shrink-0 border-r border-border bg-card/60 transition-all duration-300 flex flex-col`}>
+        <aside className={`${sidebarOpen ? "w-52" : "w-14"} hidden md:flex shrink-0 border-r border-border bg-card/60 transition-all duration-300 flex-col`}>
           <nav className="p-2 space-y-0.5 flex-1 overflow-y-auto">
             {navItems.map(({ key, label, icon: Icon, badge }) => (
               <button key={key} type="button" onClick={() => setSection(key)}
@@ -235,7 +280,7 @@ function AdminPage() {
         </aside>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-5">
+        <main className="flex-1 overflow-y-auto px-3 py-4 pb-28 sm:p-5 md:pb-5">
           {section === "overview"     && <OverviewSection onNavigate={setSection} />}
           {section === "users"        && <UsersSection />}
           {section === "participants" && <ParticipantsSection />}
@@ -244,10 +289,41 @@ function AdminPage() {
           {section === "reviews"      && <ReviewsSection />}
           {section === "appfeedback"  && <AppFeedbackSection onCountChange={setFeedbackBadge} />}
           {section === "plans"        && <PlansSection />}
+          {section === "credits"      && <CreditsSection />}
           {section === "promocodes"   && <PromoCodesSection />}
           {section === "finance"      && <FinanceSection />}
         </main>
       </div>
+
+      <nav className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+        <div className="grid grid-cols-5 gap-1">
+          {NAV_GROUPS.map(({ key, label, icon: Icon, sections }) => {
+            const selected = (sections as readonly string[]).includes(section);
+            const target = sections[0];
+            const groupBadge = (sections as readonly string[]).includes("appfeedback") ? feedbackBadge : 0;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSection(target)}
+                className={`relative min-h-14 rounded-xl px-1.5 py-1.5 text-[10px] font-semibold transition-colors flex flex-col items-center justify-center gap-1 ${
+                  selected
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span className="leading-none">{label}</span>
+                {groupBadge > 0 && (
+                  <span className="absolute right-2 top-1.5 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1.5 py-0.5">
+                    {groupBadge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
@@ -291,12 +367,12 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
         supabase.from("quiz_feedback").select("id", { count: "exact", head: true }),
         supabase.from("user_subscriptions").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", thisMonth),
-        supabase.from("payment_history").select("amount_cents").eq("status", "paid"),
+        supabase.from("manual_payments").select("amount_pkr").eq("status", "approved"),
         supabase.from("profiles").select("id, full_name, email, created_at").order("created_at", { ascending: false }).limit(5),
         supabase.from("quiz_sessions").select("id, title, owner_id, status, created_at").order("created_at", { ascending: false }).limit(5),
       ]);
 
-      const revenue = (payments ?? []).reduce((s, p) => s + (p.amount_cents ?? 0), 0);
+      const revenue = (payments ?? []).reduce((s, p) => s + (p.amount_pkr ?? 0), 0);
       setStats({
         users: c_users ?? 0, sessions: c_sessions ?? 0, questions: c_questions ?? 0,
         participants: c_participants ?? 0, categories: c_categories ?? 0,
@@ -331,15 +407,15 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
   // filter recentUsers by plan
   const filteredRecentUsers = planFilter === "all" ? recentUsers : recentUsers.filter((u) => u.plan === planFilter);
 
-  if (loading) return <div className="grid grid-cols-3 gap-4">{Array.from({length:9}).map((_,i)=><div key={i} className="h-28 rounded-2xl bg-muted/30 animate-pulse" />)}</div>;
+  if (loading) return <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">{Array.from({length:6}).map((_,i)=><div key={i} className="h-28 rounded-xl md:rounded-2xl bg-muted/30 animate-pulse" />)}</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5 md:space-y-6">
+      <div className="flex flex-col md:flex-row md:flex-wrap md:items-center md:justify-between gap-3">
         <SectionHead title="Platform Overview" sub="Real-time snapshot of the entire platform." />
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:flex-wrap">
           <Select value={dateFilter} onValueChange={setDateFilter}>
-            <SelectTrigger className="w-36 h-8 text-xs"><Calendar className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-36 h-10 md:h-8 text-xs"><Calendar className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All time</SelectItem>
               <SelectItem value="today">Today</SelectItem>
@@ -348,42 +424,45 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
             </SelectContent>
           </Select>
           <Select value={planFilter} onValueChange={setPlanFilter}>
-            <SelectTrigger className="w-32 h-8 text-xs"><Filter className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full md:w-40 h-10 md:h-8 text-xs"><Filter className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All plans</SelectItem>
-              <SelectItem value="free">Free</SelectItem>
-              <SelectItem value="pro">Pro</SelectItem>
-              <SelectItem value="enterprise">Enterprise</SelectItem>
+              <SelectItem value="individual_starter">Individual Free</SelectItem>
+              <SelectItem value="individual_pro">Individual Pro</SelectItem>
+              <SelectItem value="individual_pro_plus">Individual Pro+</SelectItem>
+              <SelectItem value="enterprise_starter">Org Free</SelectItem>
+              <SelectItem value="enterprise_pro">Org Pro</SelectItem>
+              <SelectItem value="enterprise_elite">Org Elite</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <button type="button" onClick={() => onNavigate("users")} className="text-left">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+        <button type="button" onClick={() => onNavigate("users")} className="text-left min-w-0">
           <StatCard label="Total Hosts" value={stats.users} icon={Users} trend={12} />
         </button>
-        <button type="button" onClick={() => onNavigate("participants")} className="text-left">
+        <button type="button" onClick={() => onNavigate("participants")} className="text-left min-w-0">
           <StatCard label="Total Participants" value={stats.participants} icon={UsersRound} color="text-success" />
         </button>
-        <button type="button" onClick={() => onNavigate("quizzes")} className="text-left">
+        <button type="button" onClick={() => onNavigate("quizzes")} className="text-left min-w-0">
           <StatCard label="Quiz Sessions" value={stats.sessions} icon={PlayCircle} />
         </button>
-        <button type="button" onClick={() => onNavigate("categories")} className="text-left">
+        <button type="button" onClick={() => onNavigate("categories")} className="text-left min-w-0">
           <StatCard label="Questions" value={stats.questions} icon={BookOpen} />
         </button>
-        <button type="button" onClick={() => onNavigate("categories")} className="text-left">
+        <button type="button" onClick={() => onNavigate("categories")} className="text-left min-w-0">
           <StatCard label="Categories" value={stats.categories} icon={FolderTree} />
         </button>
-        <button type="button" onClick={() => onNavigate("reviews")} className="text-left">
+        <button type="button" onClick={() => onNavigate("reviews")} className="text-left min-w-0">
           <StatCard label="Student Reviews" value={stats.feedback} icon={Star} color="text-warning" />
         </button>
-        <button type="button" onClick={() => onNavigate("plans")} className="text-left">
+        <button type="button" onClick={() => onNavigate("plans")} className="text-left min-w-0">
           <StatCard label="Active Subscriptions" value={stats.active_subs} icon={CreditCard} color="text-primary" trend={8} />
         </button>
-        <button type="button" onClick={() => onNavigate("finance")} className="text-left">
-          <StatCard label="Revenue" value={fmt$(stats.revenue)} icon={DollarSign} color="text-warning" />
+        <button type="button" onClick={() => onNavigate("finance")} className="text-left min-w-0">
+          <StatCard label="Revenue (PKR)" value={`PKR ${stats.revenue.toLocaleString()}`} icon={DollarSign} color="text-warning" />
         </button>
-        <button type="button" onClick={() => onNavigate("users")} className="text-left">
+        <button type="button" onClick={() => onNavigate("users")} className="text-left min-w-0">
           <StatCard label="New Hosts (Month)" value={stats.new_users} icon={TrendingUp} color="text-success" trend={stats.new_users > 0 ? 15 : 0} />
         </button>
       </div>
@@ -391,13 +470,13 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Recent signups */}
         <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/60 bg-muted/20 flex items-center justify-between">
+          <div className="px-4 md:px-5 py-3 border-b border-border/60 bg-muted/20 flex items-center justify-between">
             <span className="font-semibold text-sm">Recent Host Signups</span>
             <button type="button" onClick={() => onNavigate("users")} className="text-[11px] text-primary hover:underline">View all</button>
           </div>
           <div className="divide-y divide-border/40">
             {filteredRecentUsers.map((u, i) => (
-              <div key={i} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/10">
+              <div key={i} className="px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10">
                 <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                   {u.name.charAt(0).toUpperCase()}
                 </div>
@@ -405,8 +484,8 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
                   <div className="text-xs font-medium truncate">{u.name}</div>
                   <div className="text-[11px] text-muted-foreground truncate">{u.email}</div>
                 </div>
-                {planBadge(u.plan)}
-                <span className="text-[11px] text-muted-foreground shrink-0">{ago(u.joined)}</span>
+                <div className="shrink-0">{planBadge(u.plan)}</div>
+                <span className="hidden sm:inline text-[11px] text-muted-foreground shrink-0">{ago(u.joined)}</span>
               </div>
             ))}
           </div>
@@ -414,13 +493,13 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
 
         {/* Recent quizzes */}
         <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border/60 bg-muted/20 flex items-center justify-between">
+          <div className="px-4 md:px-5 py-3 border-b border-border/60 bg-muted/20 flex items-center justify-between">
             <span className="font-semibold text-sm">Recent Quiz Sessions</span>
             <button type="button" onClick={() => onNavigate("quizzes")} className="text-[11px] text-primary hover:underline">View all</button>
           </div>
           <div className="divide-y divide-border/40">
             {recentQuizzes.map((q, i) => (
-              <div key={i} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/10">
+              <div key={i} className="px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10">
                 <div className="h-8 w-8 rounded-xl bg-muted/40 flex items-center justify-center shrink-0">
                   <PlayCircle className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -428,8 +507,8 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void
                   <div className="text-xs font-medium truncate">{q.title}</div>
                   <div className="text-[11px] text-muted-foreground">by {q.owner}</div>
                 </div>
-                {statusBadge(q.status)}
-                <span className="text-[11px] text-muted-foreground shrink-0">{ago(q.created)}</span>
+                <div className="shrink-0">{statusBadge(q.status)}</div>
+                <span className="hidden sm:inline text-[11px] text-muted-foreground shrink-0">{ago(q.created)}</span>
               </div>
             ))}
           </div>
@@ -452,11 +531,11 @@ type UserRow = {
 function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: (userId: string, slug: string) => void }) {
   const [subDetails, setSubDetails] = useState<{
     plan_name: string; status: string; started_at: string | null;
-    expires_at: string | null; stripe_customer_id: string | null;
+    expires_at: string | null;
     plan_limits: Record<string, number>;
     plan_features: string[];
   } | null>(null);
-  const [payments, setPayments] = useState<{ amount_cents: number; status: string; created_at: string; description: string | null }[]>([]);
+  const [payments, setPayments] = useState<{ amount_pkr: number; status: string; created_at: string; payment_method: string }[]>([]);
   const [recentSessions, setRecentSessions] = useState<{ id: string; title: string; status: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -464,8 +543,8 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
     void (async () => {
       setLoading(true);
       const [subRes, payRes, sessRes] = await Promise.all([
-        supabase.from("user_subscriptions").select("*, plans(name, limits, features)").eq("user_id", user.id).maybeSingle(),
-        supabase.from("payment_history").select("amount_cents, status, paid_at, description").eq("user_id", user.id).order("paid_at", { ascending: false }).limit(5),
+        supabase.from("user_subscriptions").select("*, plans(name, credits_per_month, quizzes_per_day, participants_per_session, sessions_total, features_list)").eq("user_id", user.id).maybeSingle(),
+        supabase.from("manual_payments").select("amount_pkr, status, created_at, payment_method").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
         supabase.from("quiz_sessions").select("id, title, status, created_at").eq("owner_id", user.id).order("created_at", { ascending: false }).limit(5),
       ]);
       if (subRes.data) {
@@ -474,14 +553,18 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
         setSubDetails({
           plan_name: (plan?.name as string) ?? user.plan_slug,
           status: (raw.status as string) ?? "-",
-          started_at: (raw.current_period_start as string | null) ?? null,
-          expires_at: (raw.current_period_end as string | null) ?? null,
-          stripe_customer_id: (raw.stripe_customer_id as string | null) ?? null,
-          plan_limits: (plan?.limits as Record<string, number>) ?? {},
-          plan_features: (plan?.features as string[]) ?? [],
+          started_at: (raw.started_at as string | null) ?? null,
+          expires_at: (raw.expires_at as string | null) ?? null,
+          plan_limits: {
+            quizzes_per_day: (plan?.quizzes_per_day as number) ?? 0,
+            participants_per_session: (plan?.participants_per_session as number) ?? 0,
+            sessions_total: (plan?.sessions_total as number) ?? 0,
+            credits_per_month: (plan?.credits_per_month as number) ?? 0,
+          },
+          plan_features: (plan?.features_list as string[]) ?? [],
         });
       }
-      const pays = (payRes.data ?? []) as unknown as { amount_cents: number; status: string; created_at: string; description: string | null }[];
+      const pays = (payRes.data ?? []) as unknown as { amount_pkr: number; status: string; created_at: string; payment_method: string }[];
       setPayments(pays);
       setRecentSessions(sessRes.data ?? []);
       setLoading(false);
@@ -490,10 +573,9 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
 
   const limitLabels: Record<string, string> = {
     quizzes_per_day: "Quizzes / day",
-    ai_calls_per_day: "AI calls / day",
     participants_per_session: "Participants / session",
-    question_bank: "Question bank",
     sessions_total: "Total sessions",
+    credits_per_month: "Credits / month",
   };
 
   return (
@@ -563,12 +645,6 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
                   </div>
                 ))}
               </div>
-              {subDetails.stripe_customer_id && (
-                <div className="pt-1 border-t border-border/40">
-                  <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Stripe Customer ID</div>
-                  <div className="text-xs font-mono text-muted-foreground">{subDetails.stripe_customer_id}</div>
-                </div>
-              )}
               {/* Plan limits */}
               {Object.keys(subDetails.plan_limits).length > 0 && (
                 <div className="pt-1 border-t border-border/40 space-y-2">
@@ -594,11 +670,11 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
                 {payments.map((p, i) => (
                   <div key={i} className="px-4 py-2.5 flex items-center justify-between text-xs">
                     <div>
-                      <div className="font-medium">{p.description ?? "Payment"}</div>
+                      <div className="font-medium capitalize">{p.payment_method.replace("_", " ")}</div>
                       <div className="text-muted-foreground">{fmtDate(p.created_at)}</div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{fmt$(p.amount_cents)}</span>
+                      <span className="font-semibold">PKR {p.amount_pkr.toLocaleString()}</span>
                       {statusBadge(p.status)}
                     </div>
                   </div>
@@ -630,12 +706,19 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
       {/* Change plan */}
       <div className="rounded-xl border border-border bg-card/40 p-4">
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Change Plan</div>
-        <div className="flex gap-2">
-          {["free","pro","enterprise"].map((s) => (
+        <div className="flex flex-wrap gap-2">
+          {[
+            { s: "individual_starter", label: "Ind. Free" },
+            { s: "individual_pro", label: "Ind. Pro" },
+            { s: "individual_pro_plus", label: "Ind. Pro+" },
+            { s: "enterprise_starter", label: "Org Free" },
+            { s: "enterprise_pro", label: "Org Pro" },
+            { s: "enterprise_elite", label: "Org Elite" },
+          ].map(({ s, label }) => (
             <button key={s} type="button"
               onClick={() => onChangePlan(user.id, s)}
-              className={`flex-1 text-xs py-2 rounded-xl border font-medium transition-colors capitalize ${user.plan_slug === s ? "bg-primary/20 border-primary/40 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
-              {s}
+              className={`flex-1 text-xs py-2 rounded-xl border font-medium transition-colors ${user.plan_slug === s ? "bg-primary/20 border-primary/40 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+              {label}
             </button>
           ))}
         </div>
@@ -647,12 +730,21 @@ function UserDetailPanel({ user, onChangePlan }: { user: UserRow; onChangePlan: 
 // ═══════════════════════════════════════════════════════════════
 // USERS (HOSTS)
 // ═══════════════════════════════════════════════════════════════
+type CompanyGroup = {
+  company_id: string;
+  company_name: string;
+  admin_user_id: string;
+  member_user_ids: string[];
+};
+
 function UsersSection() {
   const [rows, setRows] = useState<UserRow[]>([]);
+  const [companies, setCompanies] = useState<CompanyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [planFilter, setPlanFilter] = useState("all");
   const [detail, setDetail] = useState<UserRow | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -662,11 +754,13 @@ function UsersSection() {
     if (!profiles?.length) { setLoading(false); return; }
     const ids = profiles.map((p) => p.id);
 
-    const [{ data: subs }, { data: sess }, { data: qs }, { data: parts }] = await Promise.all([
+    const [{ data: subs }, { data: sess }, { data: qs }, { data: parts }, { data: cps }, { data: cms }] = await Promise.all([
       supabase.from("user_subscriptions").select("user_id,status,plans(slug)").in("user_id", ids),
       supabase.from("quiz_sessions").select("owner_id").in("owner_id", ids),
       supabase.from("questions").select("owner_id").in("owner_id", ids),
       supabase.from("participants").select("owner_id").in("owner_id", ids),
+      supabase.from("company_profiles").select("id, admin_user_id, company_name"),
+      (supabase.from("company_members") as any).select("user_id, company_id, status").eq("status", "active"),
     ]);
 
     const subMap: Record<string, { slug: string; status: string }> = {};
@@ -680,6 +774,21 @@ function UsersSection() {
       ...p, plan_slug: subMap[p.id]?.slug ?? "free", sub_status: subMap[p.id]?.status ?? "active",
       session_count: cnt(sess, p.id), question_count: cnt(qs, p.id), participant_count: cnt(parts, p.id),
     })));
+
+    // Build company groups: admin + members
+    const memberByCompany: Record<string, string[]> = {};
+    ((cms ?? []) as { user_id: string | null; company_id: string }[]).forEach((m) => {
+      if (m.user_id && m.company_id) (memberByCompany[m.company_id] ||= []).push(m.user_id);
+    });
+    setCompanies(
+      ((cps ?? []) as { id: string; admin_user_id: string; company_name: string }[]).map((c) => ({
+        company_id: c.id,
+        company_name: c.company_name,
+        admin_user_id: c.admin_user_id,
+        member_user_ids: memberByCompany[c.id] ?? [],
+      })),
+    );
+
     setLoading(false);
   }, []);
 
@@ -699,6 +808,85 @@ function UsersSection() {
     if (planFilter !== "all") r = r.filter((u) => u.plan_slug === planFilter);
     return r;
   }, [rows, search, planFilter]);
+
+  // Group filtered rows: company admin first, then their hosts. Independent users last.
+  const grouped = useMemo(() => {
+    const byId = new Map(filtered.map((r) => [r.id, r] as const));
+    const used = new Set<string>();
+    const groups: Array<{ company_id: string; company_name: string; admin: UserRow | null; members: UserRow[] }> = [];
+
+    // Stable order: sort companies by name so admins appear consistently
+    const sortedCompanies = [...companies].sort((a, b) => a.company_name.localeCompare(b.company_name));
+    for (const c of sortedCompanies) {
+      const admin = byId.get(c.admin_user_id) ?? null;
+      if (admin) used.add(admin.id);
+      const members = c.member_user_ids
+        .map((id) => byId.get(id))
+        .filter((m): m is UserRow => !!m);
+      members.forEach((m) => used.add(m.id));
+      if (admin || members.length > 0) {
+        groups.push({ company_id: c.company_id, company_name: c.company_name, admin, members });
+      }
+    }
+    const independent = filtered.filter((u) => !used.has(u.id));
+    return { groups, independent };
+  }, [filtered, companies]);
+
+  const toggleGroup = (companyId: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyId)) next.delete(companyId); else next.add(companyId);
+      return next;
+    });
+  };
+
+  const renderUserRow = (u: UserRow, indent: "none" | "host" = "none") => (
+    <tr key={u.id} className="hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => setDetail(u)}>
+      <td className="px-4 py-3">
+        <div className={`flex items-center gap-2.5 ${indent === "host" ? "pl-8" : ""}`}>
+          <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+            {(u.full_name ?? u.email ?? "?").charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div className="text-xs font-medium flex items-center gap-1.5">
+              {u.full_name ?? "-"}
+              {indent === "host" && <Badge className="bg-blue-500/10 text-blue-600 border-0 text-[9px] px-1.5 py-0">Host</Badge>}
+            </div>
+            <div className="text-[11px] text-muted-foreground">{u.email ?? "-"}</div>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-xs text-muted-foreground">{[u.organization, u.country].filter(Boolean).join(" · ") || "-"}</td>
+      <td className="px-4 py-3">
+        {indent === "host"
+          ? <span className="text-[10px] text-muted-foreground italic">via org</span>
+          : planBadge(u.plan_slug)}
+      </td>
+      <td className="px-4 py-3 text-xs font-medium text-center">{u.session_count}</td>
+      <td className="px-4 py-3 text-xs font-medium text-center">{u.question_count}</td>
+      <td className="px-4 py-3 text-xs font-medium text-center">{u.participant_count}</td>
+      <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(u.created_at)}</td>
+      <td className="px-4 py-3">
+        {indent === "host"
+          ? <span className="text-[10px] text-muted-foreground italic">managed by org</span>
+          : (
+            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+              {[
+                { s: "individual_starter", label: "Free" },
+                { s: "individual_pro", label: "Pro" },
+                { s: "enterprise_pro", label: "Org" },
+              ].map(({ s, label }) => (
+                <button key={s} type="button" title={`Set ${s}`}
+                  onClick={() => void changePlan(u.id, s)}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${u.plan_slug === s ? "bg-primary/20 border-primary/30 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+      </td>
+    </tr>
+  );
 
   // ── Detail page view ──────────────────────────────────────────
   if (detail) {
@@ -727,60 +915,71 @@ function UsersSection() {
   return (
     <div className="space-y-4">
       <SectionHead title="Hosts & Teachers" sub={`${rows.length} registered hosts on the platform.`} />
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-52">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search name, email, org…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={planFilter} onValueChange={setPlanFilter}>
-          <SelectTrigger className="w-36"><Filter className="h-4 w-4 mr-1" /><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-44 h-11 sm:h-9"><Filter className="h-4 w-4 mr-1" /><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All plans</SelectItem>
-            <SelectItem value="free">Free</SelectItem>
-            <SelectItem value="pro">Pro</SelectItem>
-            <SelectItem value="enterprise">Enterprise</SelectItem>
+            <SelectItem value="individual_starter">Individual Free</SelectItem>
+            <SelectItem value="individual_pro">Individual Pro</SelectItem>
+            <SelectItem value="individual_pro_plus">Individual Pro+</SelectItem>
+            <SelectItem value="enterprise_starter">Org Free</SelectItem>
+            <SelectItem value="enterprise_pro">Org Pro</SelectItem>
+            <SelectItem value="enterprise_elite">Org Elite</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={() => void load()} className="gap-1.5"><RefreshCw className="h-4 w-4" />Refresh</Button>
+        <Button variant="outline" size="sm" onClick={() => void load()} className="h-11 sm:h-8 gap-1.5"><RefreshCw className="h-4 w-4" />Refresh</Button>
       </div>
 
-      <TableShell footer={`${filtered.length} of ${rows.length} hosts`}>
-        <THead cols={["Host", "Org / Country", "Plan", "Sessions", "Questions", "Participants", "Joined", ""]} />
+      <TableShell footer={`${filtered.length} of ${rows.length} users · ${grouped.groups.length} companies`}>
+        <THead cols={["User", "Org / Country", "Plan", "Sessions", "Questions", "Participants", "Joined", ""]} />
         <tbody className="divide-y divide-border/40">
           {loading ? <SkeletonRows cols={8} /> : filtered.length === 0 ? (
-            <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No hosts found.</td></tr>
-          ) : filtered.map((u) => (
-            <tr key={u.id} className="hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => setDetail(u)}>
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                    {(u.full_name ?? u.email ?? "?").charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium">{u.full_name ?? "-"}</div>
-                    <div className="text-[11px] text-muted-foreground">{u.email ?? "-"}</div>
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{[u.organization, u.country].filter(Boolean).join(" · ") || "-"}</td>
-              <td className="px-4 py-3">{planBadge(u.plan_slug)}</td>
-              <td className="px-4 py-3 text-xs font-medium text-center">{u.session_count}</td>
-              <td className="px-4 py-3 text-xs font-medium text-center">{u.question_count}</td>
-              <td className="px-4 py-3 text-xs font-medium text-center">{u.participant_count}</td>
-              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(u.created_at)}</td>
-              <td className="px-4 py-3">
-                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                  {["free","pro","enterprise"].map((s) => (
-                    <button key={s} type="button" title={`Set ${s}`}
-                      onClick={() => void changePlan(u.id, s)}
-                      className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${u.plan_slug === s ? "bg-primary/20 border-primary/30 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </td>
-            </tr>
-          ))}
+            <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No users found.</td></tr>
+          ) : (
+            <>
+              {grouped.groups.map((g) => {
+                const isCollapsed = collapsed.has(g.company_id);
+                return (
+                  <React.Fragment key={`co-${g.company_id}`}>
+                    {/* Company group header */}
+                    <tr className="bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer" onClick={() => toggleGroup(g.company_id)}>
+                      <td colSpan={8} className="px-4 py-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                          {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          <Building2 className="h-3.5 w-3.5" />
+                          <span>{g.company_name}</span>
+                          <span className="text-muted-foreground font-normal">·</span>
+                          <span className="text-muted-foreground font-normal">{g.members.length} host{g.members.length === 1 ? "" : "s"}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {!isCollapsed && g.admin && renderUserRow(g.admin, "none")}
+                    {!isCollapsed && g.members.map((m) => renderUserRow(m, "host"))}
+                  </React.Fragment>
+                );
+              })}
+              {grouped.independent.length > 0 && (
+                <>
+                  <tr className="bg-muted/30">
+                    <td colSpan={8} className="px-4 py-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        <span>Individual Users</span>
+                        <span className="font-normal">·</span>
+                        <span className="font-normal">{grouped.independent.length}</span>
+                      </div>
+                    </td>
+                  </tr>
+                  {grouped.independent.map((u) => renderUserRow(u, "none"))}
+                </>
+              )}
+            </>
+          )}
         </tbody>
       </TableShell>
     </div>
@@ -877,18 +1076,18 @@ function ParticipantsSection() {
   return (
     <div className="space-y-4">
       <SectionHead title="Participants" sub={`${total} participants across all hosts.`} />
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-56">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search name, email, mobile…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-11 sm:h-9"
           />
         </div>
         <Select value={sort} onValueChange={(value) => setSort(value as "created_at" | "name")}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full sm:w-40 h-11 sm:h-9">
             <SelectValue placeholder="Sort" />
           </SelectTrigger>
           <SelectContent>
@@ -1006,13 +1205,13 @@ function QuizzesSection() {
   return (
     <div className="space-y-4">
       <SectionHead title="Quiz Sessions" sub={`${rows.length} sessions created across all hosts.`} />
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-52">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search title, host, type…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-36 h-11 sm:h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
             {["draft","scheduled","active","completed","expired"].map((s) => (
@@ -1111,7 +1310,7 @@ function CategoriesSection() {
   return (
     <div className="space-y-4">
       <SectionHead title="Question Categories" sub={`${rows.length} categories created by hosts.`} />
-      <div className="relative max-w-sm">
+      <div className="relative max-w-sm sm:max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search name, subject, host…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
       </div>
@@ -1245,13 +1444,13 @@ function ReviewsSection() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-52">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
+        <div className="relative min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search quiz, host, participant…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         <Select value={ratingFilter} onValueChange={setRatingFilter}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-32 h-11 sm:h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All ratings</SelectItem>
             {[5,4,3,2,1].map((n)=><SelectItem key={n} value={String(n)}>{"★".repeat(n)}</SelectItem>)}
@@ -1382,13 +1581,13 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
           const cnt = rows.filter((r) => r.status === status).length;
           return (
             <button key={status} type="button" onClick={() => setStatusFilter(statusFilter === status ? "all" : status)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${statusFilter === status ? cls + " border-transparent" : "border-border text-muted-foreground hover:border-primary/30"}`}>
+              className={`min-h-10 rounded-xl px-3 py-1.5 text-xs font-semibold border transition-all ${statusFilter === status ? cls + " border-transparent" : "border-border text-muted-foreground hover:border-primary/30"}`}>
               {label} <span className="ml-1 font-bold">{cnt}</span>
             </button>
           );
         })}
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-36 h-10 sm:h-8"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All types</SelectItem>
             <SelectItem value="bug">Bug</SelectItem>
@@ -1486,10 +1685,15 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
 // ═══════════════════════════════════════════════════════════════
 function PlansSection() {
   type PlanRow = {
-    id: string; name: string; slug: string; description: string | null;
-    price_monthly: number; price_yearly: number; is_active: boolean;
-    stripe_price_id_monthly: string | null; stripe_price_id_yearly: string | null;
-    limits: Record<string, number>; features: string[];
+    id: string; name: string; slug: string; tier: string; description: string | null;
+    price_pkr: number; credits_per_month: number; is_active: boolean;
+    quizzes_per_day: number; participants_per_session: number;
+    participants_total: number; question_bank: number; sessions_total: number;
+    max_hosts: number; ai_enabled: boolean; custom_branding: boolean; white_label: boolean;
+    credit_cost_ai_10q: number; credit_cost_ai_scan: number;
+    credit_cost_extra_quiz: number; credit_cost_extra_participants: number;
+    credit_cost_session_launch: number; credit_cost_export: number;
+    features_list: string[];
     subscriber_count: number;
   };
   const [plans, setPlans] = useState<PlanRow[]>([]);
@@ -1503,11 +1707,14 @@ function PlansSection() {
     if (!data) { setLoading(false); return; }
     const { data: subs } = await supabase.from("user_subscriptions").select("plan_id").eq("status", "active");
     const subCnt: Record<string, number> = {};
-    (subs ?? []).forEach((s) => { subCnt[s.plan_id] = (subCnt[s.plan_id] ?? 0) + 1; });
+    (subs ?? []).forEach((s: { plan_id: string }) => { subCnt[s.plan_id] = (subCnt[s.plan_id] ?? 0) + 1; });
     setPlans(data.map((p) => ({
-      ...p, limits: (p.limits as Record<string, number>) ?? {},
-      features: (p.features as string[]) ?? [], subscriber_count: subCnt[p.id] ?? 0,
-    })));
+      ...p,
+      features_list: (p.features_list as string[]) ?? [],
+      subscriber_count: subCnt[p.id] ?? 0,
+      credit_cost_session_launch: (p.credit_cost_session_launch as number) ?? 0,
+      credit_cost_export: (p.credit_cost_export as number) ?? 0,
+    })) as PlanRow[]);
     setLoading(false);
   }, []);
 
@@ -1518,173 +1725,137 @@ function PlansSection() {
     setSaving(true);
     const { error } = await supabase.from("plans").update({
       name: editing.name, description: editing.description,
-      price_monthly: editing.price_monthly, price_yearly: editing.price_yearly,
-      is_active: editing.is_active,
-      limits: editing.limits, features: editing.features,
+      price_pkr: editing.price_pkr, credits_per_month: editing.credits_per_month,
+      is_active: editing.is_active, quizzes_per_day: editing.quizzes_per_day,
+      participants_per_session: editing.participants_per_session,
+      participants_total: editing.participants_total, question_bank: editing.question_bank,
+      sessions_total: editing.sessions_total, max_hosts: editing.max_hosts,
+      ai_enabled: editing.ai_enabled, custom_branding: editing.custom_branding,
+      white_label: editing.white_label,
+      credit_cost_ai_10q: editing.credit_cost_ai_10q,
+      credit_cost_ai_scan: editing.credit_cost_ai_scan,
+      credit_cost_extra_quiz: editing.credit_cost_extra_quiz,
+      credit_cost_extra_participants: editing.credit_cost_extra_participants,
+      credit_cost_session_launch: editing.credit_cost_session_launch,
+      credit_cost_export: editing.credit_cost_export,
+      features_list: editing.features_list,
     }).eq("id", editing.id);
-    if (error) { setSaving(false); toast.error(error.message); return; }
-
-    // Auto-create/update Stripe prices from the entered amounts
-    try {
-      const { syncPlanToStripe } = await import("@/integrations/stripe/stripe.server");
-      await syncPlanToStripe({
-        data: {
-          planId: editing.id,
-          planName: editing.name,
-          planSlug: editing.slug,
-          priceMonthly: editing.price_monthly,
-          priceYearly: editing.price_yearly,
-        },
-      });
-      toast.success("Plan saved & Stripe prices synced");
-    } catch (err) {
-      toast.warning("Plan saved but Stripe sync failed - check server logs", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    }
-
     setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Plan saved");
     setEditing(null);
     void load();
   };
 
   if (loading) return <div className="space-y-3">{Array.from({length:3}).map((_,i)=><div key={i} className="h-40 rounded-2xl bg-muted/30 animate-pulse" />)}</div>;
 
+  const numField = (label: string, val: number, key: keyof PlanRow) => (
+    <div>
+      <label className="text-xs text-muted-foreground mb-1 block">{label} (-1=∞)</label>
+      <Input type="number" min={-1} value={val}
+        onChange={(e) => editing && setEditing({ ...editing, [key]: Number(e.target.value) })} />
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      <SectionHead title="Plan Management" sub="Edit pricing, limits, and Stripe IDs for each subscription tier." />
+      <SectionHead title="Plan Management" sub="Edit pricing, credits, limits, and features for each plan." />
       {editing ? (
         <div className="rounded-2xl border border-primary/30 bg-card/60 overflow-hidden">
-          {/* Edit header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/80">
             <div className="flex items-center gap-3">
               {planBadge(editing.slug)}
-              <span className="font-display font-bold text-lg">Edit Plan</span>
+              <span className="font-display font-bold text-lg">Edit: {editing.name}</span>
+              <Badge className="bg-muted text-muted-foreground border-0 text-[10px] capitalize">{editing.tier}</Badge>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setEditing(null)}><X className="h-4 w-4" /></Button>
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Basic Info */}
+            {/* Pricing */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-6 w-1 rounded-full bg-primary" />
-                <span className="text-sm font-semibold">Basic Information</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-xs text-muted-foreground mb-1 block">Monthly Price ($)</label>
-                  <Input type="number" min={0} step={0.01} value={editing.price_monthly} onChange={(e) => setEditing({ ...editing, price_monthly: Number(e.target.value) })} /></div>
-                <div><label className="text-xs text-muted-foreground mb-1 block">Yearly Price ($)</label>
-                  <Input type="number" min={0} step={0.01} value={editing.price_yearly} onChange={(e) => setEditing({ ...editing, price_yearly: Number(e.target.value) })} /></div>
-                <div className="col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Description</label>
+              <div className="flex items-center gap-2 mb-3"><div className="h-6 w-1 rounded-full bg-primary" /><span className="text-sm font-semibold">Pricing & Credits</span></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label className="text-xs text-muted-foreground mb-1 block">Price (PKR/month)</label>
+                  <Input type="number" min={0} value={editing.price_pkr} onChange={(e) => setEditing({ ...editing, price_pkr: Number(e.target.value) })} /></div>
+                <div><label className="text-xs text-muted-foreground mb-1 block">Credits/month</label>
+                  <Input type="number" min={0} value={editing.credits_per_month} onChange={(e) => setEditing({ ...editing, credits_per_month: Number(e.target.value) })} /></div>
+                <div className="sm:col-span-3"><label className="text-xs text-muted-foreground mb-1 block">Description</label>
                   <Input value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
               </div>
             </div>
 
-            {/* Stripe sync info */}
-            <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-3 text-xs text-muted-foreground flex items-start gap-2">
-              <Tag className="h-3.5 w-3.5 text-warning mt-0.5 shrink-0" />
-              <span>Stripe prices are created automatically when you save. Just enter the dollar amounts above.</span>
-            </div>
-
             {/* Limits */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-6 w-1 rounded-full bg-success" />
-                <span className="text-sm font-semibold">Usage Limits</span>
-                <span className="text-xs text-muted-foreground ml-1">(-1 = Unlimited)</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {([
-                  { key: "quizzes_per_day", label: "Quizzes per Day", icon: "📋" },
-                  { key: "ai_calls_per_day", label: "AI Calls per Day", icon: "🤖" },
-                  { key: "participants_per_session", label: "Participants per Session", icon: "👥" },
-                  { key: "question_bank", label: "Question Bank Size", icon: "❓" },
-                  { key: "sessions_total", label: "Total Sessions", icon: "🎯" },
-                ] as { key: string; label: string; icon: string }[]).map(({ key, label, icon }) => {
-                  const val = editing.limits[key] ?? -1;
-                  const isUnlimited = val === -1;
-                  return (
-                    <div key={key} className="rounded-xl border border-border bg-muted/10 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium flex items-center gap-1.5">{icon} {label}</span>
-                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                          <span className="text-[10px] text-muted-foreground">Unlimited</span>
-                          <button
-                            type="button"
-                            onClick={() => setEditing({ ...editing, limits: { ...editing.limits, [key]: isUnlimited ? 10 : -1 } })}
-                            className={`relative h-4.5 w-8 rounded-full transition-colors cursor-pointer ${isUnlimited ? "bg-primary" : "bg-muted"}`}
-                          >
-                            <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all ${isUnlimited ? "left-4" : "left-0.5"}`} />
-                          </button>
-                        </label>
-                      </div>
-                      {!isUnlimited && (
-                        <Input
-                          type="number" min={0} value={val}
-                          onChange={(e) => setEditing({ ...editing, limits: { ...editing.limits, [key]: Number(e.target.value) } })}
-                          className="h-8 text-sm"
-                        />
-                      )}
-                      {isUnlimited && (
-                        <div className="text-xs text-primary font-semibold px-1">∞ No limit</div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="flex items-center gap-2 mb-3"><div className="h-6 w-1 rounded-full bg-success" /><span className="text-sm font-semibold">Usage Limits</span></div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {numField("Quizzes/day", editing.quizzes_per_day, "quizzes_per_day")}
+                {numField("Participants/session", editing.participants_per_session, "participants_per_session")}
+                {numField("Total participants", editing.participants_total, "participants_total")}
+                {numField("Question bank", editing.question_bank, "question_bank")}
+                {numField("Max hosts (enterprise)", editing.max_hosts, "max_hosts")}
+                {numField("AI calls/day", editing.ai_enabled ? -1 : 0, "max_hosts")}
               </div>
             </div>
 
-            {/* Features */}
+            {/* Credit costs */}
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-6 w-1 rounded-full bg-purple-400" />
-                <span className="text-sm font-semibold">Features List</span>
-                <span className="text-xs text-muted-foreground ml-1">shown to users on pricing page</span>
+              <div className="flex items-center gap-2 mb-3"><div className="h-6 w-1 rounded-full bg-warning" /><span className="text-sm font-semibold">Credit Costs per Action</span></div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {numField("AI: Generate 10 Qs", editing.credit_cost_ai_10q, "credit_cost_ai_10q")}
+                {numField("AI: OCR Image Scan", editing.credit_cost_ai_scan, "credit_cost_ai_scan")}
+                {numField("Launch Session", editing.credit_cost_session_launch, "credit_cost_session_launch")}
+                {numField("Export PDF/Excel", editing.credit_cost_export, "credit_cost_export")}
+                {numField("Extra Quiz Slot", editing.credit_cost_extra_quiz, "credit_cost_extra_quiz")}
+                {numField("Extra 10 Participants", editing.credit_cost_extra_participants, "credit_cost_extra_participants")}
               </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">Set 0 to make an action free. AI costs scale per-question (e.g. 10 credits per 10q = 1 credit/question). Session launch and export default to 0.</p>
+            </div>
+
+            {/* Feature flags */}
+            <div>
+              <div className="flex items-center gap-2 mb-3"><div className="h-6 w-1 rounded-full bg-purple-400" /><span className="text-sm font-semibold">Feature Flags</span></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {([
+                  { key: "ai_enabled", label: "AI Enabled" },
+                  { key: "custom_branding", label: "Custom Branding" },
+                  { key: "white_label", label: "White Label" },
+                ] as { key: keyof PlanRow; label: string }[]).map(({ key, label }) => (
+                  <label key={String(key)} className="flex items-center gap-3 rounded-xl border border-border bg-muted/10 p-3 cursor-pointer">
+                    <input type="checkbox" checked={editing[key] as boolean}
+                      onChange={(e) => setEditing({ ...editing, [key]: e.target.checked })}
+                      className="h-4 w-4 accent-primary" />
+                    <span className="text-sm font-medium">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Features list */}
+            <div>
+              <div className="flex items-center gap-2 mb-3"><div className="h-6 w-1 rounded-full bg-blue-400" /><span className="text-sm font-semibold">Features List</span><span className="text-xs text-muted-foreground ml-1">shown on pricing page</span></div>
               <div className="space-y-2">
-                {editing.features.map((feat, i) => (
+                {editing.features_list.map((feat, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-                      <button type="button" disabled={i === 0} onClick={() => {
-                        const arr = [...editing.features];
-                        [arr[i-1], arr[i]] = [arr[i], arr[i-1]];
-                        setEditing({ ...editing, features: arr });
-                      }} className="hover:text-foreground disabled:opacity-30 cursor-pointer">▲</button>
-                      <button type="button" disabled={i === editing.features.length - 1} onClick={() => {
-                        const arr = [...editing.features];
-                        [arr[i+1], arr[i]] = [arr[i], arr[i+1]];
-                        setEditing({ ...editing, features: arr });
-                      }} className="hover:text-foreground disabled:opacity-30 cursor-pointer">▼</button>
-                    </div>
                     <CheckCircle className="h-3.5 w-3.5 text-success shrink-0" />
-                    <Input
-                      value={feat}
-                      onChange={(e) => {
-                        const arr = [...editing.features];
-                        arr[i] = e.target.value;
-                        setEditing({ ...editing, features: arr });
-                      }}
-                      className="h-8 text-sm flex-1"
-                    />
-                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive/60 hover:text-destructive cursor-pointer"
-                      onClick={() => setEditing({ ...editing, features: editing.features.filter((_, j) => j !== i) })}>
+                    <Input value={feat} onChange={(e) => { const arr=[...editing.features_list]; arr[i]=e.target.value; setEditing({...editing,features_list:arr}); }} className="h-8 text-sm flex-1" />
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive/60 hover:text-destructive"
+                      onClick={() => setEditing({...editing,features_list:editing.features_list.filter((_,j)=>j!==i)})}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" className="gap-1.5 w-full mt-1 cursor-pointer"
-                  onClick={() => setEditing({ ...editing, features: [...editing.features, ""] })}>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 w-full mt-1"
+                  onClick={() => setEditing({...editing,features_list:[...editing.features_list,""]})}>
                   <Plus className="h-4 w-4" /> Add Feature
                 </Button>
               </div>
             </div>
           </div>
 
-          {/* Sticky footer */}
           <div className="sticky bottom-0 border-t border-border bg-card/90 backdrop-blur px-6 py-3 flex items-center justify-between">
-            <Button variant="ghost" onClick={() => setEditing(null)} className="cursor-pointer">Cancel</Button>
-            <Button onClick={() => void save()} disabled={saving} className="bg-gradient-primary text-primary-foreground shadow-glow gap-2 cursor-pointer">
+            <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={() => void save()} disabled={saving} className="bg-gradient-primary text-primary-foreground shadow-glow gap-2">
               {saving ? "Saving…" : "Save Plan"}
             </Button>
           </div>
@@ -1692,12 +1863,12 @@ function PlansSection() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {plans.map((plan) => (
-            <div key={plan.id} className={`rounded-2xl border p-5 space-y-4 hover:shadow-glow hover:scale-[1.02] transition-all duration-300 ${plan.is_active ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}>
+            <div key={plan.id} className={`rounded-2xl border p-5 space-y-3 hover:shadow-glow transition-all duration-300 ${plan.is_active ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}>
               <div className="flex items-start justify-between">
                 <div>
                   {planBadge(plan.slug)}
-                  <div className="font-display font-bold text-2xl mt-2">${plan.price_monthly}<span className="text-xs text-muted-foreground font-normal">/mo</span></div>
-                  <div className="text-[11px] text-muted-foreground">${plan.price_yearly}/yr</div>
+                  <div className="font-display font-bold text-2xl mt-2">PKR {plan.price_pkr}<span className="text-xs text-muted-foreground font-normal">/mo</span></div>
+                  <div className="text-[11px] text-warning font-semibold">{plan.credits_per_month} credits/month</div>
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditing(plan)}><Edit2 className="h-3.5 w-3.5" /></Button>
@@ -1710,15 +1881,11 @@ function PlansSection() {
                 <div className="font-display text-3xl font-bold text-primary">{plan.subscriber_count}</div>
                 <div className="text-xs text-muted-foreground">Active subscribers</div>
               </div>
-              <p className="text-xs text-muted-foreground">{plan.description}</p>
-              <ul className="space-y-1.5">
-                {plan.features.slice(0, 5).map((f) => (
-                  <li key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <CheckCircle className="h-3 w-3 text-success shrink-0" />{f}
-                  </li>
-                ))}
-                {plan.features.length > 5 && <li className="text-xs text-muted-foreground pl-4.5">+{plan.features.length - 5} more</li>}
-              </ul>
+              <div className="flex gap-1.5 flex-wrap">
+                {plan.ai_enabled && <Badge className="bg-success/10 text-success border-0 text-[10px]">AI</Badge>}
+                {plan.custom_branding && <Badge className="bg-primary/10 text-primary border-0 text-[10px]">Branding</Badge>}
+                {plan.white_label && <Badge className="bg-purple-500/10 text-purple-600 border-0 text-[10px]">White Label</Badge>}
+              </div>
             </div>
           ))}
         </div>
@@ -1728,56 +1895,496 @@ function PlansSection() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// FINANCE
+// CREDITS MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+function CreditsSection() {
+  const { user: adminUser } = useAuth();
+  type UserRow = { user_id: string; email: string; name: string; balance: number; total_earned: number; total_spent: number; plan_name: string };
+  type TxRow = { id: string; user_id: string; type: string; amount: number; description: string | null; created_at: string; user_name: string };
+
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [txHistory, setTxHistory] = useState<TxRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [adjustType, setAdjustType] = useState<"add" | "deduct">("add");
+  const [saving, setSaving] = useState(false);
+  const [showTx, setShowTx] = useState(false);
+
+  // Credit cost config per plan
+  type CostRow = {
+    id: string; name: string; slug: string;
+    credit_cost_ai_10q: number; credit_cost_ai_scan: number;
+    credit_cost_session_launch: number; credit_cost_export: number;
+    credit_cost_extra_quiz: number; credit_cost_extra_participants: number;
+  };
+  const [costPlans, setCostPlans] = useState<CostRow[]>([]);
+  const [editingCosts, setEditingCosts] = useState<CostRow | null>(null);
+  const [savingCosts, setSavingCosts] = useState(false);
+
+  const loadCosts = useCallback(async () => {
+    const { data } = await supabase.from("plans")
+      .select("id, name, slug, credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_session_launch, credit_cost_export, credit_cost_extra_quiz, credit_cost_extra_participants")
+      .order("sort_order");
+    if (data) setCostPlans(data as CostRow[]);
+  }, []);
+
+  const saveCosts = async () => {
+    if (!editingCosts) return;
+    setSavingCosts(true);
+    const { error } = await supabase.from("plans").update({
+      credit_cost_ai_10q: editingCosts.credit_cost_ai_10q,
+      credit_cost_ai_scan: editingCosts.credit_cost_ai_scan,
+      credit_cost_session_launch: editingCosts.credit_cost_session_launch,
+      credit_cost_export: editingCosts.credit_cost_export,
+      credit_cost_extra_quiz: editingCosts.credit_cost_extra_quiz,
+      credit_cost_extra_participants: editingCosts.credit_cost_extra_participants,
+    }).eq("id", editingCosts.id);
+    setSavingCosts(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Credit costs updated for ${editingCosts.name}`);
+    setEditingCosts(null);
+    void loadCosts();
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data: credits } = await supabase
+      .from("user_credits")
+      .select("user_id, balance, total_earned, total_spent")
+      .order("balance", { ascending: false });
+
+    if (!credits) { setLoading(false); return; }
+
+    const userIds = credits.map((c) => c.user_id);
+    const [profilesRes, subsRes] = await Promise.all([
+      supabase.from("profiles").select("id, full_name, email").in("id", userIds),
+      supabase.from("user_subscriptions").select("user_id, plans(name)").in("user_id", userIds).eq("status", "active"),
+    ]);
+
+    const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
+    const subMap = new Map((subsRes.data ?? []).map((s) => [s.user_id, (s.plans as { name: string } | null)?.name ?? "Starter"]));
+
+    setUsers(credits.map((c) => ({
+      user_id: c.user_id,
+      email: profileMap.get(c.user_id)?.email ?? c.user_id,
+      name: profileMap.get(c.user_id)?.full_name ?? "Unknown",
+      balance: c.balance,
+      total_earned: c.total_earned,
+      total_spent: c.total_spent,
+      plan_name: subMap.get(c.user_id) ?? "Starter",
+    })));
+    setLoading(false);
+  }, []);
+
+  const loadTx = useCallback(async () => {
+    const { data } = await supabase
+      .from("credit_transactions")
+      .select("id, user_id, type, amount, description, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (!data) return;
+    const ids = [...new Set(data.map((t) => t.user_id))];
+    const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+    const pMap = new Map((profs ?? []).map((p) => [p.id, p.full_name ?? "Unknown"]));
+    setTxHistory(data.map((t) => ({ ...t, user_name: pMap.get(t.user_id) ?? t.user_id })));
+  }, []);
+
+  useEffect(() => { void load(); void loadTx(); void loadCosts(); }, [load, loadTx, loadCosts]);
+
+  const handleAdjust = async () => {
+    if (!selectedUser || !adjustAmount || !adminUser) return;
+    const amt = parseInt(adjustAmount);
+    if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid positive amount"); return; }
+    if (amt > 50000) { toast.error("Single adjustment capped at 50,000 credits"); return; }
+    setSaving(true);
+    try {
+      const { data: ok, error } = await supabase.rpc("admin_adjust_credits", {
+        p_user_id: selectedUser.user_id,
+        p_amount: amt,
+        p_direction: adjustType,
+        p_description: adjustNote || `Admin ${adjustType === "add" ? "added" : "deducted"} ${amt} credits`,
+      });
+      if (error) throw error;
+      if (!ok && adjustType === "deduct") { toast.error("Insufficient balance to deduct"); setSaving(false); return; }
+      toast.success(`${adjustType === "add" ? "+" : "-"}${amt} credits ${adjustType === "add" ? "added to" : "deducted from"} ${selectedUser.name}`);
+      setSelectedUser(null);
+      setAdjustAmount("");
+      setAdjustNote("");
+      void load();
+      void loadTx();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const TX_LABEL: Record<string, string> = {
+    plan_refill: "Plan Refill", manual_topup: "Manual Top-up",
+    payment_approved: "Payment Approved", ai_question_gen: "AI Question Gen",
+    ai_image_scan: "AI Image Scan", admin_adjustment: "Admin Adjustment",
+    extra_quiz: "Extra Quiz", extra_participants: "Extra Participants", expiry: "Expired",
+  };
+
+  const filtered = users.filter((u) =>
+    u.name.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-2xl font-bold">Credits Management</h2>
+          <p className="text-sm text-muted-foreground">View balances, manually add or deduct credits for any user</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowTx(!showTx)} className="gap-1.5">
+            <TrendingUp className="h-4 w-4" /> {showTx ? "Hide" : "Show"} Transactions
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void load()} className="gap-1.5">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="rounded-2xl border border-warning/30 bg-warning/5 p-4 flex items-center gap-3">
+          <Wallet className="h-8 w-8 text-warning/60" />
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Credits in Circulation</div>
+            <div className="font-display text-2xl font-bold text-warning">{users.reduce((s, u) => s + u.balance, 0).toLocaleString()}</div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-success/30 bg-success/5 p-4 flex items-center gap-3">
+          <TrendingUp className="h-8 w-8 text-success/60" />
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Ever Earned</div>
+            <div className="font-display text-2xl font-bold text-success">{users.reduce((s, u) => s + u.total_earned, 0).toLocaleString()}</div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-border bg-card/60 p-4 flex items-center gap-3">
+          <TrendingDown className="h-8 w-8 text-muted-foreground/60" />
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Ever Spent</div>
+            <div className="font-display text-2xl font-bold">{users.reduce((s, u) => s + u.total_spent, 0).toLocaleString()}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search user..." className="pl-9" />
+      </div>
+
+      {/* Users credit table */}
+      <div className="rounded-2xl border border-border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40 border-b border-border">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">User</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Balance</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Earned</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Spent</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {loading ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Loading…</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No users found</td></tr>
+            ) : filtered.map((u) => (
+              <tr key={u.user_id} className="hover:bg-muted/20 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="font-medium">{u.name}</div>
+                  <div className="text-xs text-muted-foreground">{u.email}</div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">{u.plan_name}</span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span className="font-bold text-warning">{u.balance}</span>
+                </td>
+                <td className="px-4 py-3 text-right text-success text-xs">+{u.total_earned}</td>
+                <td className="px-4 py-3 text-right text-muted-foreground text-xs">-{u.total_spent}</td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="default" className="h-7 px-2 text-[11px] gap-1 bg-success hover:bg-success/90 text-white"
+                      onClick={() => { setSelectedUser(u); setAdjustType("add"); }}>
+                      <PlusCircle className="h-3 w-3" /> Add
+                    </Button>
+                    <Button size="sm" variant="destructive" className="h-7 px-2 text-[11px] gap-1"
+                      onClick={() => { setSelectedUser(u); setAdjustType("deduct"); }}>
+                      <MinusCircle className="h-3 w-3" /> Deduct
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Adjust dialog */}
+      <Dialog open={!!selectedUser} onOpenChange={(o) => { if (!o) setSelectedUser(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {adjustType === "add"
+                ? <><PlusCircle className="h-5 w-5 text-success" /> Add Credits</>
+                : <><MinusCircle className="h-5 w-5 text-destructive" /> Deduct Credits</>}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            {selectedUser && (
+              <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm">
+                <div className="font-semibold">{selectedUser.name}</div>
+                <div className="text-muted-foreground text-xs">{selectedUser.email}</div>
+                <div className="mt-1 flex items-center gap-2">
+                  <Coins className="h-3.5 w-3.5 text-warning" />
+                  <span className="text-warning font-bold">{selectedUser.balance} credits</span>
+                </div>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Amount (credits)
+              </label>
+              <Input
+                type="number"
+                min={1}
+                value={adjustAmount}
+                onChange={(e) => setAdjustAmount(e.target.value)}
+                placeholder="e.g. 100"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Note (optional)
+              </label>
+              <Input
+                value={adjustNote}
+                onChange={(e) => setAdjustNote(e.target.value)}
+                placeholder="Reason for adjustment..."
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button variant="ghost" className="flex-1" onClick={() => setSelectedUser(null)} disabled={saving}>Cancel</Button>
+              <Button
+                className={`flex-1 gap-1 ${adjustType === "add" ? "bg-success hover:bg-success/90 text-white" : ""}`}
+                variant={adjustType === "deduct" ? "destructive" : "default"}
+                onClick={() => void handleAdjust()}
+                disabled={saving || !adjustAmount}
+              >
+                {saving ? "Saving…" : adjustType === "add" ? `+${adjustAmount || 0} credits` : `-${adjustAmount || 0} credits`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transaction history */}
+      {showTx && (
+        <div className="rounded-2xl border border-border overflow-hidden">
+          <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center gap-2">
+            <Coins className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-sm">Recent Transactions (last 50)</span>
+          </div>
+          <div className="divide-y divide-border max-h-96 overflow-y-auto">
+            {txHistory.map((tx) => {
+              const isAdd = tx.amount > 0;
+              return (
+                <div key={tx.id} className="px-4 py-3 flex items-center gap-3 hover:bg-muted/20 transition-colors">
+                  <div className={`rounded-lg p-1.5 shrink-0 ${isAdd ? "bg-success/15" : "bg-warning/15"}`}>
+                    {isAdd ? <TrendingUp className="h-3.5 w-3.5 text-success" /> : <TrendingDown className="h-3.5 w-3.5 text-warning" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{tx.user_name}</div>
+                    <div className="text-xs text-muted-foreground">{TX_LABEL[tx.type] ?? tx.type}{tx.description ? ` — ${tx.description}` : ""}</div>
+                  </div>
+                  <div className={`text-sm font-bold shrink-0 ${isAdd ? "text-success" : "text-warning"}`}>
+                    {isAdd ? "+" : ""}{tx.amount}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground shrink-0">{new Date(tx.created_at).toLocaleDateString()}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Credit cost configuration per plan */}
+      <div className="rounded-2xl border border-border overflow-hidden">
+        <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-sm">Credit Cost Settings per Plan</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground">Click a row to edit, then save</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
+            <thead className="bg-muted/20 border-b border-border">
+              <tr>
+                <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Plan</th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Gen<br/><span className="font-normal normal-case">per 10 Q</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Scan<br/><span className="font-normal normal-case">per image</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Session<br/><span className="font-normal normal-case">launch</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Export<br/><span className="font-normal normal-case">per report</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Extra Quiz<br/><span className="font-normal normal-case">overage</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Extra Ptcp<br/><span className="font-normal normal-case">overage</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {costPlans.length === 0 ? (
+                <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground text-sm">Loading plans…</td></tr>
+              ) : costPlans.map((plan) => {
+                const isEditing = editingCosts?.id === plan.id;
+                const row = isEditing ? editingCosts! : plan;
+                const numInput = (field: keyof CostRow, label: string) => (
+                  <input
+                    type="number"
+                    min={0}
+                    aria-label={label}
+                    value={row[field] as number}
+                    readOnly={!isEditing}
+                    onChange={(e) => isEditing && setEditingCosts({ ...editingCosts!, [field]: parseInt(e.target.value) || 0 })}
+                    className={`w-16 text-center rounded-lg border px-2 py-1 text-sm font-semibold outline-none transition-colors
+                      ${isEditing ? "border-primary bg-primary/5 focus:ring-2 focus:ring-primary/30" : "border-transparent bg-transparent text-foreground cursor-default"}`}
+                  />
+                );
+                return (
+                  <tr key={plan.id} className={`transition-colors ${isEditing ? "bg-primary/5" : "hover:bg-muted/20"}`}>
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{plan.name}</div>
+                      <div className="text-[10px] text-muted-foreground">{plan.slug}</div>
+                    </td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_10q", "AI gen per 10 questions")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_scan", "AI scan per image")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_session_launch", "Session launch cost")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_export", "Export cost")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_extra_quiz", "Extra quiz overage")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_extra_participants", "Extra participants overage")}</td>
+                    <td className="px-3 py-3 text-center">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1.5 justify-center">
+                          <Button size="sm" className="h-7 px-3 text-[11px] bg-success hover:bg-success/90 text-white"
+                            onClick={() => void saveCosts()} disabled={savingCosts}>
+                            {savingCosts ? "…" : "Save"}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
+                            onClick={() => setEditingCosts(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" className="h-7 px-3 text-[11px] gap-1"
+                          onClick={() => setEditingCosts({ ...plan })}>
+                          <Edit2 className="h-3 w-3" /> Edit
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-2.5 bg-muted/10 border-t border-border text-[10px] text-muted-foreground">
+          AI Gen cost is per 10 questions; actual per-question cost is prorated (e.g. 5 questions at 10cr/10q = 5cr). Set 0 for free activities.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MANUAL PAYMENTS (Finance)
 // ═══════════════════════════════════════════════════════════════
 function FinanceSection() {
+  const { user } = useAuth();
   type PayRow = {
-    id: string; user_name: string; user_email: string; plan_name: string;
-    amount_cents: number; currency: string; status: string;
-    description: string | null; paid_at: string;
+    id: string; user_id: string; user_name: string; user_email: string;
+    plan_name: string; amount_pkr: number; payment_method: string;
+    status: string; screenshot_url: string | null;
+    credits_to_add: number; notes: string | null;
+    created_at: string; reviewed_at: string | null;
   };
   const [payments, setPayments] = useState<PayRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      const { data } = await supabase.from("payment_history").select("*").order("paid_at", { ascending: false }).limit(200);
-      if (!data?.length) { setLoading(false); return; }
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("manual_payments")
+      .select("*, plans(name)")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    if (!data?.length) { setLoading(false); return; }
 
-      const userIds = [...new Set(data.map((p) => p.user_id))];
-      const planIds = [...new Set(data.map((p) => p.plan_id).filter(Boolean))] as string[];
-      const [{ data: profiles }, { data: planRows }] = await Promise.all([
-        supabase.from("profiles").select("id,full_name,email").in("id", userIds),
-        supabase.from("plans").select("id,name").in("id", planIds),
-      ]);
-      const profMap: Record<string, { full_name: string | null; email: string | null }> = {};
-      (profiles ?? []).forEach((p) => { profMap[p.id] = p; });
-      const planMap: Record<string, string> = {};
-      (planRows ?? []).forEach((p) => { planMap[p.id] = p.name; });
+    const userIds = [...new Set(data.map((p) => p.user_id))];
+    const { data: profiles } = await supabase.from("profiles").select("id,full_name,email").in("id", userIds);
+    const profMap: Record<string, { full_name: string | null; email: string | null }> = {};
+    (profiles ?? []).forEach((p) => { profMap[p.id] = p; });
 
-      setPayments(data.map((p) => ({
-        id: p.id, user_name: profMap[p.user_id]?.full_name ?? "Unknown",
-        user_email: profMap[p.user_id]?.email ?? "-",
-        plan_name: p.plan_id ? (planMap[p.plan_id] ?? "-") : "-",
-        amount_cents: p.amount_cents, currency: p.currency,
-        status: p.status, description: p.description ?? null, paid_at: p.paid_at,
-      })));
-      setLoading(false);
-    })();
-  }, []);
+    setPayments(data.map((p) => ({
+      id: p.id, user_id: p.user_id,
+      user_name: profMap[p.user_id]?.full_name ?? "Unknown",
+      user_email: profMap[p.user_id]?.email ?? "-",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      plan_name: (p as any).plans?.name ?? "-",
+      amount_pkr: p.amount_pkr, payment_method: p.payment_method,
+      status: p.status, screenshot_url: p.screenshot_url ?? null,
+      credits_to_add: p.credits_to_add, notes: p.notes ?? null,
+      created_at: p.created_at, reviewed_at: p.reviewed_at ?? null,
+    })));
+    setLoading(false);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const handleApprove = async (p: PayRow) => {
+    setActioning(p.id);
+    const { error } = await supabase.rpc("approve_payment", { p_payment_id: p.id, p_admin_id: user!.id });
+    if (error) { toast.error("Failed: " + error.message); }
+    else { toast.success(`Approved — ${p.credits_to_add} credits added to ${p.user_name}`); }
+    setActioning(null);
+    void load();
+  };
+
+  const handleReject = async (p: PayRow) => {
+    setActioning(p.id);
+    const { error } = await supabase
+      .from("manual_payments")
+      .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+      .eq("id", p.id);
+    if (error) { toast.error("Failed: " + error.message); }
+    else { toast.success("Payment rejected."); }
+    setActioning(null);
+    void load();
+  };
 
   const filtered = statusFilter === "all" ? payments : payments.filter((p) => p.status === statusFilter);
-  const paid = payments.filter((p) => p.status === "paid");
   const thisMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-  const revenue = paid.reduce((s, p) => s + p.amount_cents, 0);
-  const monthRevenue = paid.filter((p) => p.paid_at >= thisMonth).reduce((s, p) => s + p.amount_cents, 0);
-  const refunds = payments.filter((p) => p.status === "refunded").reduce((s, p) => s + p.amount_cents, 0);
+  const approved = payments.filter((p) => p.status === "approved");
+  const pending = payments.filter((p) => p.status === "pending");
+  const revenue = approved.reduce((s, p) => s + p.amount_pkr, 0);
+  const monthRevenue = approved.filter((p) => p.created_at >= thisMonth).reduce((s, p) => s + p.amount_pkr, 0);
 
   const exportCSV = () => {
-    const csv = ["Date,User,Email,Plan,Amount,Status",
-      ...filtered.map((p) => `${fmtDate(p.paid_at)},${p.user_name},${p.user_email},${p.plan_name},${fmt$(p.amount_cents)},${p.status}`)
+    const csv = ["Date,User,Email,Plan,Amount PKR,Method,Status,Credits",
+      ...filtered.map((p) => `${fmtDate(p.created_at)},${p.user_name},${p.user_email},${p.plan_name},${p.amount_pkr},${p.payment_method},${p.status},${p.credits_to_add}`)
     ].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -1785,42 +2392,123 @@ function FinanceSection() {
     a.click();
   };
 
+  const methodBadge = (m: string) => {
+    const cfg: Record<string, string> = {
+      easypaisa: "bg-[#00A850]/15 text-[#00A850]",
+      jazzcash: "bg-[#D9232D]/15 text-[#D9232D]",
+      bank_transfer: "bg-primary/15 text-primary",
+    };
+    const labels: Record<string, string> = { easypaisa: "EasyPaisa", jazzcash: "JazzCash", bank_transfer: "Bank" };
+    return <Badge className={`${cfg[m] ?? "bg-muted/40 text-muted-foreground"} border-0 text-[10px]`}>{labels[m] ?? m}</Badge>;
+  };
+
+  const payStatusBadge = (s: string) => {
+    const cfg: Record<string, string> = {
+      pending: "bg-warning/15 text-warning",
+      approved: "bg-success/15 text-success",
+      rejected: "bg-destructive/15 text-destructive",
+    };
+    return <Badge className={`${cfg[s] ?? "bg-muted/40 text-muted-foreground"} border-0 text-[10px] capitalize`}>{s}</Badge>;
+  };
+
   return (
     <div className="space-y-5">
-      <SectionHead title="Finance" sub="Payment history and revenue overview." />
+      <SectionHead title="Payments" sub="Manual payment verification — approve or reject screenshot-based payments." />
+
+      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Total Revenue" value={fmt$(revenue)} icon={DollarSign} color="text-success" trend={12} />
-        <StatCard label="This Month" value={fmt$(monthRevenue)} icon={Calendar} color="text-primary" />
-        <StatCard label="Refunds" value={fmt$(refunds)} icon={ArrowDownRight} color="text-destructive" />
+        <StatCard label="Total Revenue (PKR)" value={`PKR ${revenue.toLocaleString()}`} icon={DollarSign} color="text-success" />
+        <StatCard label="This Month (PKR)" value={`PKR ${monthRevenue.toLocaleString()}`} icon={Calendar} color="text-primary" />
+        <StatCard label="Pending Review" value={pending.length} icon={AlertTriangle} color="text-warning" />
       </div>
+
+      {/* Filters */}
       <div className="flex gap-3">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36"><Filter className="h-4 w-4 mr-1" /><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-40"><Filter className="h-4 w-4 mr-1" /><SelectValue /></SelectTrigger>
           <SelectContent>
-            {["all","paid","failed","refunded","pending"].map((s) => <SelectItem key={s} value={s}>{s === "all" ? "All statuses" : s}</SelectItem>)}
+            {["all","pending","approved","rejected"].map((s) => (
+              <SelectItem key={s} value={s}>{s === "all" ? "All statuses" : s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
+        <Button variant="outline" size="sm" onClick={() => void load()} className="gap-1.5"><RefreshCw className="h-4 w-4" />Refresh</Button>
         <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5 ml-auto"><Download className="h-4 w-4" />Export CSV</Button>
       </div>
-      <TableShell footer={`${filtered.length} transaction${filtered.length !== 1 ? "s" : ""}`}>
-        <THead cols={["Date", "User", "Plan", "Amount", "Status", "Description"]} />
+
+      {/* Table */}
+      <TableShell footer={`${filtered.length} payment${filtered.length !== 1 ? "s" : ""}`}>
+        <THead cols={["Date", "User", "Plan", "Amount", "Method", "Credits", "Status", "Actions"]} />
         <tbody className="divide-y divide-border/40">
-          {loading ? <SkeletonRows cols={6} /> : filtered.length === 0 ? (
-            <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">No payments found.</td></tr>
+          {loading ? <SkeletonRows cols={8} /> : filtered.length === 0 ? (
+            <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No payments found.</td></tr>
           ) : filtered.map((p) => (
             <tr key={p.id} className="hover:bg-muted/10 transition-colors">
-              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(p.paid_at)}</td>
-              <td className="px-4 py-3"><div className="text-xs font-medium">{p.user_name}</div><div className="text-[11px] text-muted-foreground">{p.user_email}</div></td>
-              <td className="px-4 py-3">{planBadge(p.plan_name.toLowerCase())}</td>
-              <td className="px-4 py-3 text-right text-xs font-semibold">{fmt$(p.amount_cents)}</td>
+              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(p.created_at)}</td>
               <td className="px-4 py-3">
-                <Badge className={`text-[10px] border-0 ${p.status === "paid" ? "bg-success/15 text-success" : p.status === "refunded" ? "bg-warning/15 text-warning" : "bg-destructive/15 text-destructive"}`}>{p.status}</Badge>
+                <div className="text-xs font-medium">{p.user_name}</div>
+                <div className="text-[11px] text-muted-foreground">{p.user_email}</div>
               </td>
-              <td className="px-4 py-3 text-xs text-muted-foreground">{p.description ?? "-"}</td>
+              <td className="px-4 py-3 text-xs">{p.plan_name}</td>
+              <td className="px-4 py-3 text-right text-xs font-semibold whitespace-nowrap">PKR {p.amount_pkr.toLocaleString()}</td>
+              <td className="px-4 py-3">{methodBadge(p.payment_method)}</td>
+              <td className="px-4 py-3 text-xs text-center">{p.credits_to_add}</td>
+              <td className="px-4 py-3">{payStatusBadge(p.status)}</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  {p.screenshot_url && (
+                    <img
+                      src="#"
+                      alt="Payment proof"
+                      className="h-14 w-14 object-cover rounded-md cursor-pointer border border-border hover:border-primary/60 transition-colors shrink-0"
+                      onClick={async () => {
+                        // Generate a short-lived signed URL (private bucket)
+                        const { data } = await supabase.storage
+                          .from("uploads")
+                          .createSignedUrl(p.screenshot_url!, 300); // 5-min expiry
+                        if (data?.signedUrl) setScreenshotUrl(data.signedUrl);
+                      }}
+                      onLoad={(e) => {
+                        // Lazy-load signed URL on first render
+                        const img = e.currentTarget;
+                        if (img.src.endsWith("#")) {
+                          supabase.storage.from("uploads")
+                            .createSignedUrl(p.screenshot_url!, 300)
+                            .then(({ data }) => { if (data?.signedUrl) img.src = data.signedUrl; });
+                        }
+                      }}
+                    />
+                  )}
+                  {p.status === "pending" && (
+                    <div className="flex flex-col gap-1">
+                      <Button size="sm" variant="default" className="h-6 px-2 text-[11px] bg-success hover:bg-success/90 text-white gap-1"
+                        disabled={actioning === p.id}
+                        onClick={() => void handleApprove(p)}>
+                        <CheckCircle className="h-3 w-3" />Approve
+                      </Button>
+                      <Button size="sm" variant="destructive" className="h-6 px-2 text-[11px] gap-1"
+                        disabled={actioning === p.id}
+                        onClick={() => void handleReject(p)}>
+                        <X className="h-3 w-3" />Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
       </TableShell>
+
+      {/* Screenshot preview dialog */}
+      <Dialog open={!!screenshotUrl} onOpenChange={() => setScreenshotUrl(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Payment Screenshot</DialogTitle></DialogHeader>
+          {screenshotUrl && (
+            <img src={screenshotUrl} alt="Payment proof" className="w-full rounded-lg object-contain max-h-[70vh]" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2152,7 +2840,7 @@ function PromoCodesSection() {
                   { v: "fixed",   icon: DollarSign, label: "Fixed amount", sub: "e.g. $5.00 off" },
                   { v: "free",    icon: Zap, label: "Free plan", sub: "Grant free access" },
                 ] as const).map(({ v, icon: Icon, label, sub }) => (
-                  <button key={v} type="button" onClick={() => set("discount_type", v)}
+                  <button key={v} type="button" title={label} onClick={() => set("discount_type", v)}
                     className={`rounded-xl border p-3 text-left transition-colors ${
                       draft.discount_type === v
                         ? "border-primary/60 bg-primary/10"
@@ -2291,8 +2979,8 @@ function PromoCodesSection() {
 function SectionHead({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="mb-2">
-      <h2 className="font-display text-xl font-bold">{title}</h2>
-      <p className="text-sm text-muted-foreground mt-0.5">{sub}</p>
+      <h2 className="font-display text-lg md:text-xl font-bold leading-tight">{title}</h2>
+      <p className="text-xs md:text-sm text-muted-foreground mt-1 leading-relaxed">{sub}</p>
     </div>
   );
 }

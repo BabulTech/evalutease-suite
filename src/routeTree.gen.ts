@@ -14,6 +14,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as QCodeRouteImport } from './routes/q.$code'
@@ -25,13 +26,16 @@ import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppQuizHistoryRouteImport } from './routes/_app/quiz-history'
 import { Route as AppParticipantTypesRouteImport } from './routes/_app/participant-types'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppCompanyRouteImport } from './routes/_app/company'
 import { Route as AppCategoriesRouteImport } from './routes/_app/categories'
+import { Route as AppBillingRouteImport } from './routes/_app/billing'
 import { Route as AppSessionsNewRouteImport } from './routes/_app/sessions.new'
 import { Route as AppSessionsSessionIdRouteImport } from './routes/_app/sessions.$sessionId'
 import { Route as AppParticipantTypesAddRouteImport } from './routes/_app/participant-types.add'
 import { Route as AppParticipantTypesTypeIdRouteImport } from './routes/_app/participant-types.$typeId'
 import { Route as AppCategoriesAddRouteImport } from './routes/_app/categories.add'
 import { Route as AppCategoriesCategoryIdRouteImport } from './routes/_app/categories.$categoryId'
+import { Route as AppSessionsSessionIdGradeRouteImport } from './routes/_app/sessions.$sessionId.grade'
 import { Route as AppParticipantTypesTypeIdSubIdRouteImport } from './routes/_app/participant-types.$typeId.$subId'
 import { Route as AppCategoriesCategoryIdSubIdRouteImport } from './routes/_app/categories.$categoryId.$subId'
 
@@ -58,6 +62,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInviteRoute = AcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRoute = AppRouteImport.update({
@@ -114,9 +123,19 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCompanyRoute = AppCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCategoriesRoute = AppCategoriesRouteImport.update({
   id: '/categories',
   path: '/categories',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBillingRoute = AppBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSessionsNewRoute = AppSessionsNewRouteImport.update({
@@ -150,6 +169,12 @@ const AppCategoriesCategoryIdRoute = AppCategoriesCategoryIdRouteImport.update({
   path: '/$categoryId',
   getParentRoute: () => AppCategoriesRoute,
 } as any)
+const AppSessionsSessionIdGradeRoute =
+  AppSessionsSessionIdGradeRouteImport.update({
+    id: '/grade',
+    path: '/grade',
+    getParentRoute: () => AppSessionsSessionIdRoute,
+  } as any)
 const AppParticipantTypesTypeIdSubIdRoute =
   AppParticipantTypesTypeIdSubIdRouteImport.update({
     id: '/$subId',
@@ -165,12 +190,15 @@ const AppCategoriesCategoryIdSubIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/billing': typeof AppBillingRoute
   '/categories': typeof AppCategoriesRouteWithChildren
+  '/company': typeof AppCompanyRoute
   '/dashboard': typeof AppDashboardRoute
   '/participant-types': typeof AppParticipantTypesRouteWithChildren
   '/quiz-history': typeof AppQuizHistoryRoute
@@ -184,19 +212,23 @@ export interface FileRoutesByFullPath {
   '/categories/add': typeof AppCategoriesAddRoute
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
   '/participant-types/add': typeof AppParticipantTypesAddRoute
-  '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
+  '/sessions/$sessionId': typeof AppSessionsSessionIdRouteWithChildren
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
+  '/sessions/$sessionId/grade': typeof AppSessionsSessionIdGradeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/billing': typeof AppBillingRoute
   '/categories': typeof AppCategoriesRouteWithChildren
+  '/company': typeof AppCompanyRoute
   '/dashboard': typeof AppDashboardRoute
   '/participant-types': typeof AppParticipantTypesRouteWithChildren
   '/quiz-history': typeof AppQuizHistoryRoute
@@ -210,21 +242,25 @@ export interface FileRoutesByTo {
   '/categories/add': typeof AppCategoriesAddRoute
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
   '/participant-types/add': typeof AppParticipantTypesAddRoute
-  '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
+  '/sessions/$sessionId': typeof AppSessionsSessionIdRouteWithChildren
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
+  '/sessions/$sessionId/grade': typeof AppSessionsSessionIdGradeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/accept-invite': typeof AcceptInviteRoute
   '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/_app/billing': typeof AppBillingRoute
   '/_app/categories': typeof AppCategoriesRouteWithChildren
+  '/_app/company': typeof AppCompanyRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/participant-types': typeof AppParticipantTypesRouteWithChildren
   '/_app/quiz-history': typeof AppQuizHistoryRoute
@@ -238,21 +274,25 @@ export interface FileRoutesById {
   '/_app/categories/add': typeof AppCategoriesAddRoute
   '/_app/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
   '/_app/participant-types/add': typeof AppParticipantTypesAddRoute
-  '/_app/sessions/$sessionId': typeof AppSessionsSessionIdRoute
+  '/_app/sessions/$sessionId': typeof AppSessionsSessionIdRouteWithChildren
   '/_app/sessions/new': typeof AppSessionsNewRoute
   '/_app/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/_app/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
+  '/_app/sessions/$sessionId/grade': typeof AppSessionsSessionIdGradeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accept-invite'
     | '/admin'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/billing'
     | '/categories'
+    | '/company'
     | '/dashboard'
     | '/participant-types'
     | '/quiz-history'
@@ -270,15 +310,19 @@ export interface FileRouteTypes {
     | '/sessions/new'
     | '/categories/$categoryId/$subId'
     | '/participant-types/$typeId/$subId'
+    | '/sessions/$sessionId/grade'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/accept-invite'
     | '/admin'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/billing'
     | '/categories'
+    | '/company'
     | '/dashboard'
     | '/participant-types'
     | '/quiz-history'
@@ -296,16 +340,20 @@ export interface FileRouteTypes {
     | '/sessions/new'
     | '/categories/$categoryId/$subId'
     | '/participant-types/$typeId/$subId'
+    | '/sessions/$sessionId/grade'
   id:
     | '__root__'
     | '/'
     | '/_app'
+    | '/accept-invite'
     | '/admin'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
     | '/signup'
+    | '/_app/billing'
     | '/_app/categories'
+    | '/_app/company'
     | '/_app/dashboard'
     | '/_app/participant-types'
     | '/_app/quiz-history'
@@ -323,11 +371,13 @@ export interface FileRouteTypes {
     | '/_app/sessions/new'
     | '/_app/categories/$categoryId/$subId'
     | '/_app/participant-types/$typeId/$subId'
+    | '/_app/sessions/$sessionId/grade'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  AcceptInviteRoute: typeof AcceptInviteRoute
   AdminRoute: typeof AdminRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
@@ -372,6 +422,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -451,11 +508,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/company': {
+      id: '/_app/company'
+      path: '/company'
+      fullPath: '/company'
+      preLoaderRoute: typeof AppCompanyRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/categories': {
       id: '/_app/categories'
       path: '/categories'
       fullPath: '/categories'
       preLoaderRoute: typeof AppCategoriesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/billing': {
+      id: '/_app/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof AppBillingRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/sessions/new': {
@@ -499,6 +570,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/categories/$categoryId'
       preLoaderRoute: typeof AppCategoriesCategoryIdRouteImport
       parentRoute: typeof AppCategoriesRoute
+    }
+    '/_app/sessions/$sessionId/grade': {
+      id: '/_app/sessions/$sessionId/grade'
+      path: '/grade'
+      fullPath: '/sessions/$sessionId/grade'
+      preLoaderRoute: typeof AppSessionsSessionIdGradeRouteImport
+      parentRoute: typeof AppSessionsSessionIdRoute
     }
     '/_app/participant-types/$typeId/$subId': {
       id: '/_app/participant-types/$typeId/$subId'
@@ -572,13 +650,24 @@ const AppParticipantTypesRouteChildren: AppParticipantTypesRouteChildren = {
 const AppParticipantTypesRouteWithChildren =
   AppParticipantTypesRoute._addFileChildren(AppParticipantTypesRouteChildren)
 
+interface AppSessionsSessionIdRouteChildren {
+  AppSessionsSessionIdGradeRoute: typeof AppSessionsSessionIdGradeRoute
+}
+
+const AppSessionsSessionIdRouteChildren: AppSessionsSessionIdRouteChildren = {
+  AppSessionsSessionIdGradeRoute: AppSessionsSessionIdGradeRoute,
+}
+
+const AppSessionsSessionIdRouteWithChildren =
+  AppSessionsSessionIdRoute._addFileChildren(AppSessionsSessionIdRouteChildren)
+
 interface AppSessionsRouteChildren {
-  AppSessionsSessionIdRoute: typeof AppSessionsSessionIdRoute
+  AppSessionsSessionIdRoute: typeof AppSessionsSessionIdRouteWithChildren
   AppSessionsNewRoute: typeof AppSessionsNewRoute
 }
 
 const AppSessionsRouteChildren: AppSessionsRouteChildren = {
-  AppSessionsSessionIdRoute: AppSessionsSessionIdRoute,
+  AppSessionsSessionIdRoute: AppSessionsSessionIdRouteWithChildren,
   AppSessionsNewRoute: AppSessionsNewRoute,
 }
 
@@ -587,7 +676,9 @@ const AppSessionsRouteWithChildren = AppSessionsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppBillingRoute: typeof AppBillingRoute
   AppCategoriesRoute: typeof AppCategoriesRouteWithChildren
+  AppCompanyRoute: typeof AppCompanyRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppParticipantTypesRoute: typeof AppParticipantTypesRouteWithChildren
   AppQuizHistoryRoute: typeof AppQuizHistoryRoute
@@ -598,7 +689,9 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBillingRoute: AppBillingRoute,
   AppCategoriesRoute: AppCategoriesRouteWithChildren,
+  AppCompanyRoute: AppCompanyRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppParticipantTypesRoute: AppParticipantTypesRouteWithChildren,
   AppQuizHistoryRoute: AppQuizHistoryRoute,
@@ -613,6 +706,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  AcceptInviteRoute: AcceptInviteRoute,
   AdminRoute: AdminRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,

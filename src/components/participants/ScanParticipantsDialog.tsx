@@ -1,6 +1,6 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, useEffect } from "react";
 import { toast } from "sonner";
-import { Image as ImageIcon, Save, ScanLine, Upload, X } from "lucide-react";
+import { Image as ImageIcon, Save, ScanLine, Upload, X, Coins, Zap } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { ParticipantDraftReview } from "./ParticipantDraftReview";
 import { extractParticipantsFromImage } from "./ai.server";
 import { type ParticipantDraft } from "./types";
+import { usePlan } from "@/contexts/PlanContext";
+import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 type SupportedMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
@@ -27,6 +30,9 @@ type Props = {
 };
 
 export function ScanParticipantsDialog({ trigger, onSave }: Props) {
+  const { user } = useAuth();
+  const { plan, credits, reload, isAiAllowed } = usePlan();
+  const creditCost = plan?.credit_cost_ai_scan ?? 2;
   const [open, setOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string>("");
@@ -82,8 +88,24 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
       toast.error("Upload an image first.");
       return;
     }
+    if (!user) return;
+    if (credits.balance < creditCost) {
+      toast.error(`Not enough credits. Need ${creditCost}, you have ${credits.balance}. Buy more in Billing.`);
+      return;
+    }
     setExtracting(true);
     try {
+      const { data: deducted, error: deductErr } = await supabase.rpc("deduct_credits", {
+        p_user_id: user.id,
+        p_amount: creditCost,
+        p_type: "ai_image_scan",
+        p_description: "AI scan to extract participants from image",
+      });
+      if (deductErr || !deducted) {
+        toast.error("Credit deduction failed. " + (deductErr?.message ?? "Insufficient credits."));
+        return;
+      }
+      reload();
       const out = await extractParticipantsFromImage({
         data: { imageBase64, mediaType, hint: hint.trim() },
       });
@@ -92,7 +114,7 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
         return;
       }
       setDrafts(out);
-      toast.success(`Extracted ${out.length} participant${out.length === 1 ? "" : "s"} - review before saving`);
+      toast.success(`Extracted ${out.length} participant${out.length === 1 ? "" : "s"} · ${creditCost} credits used`);
     } catch (err) {
       toast.error((err as Error)?.message ?? "Image extraction failed");
     } finally {
@@ -127,11 +149,26 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+        {!isAiAllowed ? (
+          <div className="py-10 text-center space-y-4">
+            <div className="mx-auto h-14 w-14 rounded-2xl bg-primary/15 flex items-center justify-center">
+              <ScanLine className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <div className="font-display font-bold text-lg">AI Scan Requires a Paid Plan</div>
+              <div className="text-sm text-muted-foreground mt-1">Upgrade to Individual Pro or higher to scan rosters with AI.</div>
+            </div>
+            <a href="/billing" className="inline-flex items-center gap-2 rounded-xl bg-gradient-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold shadow-glow hover:opacity-90 transition-opacity">
+              <Zap className="h-4 w-4" /> Upgrade to Pro
+            </a>
+          </div>
+        ) : (
+        <>
         <DialogHeader>
           <DialogTitle>Scan participants from an image</DialogTitle>
           <DialogDescription>
             Upload a photo of a class roster, attendance sheet, or list. Claude will read it and
-            return editable participant drafts.
+            return editable participant drafts. Costs <strong>{creditCost} credits</strong> per scan (you have <strong>{credits.balance}</strong>).
           </DialogDescription>
         </DialogHeader>
 
@@ -139,10 +176,22 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">Image</Label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                title="Upload participant roster image"
+                aria-label="Upload participant roster image"
+                className="hidden"
+                onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+              />
               <div
                 className="relative rounded-2xl border-2 border-dashed border-border hover:border-primary/40 bg-card/30 min-h-[220px] flex items-center justify-center overflow-hidden transition-colors cursor-pointer"
                 onClick={() => fileRef.current?.click()}
                 role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
+                aria-label="Click to upload image"
               >
                 {imageUrl ? (
                   <img src={imageUrl} alt={imageName} className="max-h-[360px] w-full object-contain" />
@@ -155,13 +204,6 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
                     </div>
                   </div>
                 )}
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-                />
               </div>
               {imageUrl && (
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -201,11 +243,11 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
                 <Button
                   type="button"
                   onClick={extract}
-                  disabled={extracting || !imageBase64}
+                  disabled={extracting || !imageBase64 || credits.balance < creditCost}
                   className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow flex-1"
                 >
                   <ScanLine className="h-4 w-4" />
-                  {extracting ? "Reading…" : "Extract participants"}
+                  {extracting ? "Reading…" : `Extract (${creditCost} cr)`}
                 </Button>
               </div>
             </div>
@@ -232,6 +274,8 @@ export function ScanParticipantsDialog({ trigger, onSave }: Props) {
             {saving ? "Saving…" : `Save all (${drafts.length})`}
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

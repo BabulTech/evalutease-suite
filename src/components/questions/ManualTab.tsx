@@ -10,20 +10,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DraftEditor } from "./DraftEditor";
-import { emptyDraft, validateDraft, type DraftQuestion } from "./types";
+import { DraftEditorRouter } from "./DraftEditorRouter";
+import { QuestionTypePicker } from "./QuestionTypePicker";
+import {
+  emptyDraft,
+  validateDraft,
+  type DraftQuestion,
+  type QuestionType,
+} from "./types";
 import { useI18n } from "@/lib/i18n";
 
 type Props = {
   disabled?: boolean;
   onSave: (drafts: DraftQuestion[]) => Promise<void>;
+  /** Phase 2: which question types are enabled. Defaults to MCQ + T/F. */
+  allowedTypes?: QuestionType[];
 };
 
-export function ManualTab({ disabled, onSave }: Props) {
+const DEFAULT_ALLOWED: QuestionType[] = ["mcq", "true_false", "short_answer", "long_answer"];
+
+export function ManualTab({ disabled, onSave, allowedTypes = DEFAULT_ALLOWED }: Props) {
   const { t } = useI18n();
-  const [draft, setDraft] = useState<DraftQuestion>(() => emptyDraft());
+  const [draft, setDraft] = useState<DraftQuestion>(() => emptyDraft("mcq"));
   const [saving, setSaving] = useState(false);
   const [lang, setLang] = useState<"en" | "ur">("en");
+
+  const changeType = (next: QuestionType) => {
+    if (!allowedTypes.includes(next)) return;
+    setDraft(emptyDraft(next, draft.difficulty));
+  };
 
   const submit = async () => {
     const v = validateDraft(draft);
@@ -34,7 +49,7 @@ export function ManualTab({ disabled, onSave }: Props) {
     setSaving(true);
     try {
       await onSave([draft]);
-      setDraft(emptyDraft());
+      setDraft(emptyDraft(draft.type));
     } finally {
       setSaving(false);
     }
@@ -67,13 +82,25 @@ export function ManualTab({ disabled, onSave }: Props) {
         </div>
       )}
 
-      <DraftEditor draft={draft} onChange={setDraft} />
+      {/* Question type picker */}
+      <div>
+        <Label className="mb-2 text-xs uppercase tracking-wider text-muted-foreground block">
+          Question Type
+        </Label>
+        <QuestionTypePicker
+          value={draft.type}
+          onChange={changeType}
+          allowedTypes={allowedTypes}
+        />
+      </div>
+
+      <DraftEditorRouter draft={draft} onChange={setDraft} />
 
       <div className="flex justify-end gap-2">
         <Button
           type="button"
           variant="ghost"
-          onClick={() => setDraft(emptyDraft())}
+          onClick={() => setDraft(emptyDraft(draft.type))}
           disabled={saving}
         >
           {t("q.reset")}

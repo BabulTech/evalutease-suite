@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,12 @@ import {
   CreditCard,
   Check,
   Lock,
+  Zap,
+  Star,
+  Building2,
+  Crown,
+  Wallet,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -26,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { usePlan } from "@/contexts/PlanContext";
-import { LazyUpgradeModal } from "@/components/LazyUpgradeModal";
+import { useHost, type HostInfo } from "@/contexts/HostContext";
 import {
   defaultHostSettings,
   normalizeRegistrationFields,
@@ -36,7 +42,10 @@ import {
   type RegistrationFieldKey,
 } from "@/components/settings/host-settings";
 
-export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
+export const Route = createFileRoute("/_app/settings")({
+  validateSearch: (s: Record<string, unknown>) => ({ tab: (s.tab as string) ?? "profile" }),
+  component: SettingsPage,
+});
 
 // Default customizable messages
 const DEFAULT_MESSAGES = {
@@ -62,34 +71,48 @@ const MESSAGE_FIELD_KEYS: { key: keyof AppMessages; labelKey: string; descKey: s
 function SettingsPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const { isHost } = useHost();
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="mx-auto max-w-5xl space-y-5 md:space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-bold flex items-center gap-2">
-          <SettingsIcon className="h-7 w-7 text-primary" /> {t("nav.settings")}
+        <h1 className="font-display text-2xl md:text-3xl font-bold flex items-center gap-2">
+          <SettingsIcon className="h-6 w-6 md:h-7 md:w-7 text-primary" /> {t("nav.settings")}
         </h1>
-        <p className="text-muted-foreground mt-1">{t("settings.desc")}</p>
+        <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{t("settings.desc")}</p>
       </div>
 
-      <Tabs defaultValue="profile">
-        <TabsList className="flex h-auto flex-wrap gap-1 bg-muted/60 p-1 rounded-xl w-full">
-          <TabsTrigger value="profile" className="flex-1 min-w-[80px] gap-1.5 text-xs sm:text-sm">
+      <Tabs
+        value={tab}
+        defaultValue="profile"
+        onValueChange={(nextTab) =>
+          navigate({
+            search: (prev) => ({ ...prev, tab: nextTab }),
+          })
+        }
+      >
+        <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <TabsList className="inline-flex min-w-max h-auto gap-1 bg-muted/60 p-1 rounded-xl">
+          <TabsTrigger value="profile" className="min-h-11 min-w-[104px] gap-1.5 rounded-lg px-3 text-xs sm:text-sm">
             <User className="h-4 w-4 shrink-0" /> <span className="truncate">{t("settings.profile")}</span>
           </TabsTrigger>
-          <TabsTrigger value="registration" className="flex-1 min-w-[80px] gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="registration" className="min-h-11 min-w-[132px] gap-1.5 rounded-lg px-3 text-xs sm:text-sm">
             <ListChecks className="h-4 w-4 shrink-0" /> <span className="truncate">{t("settings.registration")}</span>
           </TabsTrigger>
-          <TabsTrigger value="scoring" className="flex-1 min-w-[80px] gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="scoring" className="min-h-11 min-w-[104px] gap-1.5 rounded-lg px-3 text-xs sm:text-sm">
             <Trophy className="h-4 w-4 shrink-0" /> <span className="truncate">{t("settings.scoring")}</span>
           </TabsTrigger>
-          <TabsTrigger value="messages" className="flex-1 min-w-[80px] gap-1.5 text-xs sm:text-sm">
+          <TabsTrigger value="messages" className="min-h-11 min-w-[112px] gap-1.5 rounded-lg px-3 text-xs sm:text-sm">
             <MessageSquare className="h-4 w-4 shrink-0" /> <span className="truncate">{t("settings.messages")}</span>
           </TabsTrigger>
-          <TabsTrigger value="plan" className="flex-1 min-w-[80px] gap-1.5 text-xs sm:text-sm">
-            <CreditCard className="h-4 w-4 shrink-0" /> <span className="truncate">{t("settings.plan")}</span>
+          <TabsTrigger value="plan" className="min-h-11 min-w-[112px] gap-1.5 rounded-lg px-3 text-xs sm:text-sm">
+            {isHost ? <Building2 className="h-4 w-4 shrink-0" /> : <CreditCard className="h-4 w-4 shrink-0" />}
+            <span className="truncate">{isHost ? "Workspace" : t("settings.plan")}</span>
           </TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="profile" className="mt-4">
           {user && <ProfileForm userId={user.id} />}
@@ -124,65 +147,166 @@ const LIMIT_ROWS: { label: string; key: string }[] = [
 
 function limitLabel(v: number) { return v === -1 ? "Unlimited" : v.toLocaleString(); }
 
-type DbPlan = {
-  id: string; slug: string; name: string; description: string | null;
-  price_monthly: number; price_yearly: number;
-  features: string[]; limits: Record<string, number>;
-  stripe_price_id_monthly: string | null;
-};
-
-
-function PlanSection({ userId }: { userId: string }) {
-  const { plan: ctxPlan, usage, usedPct } = usePlan();
-  const { t } = useI18n();
-  const [plans, setPlans] = useState<DbPlan[]>([]);
-  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const [targetSlug, setTargetSlug] = useState<string | undefined>(undefined);
+// Read-only "Workspace" view shown to enterprise hosts in place of the plan picker.
+// Hosts can see their org, who their admin is, and their personal credit balance —
+// but they cannot pick or buy plans (that's their admin's responsibility).
+function HostWorkspaceSection({ host, userId }: { host: HostInfo; userId: string }) {
+  const [recentTx, setRecentTx] = useState<Array<{ id: string; amount: number; type: string; description: string | null; created_at: string }>>([]);
 
   useEffect(() => {
-    supabase.from("plans").select("*").eq("is_active", true).order("sort_order")
-      .then(({ data }) => {
-        if (data) setPlans(data.map((p) => ({
-          ...p,
-          features: (p.features as string[]) ?? [],
-          limits: (p.limits as Record<string, number>) ?? {},
-        })));
-      });
-  }, []);
+    void (async () => {
+      const { data } = await supabase
+        .from("credit_transactions")
+        .select("id, amount, type, description, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      setRecentTx((data ?? []) as typeof recentTx);
+    })();
+  }, [userId]);
 
-  const openUpgrade = (slug?: string) => { setTargetSlug(slug); setShowUpgrade(true); };
+  const available = host.balance;
+
+  return (
+    <div className="space-y-5">
+      {/* Org info */}
+      <div className="rounded-xl md:rounded-2xl border border-primary/30 bg-card/60 p-4 md:p-5 grid sm:grid-cols-3 gap-4 md:gap-5">
+        <div className="space-y-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Organization</div>
+          <div className="font-semibold text-base flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" />{host.company_name}</div>
+          <div className="text-xs text-muted-foreground">Your role: <span className="capitalize font-medium text-foreground">{host.role}</span></div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Admin</div>
+          <div className="font-semibold text-sm">{host.admin_name ?? "Admin"}</div>
+          <div className="text-xs text-muted-foreground">{host.admin_email ?? "—"}</div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Org Plan</div>
+          <div className="flex items-center gap-2"><Crown className="h-4 w-4 text-warning" /><span className="font-semibold text-sm">{host.org_plan_name ?? "—"}</span></div>
+          <div className="text-xs text-muted-foreground capitalize">{host.org_plan_slug?.replace(/_/g, " ") ?? ""}</div>
+        </div>
+      </div>
+
+      {/* Credits */}
+      <div className="rounded-xl md:rounded-2xl border border-warning/30 bg-warning/5 p-4 md:p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-warning/20 p-2"><Wallet className="h-5 w-5 text-warning" /></div>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Available Credits</div>
+              <div className="font-display text-3xl font-bold text-warning">{available}</div>
+            </div>
+          </div>
+          <div className="text-right text-xs space-y-0.5">
+            <div className="text-muted-foreground">Earned: <span className="font-semibold text-success">+{host.total_earned}</span></div>
+            <div className="text-muted-foreground">Spent: <span className="font-semibold text-foreground">-{host.total_spent}</span></div>
+          </div>
+        </div>
+        <Link to="/billing" search={{ plan: "" }} className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+          Request more credits from admin →
+        </Link>
+      </div>
+
+      {/* Recent activity */}
+      <div className="rounded-xl md:rounded-2xl border border-border bg-card/60 p-4 md:p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm">Recent Credit Activity</h3>
+        </div>
+        {recentTx.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">No transactions yet</p>
+        ) : (
+          <ul className="space-y-2">
+            {recentTx.map((tx) => (
+              <li key={tx.id} className="flex items-center justify-between rounded-xl bg-secondary/30 px-3 py-2.5">
+                <div>
+                  <div className="text-sm font-medium capitalize">{(tx.description ?? tx.type).replace(/_/g, " ")}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleDateString()}</div>
+                </div>
+                <span className={`text-sm font-bold ${tx.amount > 0 ? "text-success" : tx.amount < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                  {tx.amount > 0 ? `+${tx.amount}` : tx.amount === 0 ? "Pending" : tx.amount}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlanSection({ userId }: { userId: string }) {
+  const { plan: ctxPlan, credits, usage, usedPct, allPlans } = usePlan();
+  const { t } = useI18n();
+  const { isHost, hostInfo, loading: hostLoading } = useHost();
+  const [tierFilter, setTierFilter] = useState<"individual" | "enterprise">("individual");
+
+  if (hostLoading) return null;
+  if (isHost && hostInfo) return <HostWorkspaceSection host={hostInfo} userId={userId} />;
+
+  const visiblePlans = allPlans.filter((p) => p.tier === tierFilter);
 
   const usageItems = [
-    { label: "Quizzes today",  used: usage.quizzes_today,   pct: usedPct("quizzes_per_day"),  limit: ctxPlan?.limits.quizzes_per_day ?? 5 },
-    { label: "AI calls today", used: usage.ai_calls_today,  pct: usedPct("ai_calls_per_day"), limit: ctxPlan?.limits.ai_calls_per_day ?? 3 },
-    { label: "Total sessions", used: usage.sessions_total,  pct: usedPct("sessions_total"),   limit: ctxPlan?.limits.sessions_total ?? 20 },
-    { label: "Question bank",  used: usage.questions_total, pct: usedPct("question_bank"),    limit: ctxPlan?.limits.question_bank ?? 100 },
+    { label: "Quizzes today",    used: usage.quizzes_today,      pct: usedPct("quizzes_per_day"),       limit: ctxPlan?.quizzes_per_day ?? 3 },
+    { label: "Question bank",    used: usage.questions_total,    pct: usedPct("question_bank"),          limit: ctxPlan?.question_bank ?? 50 },
+    { label: "Participants",     used: usage.participants_total, pct: usedPct("participants_total"),     limit: ctxPlan?.participants_total ?? 50 },
+    { label: "Total sessions",   used: usage.sessions_total,     pct: usedPct("sessions_total"),         limit: ctxPlan?.sessions_total ?? -1 },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* ── Current plan card ── */}
-      <div className="rounded-2xl border border-primary/30 bg-card/60 p-5 shadow-glow">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className="space-y-5 md:space-y-6">
+      {/* ── Current plan + credits card ── */}
+      <div className="rounded-xl md:rounded-2xl border border-primary/30 bg-card/60 p-4 md:p-5 shadow-glow">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-display font-bold text-xl capitalize">{ctxPlan?.name ?? "Free"} {t("settings.plan")}</span>
-              <Badge className="bg-primary/15 text-primary border-0 text-[10px]">{t("settings.currentPlanLabel")}</Badge>
+              <span className="font-display font-bold text-xl">{ctxPlan?.name ?? "Starter"}</span>
+              <Badge className="bg-primary/15 text-primary border-0 text-[10px]">Current Plan</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {ctxPlan?.price_monthly === 0 ? t("settings.freeForever") : `$${ctxPlan?.price_monthly ?? 0}/mo · $${ctxPlan?.price_yearly ?? 0}/yr`}
+              {(ctxPlan?.price_pkr ?? 0) === 0 ? "Free forever" : `PKR ${ctxPlan?.price_pkr}/month`}
+              {ctxPlan?.ai_enabled && (
+                <span className="ml-2 inline-flex items-center gap-0.5 text-success">
+                  <Zap className="h-3 w-3" /> AI Enabled
+                </span>
+              )}
             </p>
           </div>
-          {ctxPlan?.slug !== "enterprise" && (
-            <Button size="sm" className="bg-gradient-primary text-primary-foreground shadow-glow gap-1.5" onClick={() => openUpgrade()}>
-              {t("plan.upgradeBtn")}
-            </Button>
-          )}
+          {/* Credits balance */}
+          <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5 text-center sm:min-w-[120px]">
+            <div className="font-display text-2xl font-bold text-warning">{credits.balance}</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Credits</div>
+            <Link
+              to="/billing"
+              search={{ plan: "" }}
+              className="text-[10px] text-primary hover:underline mt-0.5 block"
+            >
+              Buy more →
+            </Link>
+          </div>
         </div>
 
+        {/* Credit costs info */}
+        {ctxPlan?.ai_enabled && (
+          <div className="mb-4 rounded-xl border border-border bg-muted/20 p-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Generate 10 Qs</span>
+              <span className="font-semibold">{ctxPlan.credit_cost_ai_10q} credits</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">OCR Scan</span>
+              <span className="font-semibold">{ctxPlan.credit_cost_ai_scan} credits</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Extra Quiz Slot</span>
+              <span className="font-semibold">{ctxPlan.credit_cost_extra_quiz} credit</span>
+            </div>
+          </div>
+        )}
+
         {/* Usage bars */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 lg:grid-cols-4 gap-3">
           {usageItems.map((item) => {
             const danger = item.pct >= 80 && item.limit !== -1;
             const unlimited = item.limit === -1;
@@ -204,127 +328,98 @@ function PlanSection({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* ── Billing toggle ── */}
-      <div className="flex items-center justify-center gap-3">
-        <span className={`text-sm ${billing === "monthly" ? "text-foreground font-medium" : "text-muted-foreground"}`}>{t("plan.monthly")}</span>
-        <button type="button"
-          onClick={() => setBilling((b) => b === "monthly" ? "yearly" : "monthly")}
-          className={`relative h-6 w-11 rounded-full transition-colors ${billing === "yearly" ? "bg-primary" : "bg-muted"}`}>
-          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${billing === "yearly" ? "left-[22px]" : "left-0.5"}`} />
-        </button>
-        <span className={`text-sm ${billing === "yearly" ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-          {t("plan.yearly")} <Badge className="bg-success/15 text-success border-0 text-[10px] ml-1">{t("plan.savePercent")}</Badge>
-        </span>
+      {/* ── Tier toggle ── */}
+      <div className="flex items-center justify-center gap-2 p-1 rounded-xl bg-muted/40 w-fit mx-auto">
+        {(["individual", "enterprise"] as const).map((tier) => (
+          <button
+            key={tier}
+            type="button"
+            onClick={() => setTierFilter(tier)}
+            className={`px-5 py-1.5 rounded-lg text-sm font-semibold transition-all capitalize ${
+              tierFilter === tier ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tier === "individual" ? "Individual" : "Enterprise / School"}
+          </button>
+        ))}
       </div>
 
-      {/* ── Plan cards - DB driven ── */}
-      {plans.length === 0 ? (
-        <div className="grid grid-cols-3 gap-4">
-          {[1,2,3].map((i) => <div key={i} className="h-64 rounded-2xl bg-muted/30 animate-pulse" />)}
+      {/* ── Plan cards ── */}
+      {visiblePlans.length === 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1,2,3].map((i) => <div key={i} className="h-64 rounded-xl md:rounded-2xl bg-muted/30 animate-pulse" />)}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {plans.map((plan) => {
+          {visiblePlans.map((plan) => {
             const isCurrent = ctxPlan?.slug === plan.slug;
-            const price = billing === "yearly" ? plan.price_yearly : plan.price_monthly;
+            const isPopular = plan.slug === "individual_pro" || plan.slug === "enterprise_pro";
             return (
               <div key={plan.id}
-                className={`relative rounded-2xl border p-5 flex flex-col gap-4 transition-all duration-300 hover:shadow-glow hover:scale-[1.02] ${
+                className={`relative rounded-xl md:rounded-2xl border p-4 md:p-5 flex flex-col gap-4 transition-all duration-300 hover:shadow-glow ${
                   isCurrent ? "border-primary/60 bg-primary/5 shadow-glow" : "border-border bg-card/40"
                 }`}>
-                {plan.slug === "pro" && (
+                {isPopular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider px-3 py-0.5 shadow-glow">
-                    {t("plan.mostPopular")}
+                    Most Popular
                   </span>
                 )}
-
-                {/* Name */}
                 <div className="flex items-center gap-2">
                   <div className={`rounded-xl p-2 ${isCurrent ? "bg-primary/20" : "bg-muted/40"}`}>
                     <CreditCard className="h-4 w-4 text-primary" />
                   </div>
                   <span className="font-display font-bold">{plan.name}</span>
-                  {isCurrent && <Badge className="ml-auto bg-primary/20 text-primary border-0 text-[9px]">{t("settings.activePlan")}</Badge>}
+                  {isCurrent && <Badge className="ml-auto bg-primary/20 text-primary border-0 text-[9px]">Active</Badge>}
                 </div>
 
-                {/* Price */}
                 <div>
-                  <span className="font-display text-3xl font-bold">
-                    {price === 0 ? "Free" : `$${price}`}
-                  </span>
-                  {price > 0 && (
-                    <span className="text-xs text-muted-foreground ml-1">/{billing === "yearly" ? "yr" : "mo"}</span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="font-display text-3xl font-bold">
+                      {plan.price_pkr === 0 ? "Free" : `PKR ${plan.price_pkr}`}
+                    </span>
+                    {plan.price_pkr > 0 && <span className="text-xs text-muted-foreground">/month</span>}
+                  </div>
+                  {plan.credits_per_month > 0 && (
+                    <div className="text-xs text-warning font-semibold mt-0.5">
+                      {plan.credits_per_month} credits/month included
+                    </div>
                   )}
                   {plan.description && (
-                    <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{plan.description}</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">{plan.description}</p>
                   )}
                 </div>
 
-                {/* Features - from DB */}
                 <ul className="space-y-1.5 flex-1">
-                  {plan.features.map((f) => (
+                  {plan.features_list.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-xs text-muted-foreground">
                       <Check className="h-3.5 w-3.5 text-success mt-0.5 shrink-0" />{f}
                     </li>
                   ))}
                 </ul>
 
-                <Button
-                  size="sm"
-                  variant={isCurrent ? "outline" : "default"}
-                  disabled={isCurrent}
-                  onClick={() => openUpgrade(plan.slug)}
-                  className={`w-full gap-1.5 ${!isCurrent ? "bg-gradient-primary text-primary-foreground shadow-glow" : ""}`}
-                >
-                  {isCurrent ? t("plan.currentPlan") : `${t("plan.upgradeTo")} ${plan.name}`}
-                </Button>
+                {isCurrent ? (
+                  <Button size="sm" variant="outline" disabled className="w-full">Current Plan</Button>
+                ) : (
+                  <Link
+                    to="/billing"
+                    search={{ plan: plan.slug }}
+                    className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-primary text-primary-foreground text-sm font-semibold px-4 py-2 shadow-glow hover:opacity-90 transition-opacity"
+                  >
+                    <Zap className="h-3.5 w-3.5" /> Get {plan.name}
+                  </Link>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {/* ── Compare table - DB driven ── */}
-      {plans.length > 0 && (
-        <div className="rounded-2xl border border-border bg-card/40 overflow-hidden">
-          <div className="px-5 py-3 border-b border-border bg-muted/20 text-sm font-semibold">{t("plan.comparison")}</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/60 bg-muted/10">
-                  <th className="text-left px-4 py-3 text-muted-foreground font-medium text-xs w-40">{t("settings.limitColHeader")}</th>
-                  {plans.map((p) => (
-                    <th key={p.id} className={`px-4 py-3 text-center text-xs font-semibold ${ctxPlan?.slug === p.slug ? "text-primary" : "text-foreground"}`}>
-                      {p.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/40">
-                {LIMIT_ROWS.map((row) => (
-                  <tr key={row.key} className="hover:bg-muted/10">
-                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{row.label}</td>
-                    {plans.map((p) => (
-                      <td key={p.id} className={`px-4 py-2.5 text-center text-xs font-medium ${ctxPlan?.slug === p.slug ? "text-primary" : ""}`}>
-                        {limitLabel(p.limits[row.key] ?? 0)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       <p className="text-center text-xs text-muted-foreground">
-        {t("plan.secure")}{" "}
+        Pay via EasyPaisa, JazzCash, or Bank Transfer.{" "}
         <a href="mailto:support@evalutease.com" className="text-primary underline-offset-4 hover:underline">
-          {t("plan.contact")}
+          Contact support
         </a>
       </p>
-
-      <LazyUpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} targetSlug={targetSlug} />
     </div>
   );
 }
@@ -567,15 +662,15 @@ function ProfileForm({ userId }: { userId: string }) {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="rounded-xl md:rounded-2xl border border-border bg-card/60 p-4 md:p-6 space-y-5 [&_input]:min-h-11 sm:[&_input]:min-h-9 [&_select]:min-h-11 sm:[&_select]:min-h-9">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <Avatar className="h-20 w-20 border border-primary/30">
           {profile.avatar_url && <AvatarImage src={profile.avatar_url} />}
           <AvatarFallback className="bg-primary/15 text-primary text-xl font-semibold">
             {initials}
           </AvatarFallback>
         </Avatar>
-        <div>
+        <div className="min-w-0 flex-1">
           <Label htmlFor="avatar-upload" className="mb-1.5 block">
             {t("settings.profilePicture")}
           </Label>
@@ -583,7 +678,7 @@ function ProfileForm({ userId }: { userId: string }) {
             id="avatar-upload"
             type="file"
             accept="image/*"
-            className="max-w-xs"
+            className="w-full max-w-sm"
             disabled={uploading}
             onChange={(e) => void uploadAvatar(e.target.files?.[0])}
           />
@@ -636,6 +731,7 @@ function ProfileForm({ userId }: { userId: string }) {
         <div>
           <Label className="mb-1.5 text-xs">{t("settings.iAmA")}</Label>
           <select
+            title={t("settings.iAmA")}
             value={profile.role}
             onChange={set("role")}
             className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -656,7 +752,7 @@ function ProfileForm({ userId }: { userId: string }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1.5 text-xs">Grade / Year</Label>
-                <select value={profile.grade_year} onChange={set("grade_year")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <select title="Grade / Year" value={profile.grade_year} onChange={set("grade_year")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
                   <option value="" disabled>Select</option>
                   {GRADE_YEARS_OPTS.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
@@ -699,14 +795,14 @@ function ProfileForm({ userId }: { userId: string }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="mb-1.5 text-xs">{t("settings.industry")}</Label>
-                <select value={profile.industry} onChange={set("industry")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <select title={t("settings.industry")} value={profile.industry} onChange={set("industry")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
                   <option value="" disabled>Select</option>
                   {INDUSTRIES_OPTS.map(i => <option key={i} value={i}>{i}</option>)}
                 </select>
               </div>
               <div>
                 <Label className="mb-1.5 text-xs">{t("settings.teamSize")}</Label>
-                <select value={profile.team_size} onChange={set("team_size")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                <select title={t("settings.teamSize")} value={profile.team_size} onChange={set("team_size")} className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
                   <option value="" disabled>Select</option>
                   {TEAM_SIZES_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
@@ -756,6 +852,7 @@ function ProfileForm({ userId }: { userId: string }) {
         <div>
           <Label className="mb-1.5 text-xs">{t("signup.hearAbout")}</Label>
           <select
+            title={t("signup.hearAbout")}
             value={profile.referral}
             onChange={set("referral")}
             className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -778,7 +875,7 @@ function ProfileForm({ userId }: { userId: string }) {
       <Button
         onClick={save}
         disabled={saving}
-        className="bg-gradient-primary text-primary-foreground shadow-glow"
+        className="h-11 w-full sm:w-auto bg-gradient-primary text-primary-foreground shadow-glow"
       >
         {saving ? t("settings.saving") : t("settings.saveChanges")}
       </Button>
@@ -799,12 +896,11 @@ function BrandingBlock({
 }) {
   const { plan } = usePlan();
   const { t } = useI18n();
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const canBrand = (plan?.limits.custom_branding ?? 0) === 1;
+  const canBrand = plan?.custom_branding ?? false;
 
   return (
     <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <Label className="text-sm font-semibold flex items-center gap-2">
             {t("settings.branding")}
@@ -817,14 +913,14 @@ function BrandingBlock({
           </p>
         </div>
         {!canBrand && (
-          <button type="button" onClick={() => setShowUpgrade(true)} className="text-xs text-primary hover:underline flex items-center gap-1 shrink-0">
-            <Lock className="h-3 w-3" /> {t("limit.upgrade")}
-          </button>
+          <Link to="/settings" search={{ tab: "plan" } as Record<string, string>} className="text-xs text-primary hover:underline flex items-center gap-1 shrink-0">
+            <Lock className="h-3 w-3" /> Upgrade
+          </Link>
         )}
       </div>
 
       {canBrand ? (
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           {profile.logo_url ? (
             <div className="h-12 w-auto rounded-xl border border-border bg-card/60 overflow-hidden flex items-center px-3">
               <img src={String(profile.logo_url)} alt="Custom logo" className="h-8 w-auto object-contain max-w-[120px]" />
@@ -835,7 +931,7 @@ function BrandingBlock({
             </div>
           )}
           <div>
-            <Input id="logo-upload" type="file" accept="image/*" className="max-w-xs" disabled={uploadingLogo}
+            <Input id="logo-upload" type="file" accept="image/*" className="w-full max-w-xs min-h-11 sm:min-h-9" disabled={uploadingLogo}
               onChange={(e) => void uploadLogo(e.target.files?.[0])} />
             <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Upload className="h-3.5 w-3.5" />
@@ -861,7 +957,6 @@ function BrandingBlock({
         </div>
       )}
 
-      <LazyUpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} lockedFeature="Custom branding" targetSlug="pro" />
     </div>
   );
 }
@@ -926,14 +1021,14 @@ function HostSettingsForm({
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+      <div className="rounded-xl md:rounded-2xl border border-border bg-card/40 p-5 md:p-6 text-sm text-muted-foreground">
         {t("common.loading")}
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-6 space-y-5">
+    <div className="rounded-xl md:rounded-2xl border border-border bg-card/60 p-4 md:p-6 space-y-5">
       {section === "registration" ? (
         <RegistrationFieldsEditor
           value={settings.registration_fields}
@@ -946,7 +1041,7 @@ function HostSettingsForm({
       <Button
         onClick={save}
         disabled={saving}
-        className="bg-gradient-primary text-primary-foreground shadow-glow"
+        className="h-11 w-full sm:w-auto bg-gradient-primary text-primary-foreground shadow-glow"
       >
         {saving ? t("settings.saving") : t("settings.saveChanges")}
       </Button>
@@ -982,7 +1077,7 @@ function RegistrationFieldsEditor({
         <p className="text-xs text-muted-foreground mt-1">{t("settings.registrationDesc")}</p>
       </div>
       <div className="rounded-xl border border-border overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_auto] items-center px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/30">
+        <div className="grid grid-cols-[1fr_auto_auto] items-center px-3 sm:px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/30">
           <span>{t("settings.colField")}</span>
           <span className="px-3">{t("settings.colVisible")}</span>
           <span className="px-3">{t("settings.colRequired")}</span>
@@ -994,7 +1089,7 @@ function RegistrationFieldsEditor({
             return (
               <li
                 key={key}
-                className="grid grid-cols-[1fr_auto_auto] items-center px-4 py-2.5 hover:bg-muted/20"
+                className="grid grid-cols-[1fr_auto_auto] items-center px-3 sm:px-4 py-3 hover:bg-muted/20"
               >
                 <span className="text-sm font-medium">
                   {REGISTRATION_FIELD_LABELS[key]}
@@ -1004,14 +1099,14 @@ function RegistrationFieldsEditor({
                     </span>
                   )}
                 </span>
-                <div className="px-3">
+                <div className="px-2 sm:px-3">
                   <Switch
                     checked={cfg.visible}
                     disabled={isName}
                     onCheckedChange={(v) => update(key, { visible: v })}
                   />
                 </div>
-                <div className="px-3">
+                <div className="px-2 sm:px-3">
                   <Switch
                     checked={cfg.required}
                     disabled={isName || !cfg.visible}
@@ -1044,9 +1139,8 @@ function ScoringEditor({
 }) {
   const { plan } = usePlan();
   const { t } = useI18n();
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const canCustomMarking   = (plan?.limits.custom_marking   ?? 0) === 1;
-  const canCustomTimeBonus = (plan?.limits.custom_time_bonus ?? 0) === 1;
+  const canCustomMarking   = plan?.custom_branding ?? false;
+  const canCustomTimeBonus = plan?.custom_branding ?? false;
 
   return (
     <div className="space-y-5">
@@ -1073,9 +1167,9 @@ function ScoringEditor({
         ) : (
           <div className="flex items-center gap-3">
             <Input value={1} disabled className="w-32 opacity-50" />
-            <button type="button" onClick={() => setShowUpgrade(true)} className="text-xs text-primary hover:underline flex items-center gap-1">
-              <Lock className="h-3 w-3" /> {t("limit.upgradeToCustomise")}
-            </button>
+            <Link to="/settings" search={{ tab: "plan" } as Record<string, string>} className="text-xs text-primary hover:underline flex items-center gap-1">
+              <Lock className="h-3 w-3" /> Upgrade to customise
+            </Link>
           </div>
         )}
         {!canCustomMarking && (
@@ -1100,9 +1194,9 @@ function ScoringEditor({
           {canCustomTimeBonus ? (
             <Switch checked={value.speed_bonus_enabled} onCheckedChange={(v) => onChange({ speed_bonus_enabled: v })} />
           ) : (
-            <button type="button" onClick={() => setShowUpgrade(true)} className="text-xs text-primary hover:underline flex items-center gap-1">
-              <Lock className="h-3 w-3" /> {t("limit.upgrade")}
-            </button>
+            <Link to="/settings" search={{ tab: "plan" } as Record<string, string>} className="text-xs text-primary hover:underline flex items-center gap-1">
+              <Lock className="h-3 w-3" /> Upgrade
+            </Link>
           )}
         </div>
         {canCustomTimeBonus && value.speed_bonus_enabled && (
@@ -1126,7 +1220,6 @@ function ScoringEditor({
         <Switch checked={value.show_explanation} onCheckedChange={(v) => onChange({ show_explanation: v })} />
       </div>
 
-      <LazyUpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} lockedFeature="Custom scoring" targetSlug="pro" />
     </div>
   );
 }

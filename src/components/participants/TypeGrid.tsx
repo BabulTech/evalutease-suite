@@ -38,34 +38,69 @@ type Props = {
 
 export function TypeGrid({ types, onEdit, onDelete, emptyState }: Props) {
   if (types.length === 0 && emptyState) return <>{emptyState}</>;
+
+  const totalParticipants = types.reduce((s, c) => s + c.participantCount, 0);
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {types.map((c) => {
         const Icon = iconFor(c.icon);
+        const sharePct = totalParticipants > 0
+          ? Math.round((c.participantCount / totalParticipants) * 100)
+          : 0;
         return (
           <div
             key={c.id}
-            className="group relative rounded-2xl border border-border bg-card/60 p-5 hover:border-primary/40 hover:shadow-glow transition-all"
+            className="group relative rounded-2xl border border-border bg-card/60 hover:border-primary/40 hover:shadow-glow transition-all duration-200 overflow-hidden"
           >
-            <div className="flex items-start justify-between">
-              <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow">
-                <Icon className="h-6 w-6" />
-              </div>
+            {/* Menu */}
+            <div className="absolute top-3 right-3 z-10">
               <TypeRowMenu type={c} onEdit={onEdit} onDelete={onDelete} />
             </div>
+
+            {/* Full-card link */}
             <Link
               to="/participant-types/$typeId"
               params={{ typeId: c.id }}
-              className="block mt-4"
+              className="block p-5 pr-10"
             >
-              <div className="font-display text-lg font-semibold">{c.name}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {c.subtypeCount} group{c.subtypeCount === 1 ? "" : "s"} ·{" "}
-                {c.participantCount} participant{c.participantCount === 1 ? "" : "s"}
+              <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow mb-4">
+                <Icon className="h-6 w-6" />
               </div>
-              <div className="mt-3 flex items-center gap-1 text-sm text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                Open <ArrowRight className="h-4 w-4" />
+
+              <div className="font-display text-lg font-bold truncate">{c.name}</div>
+
+              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{c.participantCount}</span> participants
+                </span>
+                <span className="text-muted-foreground/40 text-xs">·</span>
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{c.subtypeCount}</span> {c.subtypeCount === 1 ? "group" : "groups"}
+                </span>
               </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary group-hover:gap-2 transition-all">
+                  Browse <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+                {totalParticipants > 0 && (
+                  <span className="text-[10px] text-muted-foreground">{sharePct}% of total</span>
+                )}
+              </div>
+
+              {totalParticipants > 0 && (
+                <div className="mt-2 h-1 rounded-full bg-muted/40 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full bg-primary/60 transition-all ${
+                      sharePct <= 10 ? "w-[10%]" : sharePct <= 20 ? "w-1/5"
+                      : sharePct <= 25 ? "w-1/4" : sharePct <= 33 ? "w-1/3"
+                      : sharePct <= 50 ? "w-1/2" : sharePct <= 66 ? "w-2/3"
+                      : sharePct <= 75 ? "w-3/4" : sharePct <= 90 ? "w-[90%]" : "w-full"
+                    }`}
+                  />
+                </div>
+              )}
             </Link>
           </div>
         );

@@ -157,3 +157,6 @@
   /* Keep table rows from splitting across pages mid-row. */
   tr, li { break-inside: avoid; }
 }
+
+.chart-label { font-size: 10px; fill: rgba(128,128,128,0.9); font-weight: 600; }
+.pct-bar { width: var(--pct, 0%); }

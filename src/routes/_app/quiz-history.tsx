@@ -279,6 +279,15 @@ function QuizHistoryPage() {
     [],
   );
 
+  // Escape HTML to prevent XSS when injecting into document.write
+  const esc = (v: unknown) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
   // Print only the specific quiz section. Caller must pass the full attempts (with metadata).
   const printQuiz = (s: SessionWithStats, attempts: AttemptRow[]) => {
     const reportRows = getQuizReportRows(attempts.map(toReportAttempt));
@@ -290,20 +299,20 @@ function QuizHistoryPage() {
       .map(
         (a) => `
       <tr>
-        <td>${a.rank}</td>
-        <td>${a.name}</td>
-        <td>${a.email || "-"}</td>
-        <td>${a.rollNumber || "-"}</td>
-        <td>${a.score}</td>
-        <td>${a.attemptedQuestions}/${a.totalQuestions}</td>
-        <td>${a.correctAnswers}</td>
-        <td>${a.wrongAnswers}</td>
-        <td>${a.unattemptedQuestions}</td>
+        <td>${esc(a.rank)}</td>
+        <td>${esc(a.name)}</td>
+        <td>${esc(a.email) || "-"}</td>
+        <td>${esc(a.rollNumber) || "-"}</td>
+        <td>${esc(a.score)}</td>
+        <td>${esc(a.attemptedQuestions)}/${esc(a.totalQuestions)}</td>
+        <td>${esc(a.correctAnswers)}</td>
+        <td>${esc(a.wrongAnswers)}</td>
+        <td>${esc(a.unattemptedQuestions)}</td>
       </tr>`,
       )
       .join("");
 
-    const html = `<!DOCTYPE html><html><head><title>${s.title} - Report</title>
+    const html = `<!DOCTYPE html><html><head><title>${esc(s.title)} - Report</title>
     <style>
       body { font-family: sans-serif; padding: 24px; color: #111; }
       h1 { font-size: 20px; margin-bottom: 4px; }
@@ -313,12 +322,12 @@ function QuizHistoryPage() {
       td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
       tr:nth-child(even) td { background: #f9fafb; }
     </style></head><body>
-    <h1>${s.title}</h1>
+    <h1>${esc(s.title)}</h1>
     <div class="meta">
-      Teacher: ${teacherName} · School: ${schoolName || "Not specified"} ·
-      Type: ${QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "-"} ·
-      Date: ${new Date(s.created_at).toLocaleDateString()} ·
-      Avg Score: ${s.avgPercent}%
+      Teacher: ${esc(teacherName)} · School: ${esc(schoolName) || "Not specified"} ·
+      Type: ${esc(QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "-")} ·
+      Date: ${esc(new Date(s.created_at).toLocaleDateString())} ·
+      Avg Score: ${esc(s.avgPercent)}%
     </div>
     <table>
       <thead><tr>
@@ -372,85 +381,115 @@ function QuizHistoryPage() {
     }
   }, [sessions, openIds, attemptPages, attemptAnswerStats, loadVisibleAnswerStats, expandedAttempts]);
 
+  const totalParticipants = useMemo(
+    () => sessions.reduce((s, sess) => s + sess.attempts.filter((a) => a.completed).length, 0),
+    [sessions],
+  );
+  const overallAvg = useMemo(() => {
+    const withData = sessions.filter((s) => s.avgPercent > 0);
+    if (!withData.length) return 0;
+    return Math.round(withData.reduce((s, sess) => s + sess.avgPercent, 0) / withData.length);
+  }, [sessions]);
+
+  const avgColor = overallAvg >= 70 ? "text-success" : overallAvg >= 40 ? "text-warning" : "text-destructive";
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">{t("hist.title")}</h1>
-          <p className="text-muted-foreground mt-1">{t("hist.desc")}</p>
+    <div className="space-y-4">
+      {/* Hero header */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <Archive className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">{t("hist.title")}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t("hist.desc")}</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setShowFilters((v) => !v)}
-          >
-            <Filter className="h-3.5 w-3.5" />
-            {t("hist.filters")}
-            {hasFilters && (
-              <span className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                !
-              </span>
-            )}
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5 print:hidden" onClick={printAll}>
-            <Printer className="h-3.5 w-3.5" /> {t("hist.printAll")}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 print:hidden shrink-0" onClick={printAll}>
+          <Printer className="h-3.5 w-3.5" /> {t("hist.printAll")}
+        </Button>
       </div>
 
-      {/* Filter panel */}
-      {showFilters && (
-        <div className="rounded-2xl border border-border bg-card/60 p-4 space-y-3 print:hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold">{t("hist.filterHistory")}</span>
-            {hasFilters && (
-              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" onClick={clearFilters}>
-                <X className="h-3 w-3" /> {t("hist.clearAll")}
-              </Button>
-            )}
+      {/* Stats strip — only when data exists */}
+      {sessionTotal > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+            <div className="font-display text-2xl font-bold text-primary">{sessionTotal}</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Quizzes</div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.quizTitle")}</label>
-              <Input
-                placeholder={t("hist.searchTitle")}
-                value={filterTitle}
-                onChange={(e) => setFilterTitle(e.target.value)}
-                className="h-8 text-sm"
-              />
+          <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+            <div className="font-display text-2xl font-bold text-foreground">{totalParticipants}</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Submissions</div>
+          </div>
+          <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+            <div className={`font-display text-2xl font-bold ${avgColor}`}>{overallAvg}%</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Avg Score</div>
+          </div>
+        </div>
+      )}
+
+      {/* Search + filter row */}
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <div className="relative flex-1 min-w-[200px]">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder={t("hist.searchTitle")}
+            value={filterTitle}
+            onChange={(e) => setFilterTitle(e.target.value)}
+            className="pl-9 h-9"
+          />
+          {filterTitle && (
+            <button type="button" onClick={() => setFilterTitle("")} aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 h-9"
+          onClick={() => setShowFilters((v) => !v)}>
+          <Filter className="h-3.5 w-3.5" /> {t("hist.filters")}
+          {hasFilters && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">!</span>}
+        </Button>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="h-9 gap-1 text-xs" onClick={clearFilters}>
+            <X className="h-3 w-3" /> {t("hist.clearAll")}
+          </Button>
+        )}
+      </div>
+
+      {/* Quiz type chips + date filter panel */}
+      {showFilters && (
+        <div className="rounded-2xl border border-border bg-card/60 p-4 space-y-4 print:hidden">
+          {/* Quiz type chips */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground block mb-2">{t("hist.quizType")}</label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setFilterType("")}
+                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                  !filterType ? "border-primary bg-primary/15 text-primary" : "border-border bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}>
+                {t("hist.allTypes")}
+              </button>
+              {Object.entries(QUIZ_TYPE_LABELS).map(([val, label]) => (
+                <button key={val} type="button" onClick={() => setFilterType(val === filterType ? "" : val)}
+                  className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                    filterType === val ? "border-primary bg-primary/15 text-primary" : "border-border bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}>
+                  {label}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.quizType")}</label>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="h-8 w-full rounded-lg border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="">{t("hist.allTypes")}</option>
-                {Object.entries(QUIZ_TYPE_LABELS).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            </div>
+          </div>
+          {/* Date range */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.fromDate")}</label>
-              <Input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-                className="h-8 text-sm"
-              />
+              <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="h-8 text-sm" />
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground block mb-1">{t("hist.toDate")}</label>
-              <Input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="h-8 text-sm"
-              />
+              <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="h-8 text-sm" />
             </div>
           </div>
           {hasFilters && (
@@ -461,29 +500,33 @@ function QuizHistoryPage() {
         </div>
       )}
 
+      {/* Trend charts */}
       {sessions.length > 0 && (
         <Suspense fallback={<div className="rounded-2xl border border-border bg-card/40 p-4 text-xs text-muted-foreground">Loading charts...</div>}>
           <LazyHistoryTrendCharts trends={trendData} />
         </Suspense>
       )}
 
+      {/* Session list */}
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">
           {t("common.loading")}
         </div>
       ) : sessions.length === 0 && !hasFilters ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-          <Archive className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">{t("hist.empty")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t("hist.emptyHint")}</p>
+        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center space-y-3">
+          <Archive className="mx-auto h-10 w-10 text-muted-foreground/40" />
+          <div>
+            <p className="text-sm font-semibold">{t("hist.empty")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("hist.emptyHint")}</p>
+          </div>
         </div>
       ) : sessions.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-          <Filter className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">{t("hist.noMatch")}</p>
-          <Button variant="ghost" size="sm" className="mt-2" onClick={clearFilters}>
-            {t("hist.clearFilters")}
-          </Button>
+        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center space-y-3">
+          <Filter className="mx-auto h-10 w-10 text-muted-foreground/40" />
+          <div>
+            <p className="text-sm font-semibold">{t("hist.noMatch")}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={clearFilters}>{t("hist.clearFilters")}</Button>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -499,125 +542,112 @@ function QuizHistoryPage() {
             const teacherName = getTeacherName(profile, user?.email);
             const schoolName = profile?.organization ?? "";
             const quizTypeLabel = QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "-";
+            const avgColor = s.avgPercent >= 70 ? "text-success" : s.avgPercent >= 40 ? "text-warning" : "text-destructive";
+            const avgBarColor = s.avgPercent >= 70 ? "bg-success/60" : s.avgPercent >= 40 ? "bg-warning/60" : "bg-destructive/50";
+            const avgPct = s.avgPercent;
+            const maxScore = submitted.length > 0 ? Math.max(...submitted.map((a) => a.score), 1) : 1;
 
             return (
-              <li
-                key={s.id}
-                className="rounded-2xl border border-border bg-card/60 transition-all hover:border-primary/30 hover:shadow-glow"
-              >
+              <li key={s.id} className="rounded-2xl border border-border bg-card/60 transition-all hover:border-primary/30 hover:shadow-glow overflow-hidden">
+
+                {/* Collapsed header — full-width tap target */}
                 <button
                   type="button"
                   onClick={() => toggle(s.id)}
-                  className="w-full flex items-center justify-between gap-3 p-5 text-left"
+                  className="w-full p-5 text-left"
+                  aria-expanded={isOpen}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {isOpen ? (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="font-display text-lg font-bold truncate">{s.title}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground flex flex-wrap gap-x-2">
-                        <span>
-                          {[s.categoryName, s.subcategoryName].filter(Boolean).join(" → ") ||
-                            t("hist.uncategorised")}
-                        </span>
-                        {s.topic && (
-                          <>
-                            <span>·</span>
-                            <span className="text-primary/80">{quizTypeLabel}</span>
-                          </>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <span className={`mt-0.5 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display text-base font-bold truncate">{s.title}</div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                          <span>{[s.categoryName, s.subcategoryName].filter(Boolean).join(" → ") || t("hist.uncategorised")}</span>
+                          {s.topic && <><span>·</span><span className="text-primary/80">{quizTypeLabel}</span></>}
+                          <span>·</span>
+                          <span>{new Date(s.created_at).toLocaleDateString()}</span>
+                        </div>
+
+                        {/* Avg score bar */}
+                        {submitted.length > 0 && (
+                          <div className="mt-2.5 flex items-center gap-2">
+                            <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden max-w-[160px]">
+                              <div className={`h-full rounded-full transition-all ${avgBarColor} ${
+                                avgPct <= 10 ? "w-[10%]" : avgPct <= 20 ? "w-1/5"
+                                : avgPct <= 25 ? "w-1/4" : avgPct <= 33 ? "w-1/3"
+                                : avgPct <= 50 ? "w-1/2" : avgPct <= 66 ? "w-2/3"
+                                : avgPct <= 75 ? "w-3/4" : avgPct <= 90 ? "w-[90%]" : "w-full"
+                              }`} />
+                            </div>
+                            <span className={`text-xs font-bold ${avgColor}`}>{avgPct}%</span>
+                            <span className="text-xs text-muted-foreground">avg</span>
+                          </div>
                         )}
-                        <span>·</span>
-                        <span>{new Date(s.created_at).toLocaleDateString()}</span>
-                        <span>·</span>
-                        <span>{submitted.length} {t("hist.submitted")}</span>
-                        <span>·</span>
-                        <span>{s.avgPercent}% {t("hist.avg")}</span>
                       </div>
                     </div>
-                  </div>
-                  {top && (
-                    <div className="hidden sm:flex items-center gap-2 text-xs">
-                      <Crown className="h-3.5 w-3.5 text-warning" />
-                      <span className="font-medium truncate max-w-[120px]">{top.name}</span>
-                      <span className="text-success font-bold">
-                        {top.score}/{top.totalQuestions}
+
+                    {/* Right stats */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="hidden sm:flex flex-col items-end gap-1">
+                        <span className="text-xs text-muted-foreground">{submitted.length} submitted</span>
+                        {top && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+                            <Crown className="h-3 w-3" />
+                            <span className="truncate max-w-[100px]">{top.name}</span>
+                            <span className="text-success font-bold ml-1">{top.score}pts</span>
+                          </span>
+                        )}
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${
+                        avgPct >= 70 ? "bg-success/10 text-success border-success/25" :
+                        avgPct >= 40 ? "bg-warning/10 text-warning border-warning/25" :
+                        submitted.length === 0 ? "bg-muted/20 text-muted-foreground border-border" :
+                        "bg-destructive/10 text-destructive border-destructive/25"
+                      }`}>
+                        {submitted.length === 0 ? "No data" : avgPct >= 70 ? "Good" : avgPct >= 40 ? "Fair" : "Low"}
                       </span>
                     </div>
-                  )}
+                  </div>
                 </button>
 
+                {/* Expanded panel */}
                 {isOpen && (
-                  <div className="border-t border-border p-4" id={`history-report-${s.id}`}>
+                  <div className="border-t border-border" id={`history-report-${s.id}`}>
                     {isLoadingExpand && (
-                      <p className="mb-3 text-xs text-muted-foreground">{t("hist.loadingReport")}</p>
+                      <div className="p-4 text-xs text-muted-foreground animate-pulse">{t("hist.loadingReport")}</div>
                     )}
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2 print:hidden">
-                      <div>
-                        <div className="text-xs font-semibold">{t("hist.finalReport")}</div>
-                        <p className="text-xs text-muted-foreground">{t("hist.reportDesc")}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {t("hist.teacher")}: {teacherName} · {t("hist.school")}: {schoolName || t("hist.notSpecified")} · {t("hist.type")}:{" "}
-                          {quizTypeLabel} · {t("hist.subject")}: {subjectLabel(s)}
-                        </p>
+
+                    {/* Report meta + actions */}
+                    <div className="p-4 bg-muted/10 flex flex-wrap items-start justify-between gap-3 print:hidden">
+                      <div className="space-y-1 min-w-0">
+                        <p className="text-xs font-semibold">{t("hist.finalReport")}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                          <span>{t("hist.teacher")}: <span className="text-foreground font-medium">{teacherName}</span></span>
+                          {schoolName && <span>{t("hist.school")}: <span className="text-foreground font-medium">{schoolName}</span></span>}
+                          <span>{t("hist.type")}: <span className="text-foreground font-medium">{quizTypeLabel}</span></span>
+                          <span>{t("hist.subject")}: <span className="text-foreground font-medium">{subjectLabel(s)}</span></span>
+                        </div>
                       </div>
-                      <div className="flex gap-2" ref={downloadRef}>
-                        {/* Print this quiz */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => printQuiz(s, fullAttempts)}
-                          className="gap-1.5"
-                        >
+                      <div className="flex gap-2 shrink-0" ref={downloadRef}>
+                        <Button variant="outline" size="sm" onClick={() => printQuiz(s, fullAttempts)} className="gap-1.5">
                           <Printer className="h-3.5 w-3.5" /> {t("hist.print")}
                         </Button>
-
-                        {/* Download dropdown */}
                         <div className="relative">
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              setDownloadOpenId((prev) => (prev === s.id ? null : s.id))
-                            }
-                            className="gap-1.5 bg-gradient-primary text-primary-foreground"
-                          >
-                            <Download className="h-3.5 w-3.5" /> {t("hist.download")}
-                            <ChevronDown className="h-3 w-3 ml-0.5" />
+                          <Button size="sm" onClick={() => setDownloadOpenId((prev) => (prev === s.id ? null : s.id))}
+                            className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow">
+                            <Download className="h-3.5 w-3.5" /> {t("hist.download")} <ChevronDown className="h-3 w-3 ml-0.5" />
                           </Button>
                           {downloadOpenId === s.id && (
                             <div className="absolute right-0 mt-1 w-40 rounded-xl border border-border bg-card shadow-card z-10 overflow-hidden">
-                              <button
-                                type="button"
-                                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
-                                onClick={() => {
-                                  setDownloadOpenId(null);
-                                  downloadQuizReportCsv({
-                                    title: s.title,
-                                    categoryLabel: [s.categoryName, s.subcategoryName]
-                                      .filter(Boolean)
-                                      .join(" -> "),
-                                    teacherName,
-                                    schoolName,
-                                    subjectLabel: subjectLabel(s),
-                                    topicLabel: quizTypeLabel,
-                                    createdAt: s.created_at,
-                                    questionCount: fullAttempts[0]?.total_questions ?? 0,
-                                    attempts: fullAttempts.map(toReportAttempt),
-                                  });
-                                }}
-                              >
+                              <button type="button" className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
+                                onClick={() => { setDownloadOpenId(null); downloadQuizReportCsv({ title: s.title, categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> "), teacherName, schoolName, subjectLabel: subjectLabel(s), topicLabel: quizTypeLabel, createdAt: s.created_at, questionCount: fullAttempts[0]?.total_questions ?? 0, attempts: fullAttempts.map(toReportAttempt) }); }}>
                                 <FileSpreadsheet className="h-3.5 w-3.5 text-success" /> Excel (CSV)
                               </button>
-                              <button
-                                type="button"
-                                className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
-                                onClick={() => {
-                                  setDownloadOpenId(null);
-                                  printQuiz(s);
-                                }}
-                              >
+                              <button type="button" className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
+                                onClick={() => { setDownloadOpenId(null); printQuiz(s, fullAttempts); }}>
                                 <FileText className="h-3.5 w-3.5 text-primary" /> PDF (Print)
                               </button>
                             </div>
@@ -627,65 +657,89 @@ function QuizHistoryPage() {
                     </div>
 
                     {submitted.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        {t("hist.noParticipants")}
-                      </p>
+                      <p className="p-4 text-xs text-muted-foreground">{t("hist.noParticipants")}</p>
                     ) : (
-                      <>
-                      <ol className="space-y-1.5">
-                        {visibleSubmitted.map((a) => {
-                          const stats = attemptAnswerStats[s.id]?.[a.id];
-                          const correct = stats?.correct ?? a.correctAnswers;
-                          const wrong = stats?.wrong ?? a.wrongAnswers;
-                          const attempted = stats?.attempted ?? a.attemptedQuestions;
-                          const skipped = Math.max(0, a.totalQuestions - attempted);
-                          return (
-                          <li
-                            key={a.id}
-                            className="flex items-center gap-3 rounded-lg bg-secondary/40 hover:bg-secondary/60 hover:shadow-glow px-3 py-2 transition-all"
-                          >
-                            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
-                              {a.rank}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold truncate">{a.name}</div>
-                              <div className="text-[10px] text-muted-foreground truncate">
-                                {[
-                                  a.email || t("hist.noEmail"),
-                                  a.rollNumber ? `${t("hist.rollN")} ${a.rollNumber}` : "",
-                                  a.seatNumber ? `${t("hist.seatN")} ${a.seatNumber}` : "",
-                                  `${correct} ${t("hist.correct")}`,
-                                  `${wrong} ${t("hist.wrong")}`,
-                                  `${skipped} ${t("hist.unattempted")}`,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-bold text-success">{a.score} {t("hist.pts")}</div>
-                              <div className="text-[10px] text-muted-foreground">
-                                {attempted}/{a.totalQuestions} {t("hist.attempted")}
-                              </div>
-                              {a.completedAt && (
-                                <div className="text-[10px] text-muted-foreground">
-                                  {new Date(a.completedAt).toLocaleTimeString()}
+                      <div className="p-4 space-y-2">
+                        {/* Top-3 podium */}
+                        {submitted.length >= 2 && (
+                          <div className="grid grid-cols-3 gap-2 mb-4">
+                            {submitted.slice(0, 3).map((a, i) => {
+                              const medals = [
+                                { bg: "bg-yellow-500/15 border-yellow-500/30", text: "text-yellow-600", label: "🥇 1st" },
+                                { bg: "bg-slate-400/15 border-slate-400/30", text: "text-slate-500", label: "🥈 2nd" },
+                                { bg: "bg-orange-400/15 border-orange-400/30", text: "text-orange-600", label: "🥉 3rd" },
+                              ];
+                              const m = medals[i] ?? medals[2];
+                              return (
+                                <div key={a.id} className={`rounded-xl border p-3 text-center ${m.bg}`}>
+                                  <div className={`text-[10px] font-bold uppercase tracking-wider ${m.text}`}>{m.label}</div>
+                                  <div className="mt-1 text-sm font-bold truncate">{a.name}</div>
+                                  <div className={`text-lg font-bold ${m.text}`}>{a.score}</div>
+                                  <div className="text-[10px] text-muted-foreground">of {a.totalQuestions} pts</div>
                                 </div>
-                              )}
-                            </div>
-                          </li>
-                        )})}
-                      </ol>
-                      <PaginationControls
-                        page={attemptPage}
-                        pageSize={HISTORY_PAGE_SIZE}
-                        total={submitted.length}
-                        label="participants"
-                        onPageChange={(nextPage) =>
-                          setAttemptPages((current) => ({ ...current, [s.id]: nextPage }))
-                        }
-                      />
-                      </>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Participant rows */}
+                        <ol className="space-y-1.5">
+                          {visibleSubmitted.map((a) => {
+                            const stats = attemptAnswerStats[s.id]?.[a.id];
+                            const correct = stats?.correct ?? a.correctAnswers;
+                            const wrong = stats?.wrong ?? a.wrongAnswers;
+                            const attempted = stats?.attempted ?? a.attemptedQuestions;
+                            const skipped = Math.max(0, a.totalQuestions - attempted);
+                            const scorePct = Math.round((a.score / Math.max(1, maxScore)) * 100);
+                            const rankColors = [
+                              "bg-yellow-500/20 text-yellow-700 border-yellow-500/30",
+                              "bg-slate-400/20 text-slate-600 border-slate-400/30",
+                              "bg-orange-400/20 text-orange-600 border-orange-400/30",
+                            ];
+                            const rankClass = a.rank <= 3 ? rankColors[a.rank - 1] : "bg-primary/10 text-primary border-primary/20";
+
+                            return (
+                              <li key={a.id} className="rounded-xl bg-secondary/40 hover:bg-secondary/60 px-3 py-2.5 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  <span className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${rankClass}`}>
+                                    {a.rank}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="font-semibold text-sm truncate">{a.name}</div>
+                                      <div className="text-sm font-bold text-success shrink-0">{a.score}<span className="text-[10px] text-muted-foreground font-normal ml-0.5">pts</span></div>
+                                    </div>
+                                    {/* Score bar */}
+                                    <div className="mt-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                                      <div className={`h-full rounded-full bg-success/60 transition-all ${
+                                        scorePct <= 10 ? "w-[10%]" : scorePct <= 20 ? "w-1/5"
+                                        : scorePct <= 25 ? "w-1/4" : scorePct <= 33 ? "w-1/3"
+                                        : scorePct <= 50 ? "w-1/2" : scorePct <= 66 ? "w-2/3"
+                                        : scorePct <= 75 ? "w-3/4" : scorePct <= 90 ? "w-[90%]" : "w-full"
+                                      }`} />
+                                    </div>
+                                    {/* Pills row */}
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-success/10 text-success px-2 py-0.5 text-[10px] font-semibold">✓ {correct}</span>
+                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[10px] font-semibold">✗ {wrong}</span>
+                                      {skipped > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/40 text-muted-foreground px-2 py-0.5 text-[10px] font-semibold">— {skipped}</span>}
+                                      {a.email && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.email}</span>}
+                                      {a.rollNumber && <span className="text-[10px] text-muted-foreground">{t("hist.rollN")} {a.rollNumber}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                        <PaginationControls
+                          page={attemptPage}
+                          pageSize={HISTORY_PAGE_SIZE}
+                          total={submitted.length}
+                          label="participants"
+                          onPageChange={(nextPage) => setAttemptPages((current) => ({ ...current, [s.id]: nextPage }))}
+                        />
+                      </div>
                     )}
                   </div>
                 )}

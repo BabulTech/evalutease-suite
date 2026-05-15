@@ -5,7 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useProfile } from "@/contexts/ProfileContext";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-import { Settings, LogOut, Menu } from "lucide-react";
+import { Settings, LogOut } from "lucide-react";
 
 type Props = { onMenuClick?: () => void };
 
@@ -47,9 +47,9 @@ export function TopBar({ onMenuClick }: Props) {
           <button
             type="button"
             onClick={onMenuClick}
-            className="md:hidden p-2 rounded-lg hover:bg-sidebar-accent transition-colors"
+            className="hidden p-2 rounded-lg hover:bg-sidebar-accent transition-colors"
           >
-            <Menu className="h-5 w-5" />
+            <span className="sr-only">Open menu</span>
           </button>
         )}
         <div className="text-sm text-muted-foreground">

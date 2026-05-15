@@ -112,28 +112,37 @@ function TypeDetailPage() {
 
   const Icon = iconFor((type?.icon ?? null) as IconKey | null);
 
+  const totalParticipants = cards.reduce((s, c) => s + c.participantCount, 0);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <Link
-          to="/participant-types"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" /> All types
+    <div className="space-y-4">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Link to="/participant-types" className="hover:text-foreground transition-colors flex items-center gap-1">
+          <UsersRound size={12} /> All types
         </Link>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow">
+        <ChevronLeft className="h-3 w-3 rotate-180 shrink-0" />
+        <span className="text-foreground font-medium">{type?.name ?? "Type"}</span>
+      </nav>
+
+      {/* Hero header */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
             <Icon className="h-6 w-6" />
           </div>
-          <div>
-            <h1 className="font-display text-3xl font-bold tracking-tight">
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight truncate">
               {type?.name ?? "Type"}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Groups let you split this type - e.g. Class 9, Class 10 inside Student.
-            </p>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <UsersRound size={11} /> {cards.length} {cards.length === 1 ? "group" : "groups"}
+              </span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                · {totalParticipants} {totalParticipants === 1 ? "participant" : "participants"}
+              </span>
+            </div>
           </div>
         </div>
         <SubTypeDialog
@@ -141,15 +150,15 @@ function TypeDetailPage() {
           submitLabel="Create"
           onSubmit={create}
           trigger={
-            <Button className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              <Plus className="h-4 w-4" /> Add group
+            <Button className="h-10 gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+              <Plus className="h-4 w-4" /> Add Group
             </Button>
           }
         />
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">
           Loading groups…
         </div>
       ) : (
@@ -158,13 +167,24 @@ function TypeDetailPage() {
           onEdit={update}
           onDelete={remove}
           emptyState={
-            <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-              <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/60" />
-              <p className="mt-3 text-sm font-medium">No groups yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Add one - e.g. <span className="text-foreground">Class 9</span>,{" "}
-                <span className="text-foreground">Engineering Team</span>.
-              </p>
+            <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center space-y-3">
+              <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/40" />
+              <div>
+                <p className="text-sm font-semibold">No groups yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add a group to segment participants — e.g. <span className="text-foreground">Class 9</span>, <span className="text-foreground">Engineering Team</span>, or <span className="text-foreground">Batch 2024</span>.
+                </p>
+              </div>
+              <SubTypeDialog
+                title="Add group"
+                submitLabel="Create"
+                onSubmit={create}
+                trigger={
+                  <Button size="sm" className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow">
+                    <Plus size={14} /> Add first group
+                  </Button>
+                }
+              />
             </div>
           }
         />

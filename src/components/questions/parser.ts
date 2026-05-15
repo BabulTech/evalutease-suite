@@ -3,6 +3,7 @@ import {
   MAX_QUESTION_LENGTH,
   OPTION_COUNT,
   type DraftQuestion,
+  type McqDraft,
   type Difficulty,
 } from "./types";
 
@@ -33,7 +34,7 @@ export function parseStructuredQuestions(
     .split("\n")
     .map((l) => l.trim());
   const drafts: DraftQuestion[] = [];
-  let current: DraftQuestion | null = null;
+  let current: McqDraft | null = null;
 
   const finalize = () => {
     if (!current) return;
@@ -53,7 +54,7 @@ export function parseStructuredQuestions(
     if (qMatch) {
       finalize();
       const text = raw.slice(qMatch[0].length).trim();
-      current = emptyDraft(difficulty);
+      current = emptyDraft("mcq", difficulty);
       current.text = text.slice(0, MAX_QUESTION_LENGTH);
       continue;
     }
@@ -102,7 +103,7 @@ export function generateSkeletonDrafts(opts: {
   const topic = opts.topic.trim() || "this topic";
   const out: DraftQuestion[] = [];
   for (let i = 0; i < opts.count; i++) {
-    const d = emptyDraft(opts.difficulty);
+    const d = emptyDraft("mcq", opts.difficulty);
     d.text = `Q${i + 1}. About ${topic} — ${prompts[i % prompts.length]}`.slice(
       0,
       MAX_QUESTION_LENGTH,

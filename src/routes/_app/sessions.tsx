@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PlayCircle, QrCode } from "lucide-react";
+import { PlayCircle, QrCode, Zap } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,32 +112,61 @@ function SessionsPage() {
     toast.success(t("sess.deleted"));
   };
 
+  const activeSessions = useMemo(() => sessions.filter((s) => s.status === "active"), [sessions]);
+  const scheduledSessions = useMemo(() => sessions.filter((s) => s.status === "scheduled"), [sessions]);
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">{t("nav.sessions")}</h1>
-          <p className="text-muted-foreground mt-1">{t("sess.description")}</p>
+    <div className="space-y-4">
+      {/* Hero header */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <QrCode className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">{t("nav.sessions")}</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t("sess.description")}</p>
+          </div>
         </div>
-        <Button
-          asChild
-          className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
-        >
+        <Button asChild className="h-10 gap-2 bg-gradient-primary text-primary-foreground shadow-glow shrink-0">
           <Link to="/sessions/new">
-            <QrCode className="h-4 w-4" /> {t("sess.generateQR")}
+            <Zap className="h-4 w-4" /> {t("sess.generateQR")}
           </Link>
         </Button>
       </div>
 
+      {/* Stats strip */}
+      {sessions.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Active", value: activeSessions.length, color: "text-success" },
+            { label: "Scheduled", value: scheduledSessions.length, color: "text-primary" },
+            { label: "Total", value: sessions.length, color: "text-foreground" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="rounded-2xl border border-border bg-card/50 p-4 text-center">
+              <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">
           {t("sess.loading")}
         </div>
       ) : sessions.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-          <PlayCircle className="mx-auto h-10 w-10 text-muted-foreground/60" />
-          <p className="mt-3 text-sm font-medium">{t("sess.empty")}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{t("sess.emptyHint")}</p>
+        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center space-y-3">
+          <PlayCircle className="mx-auto h-10 w-10 text-muted-foreground/40" />
+          <div>
+            <p className="text-sm font-semibold">{t("sess.empty")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("sess.emptyHint")}</p>
+          </div>
+          <Button asChild size="sm" className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow">
+            <Link to="/sessions/new">
+              <Zap size={14} /> Generate first quiz
+            </Link>
+          </Button>
         </div>
       ) : (
         <>

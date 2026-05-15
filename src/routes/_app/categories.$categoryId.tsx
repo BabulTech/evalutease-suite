@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, FolderOpen, Plus } from "lucide-react";
+import { BookOpen, ChevronLeft, FolderOpen, HelpCircle, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -122,29 +122,37 @@ function CategoryDetailPage() {
 
   const Icon = iconFor((category?.icon ?? null) as IconKey | null);
 
+  const totalQuestions = cards.reduce((s, c) => s + c.questionCount, 0);
+
   return (
-    <div className="space-y-6">
-      <div>
-        <Link
-          to="/categories"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" /> All categories
+    <div className="space-y-4">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Link to="/categories" className="hover:text-foreground transition-colors flex items-center gap-1">
+          <BookOpen size={12} /> All categories
         </Link>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow">
+        <ChevronLeft className="h-3 w-3 rotate-180 shrink-0" />
+        <span className="text-foreground font-medium">{category?.name ?? "Category"}</span>
+      </nav>
+
+      {/* Hero header */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
             <Icon className="h-6 w-6" />
           </div>
-          <div>
-            <h1 className="font-display text-3xl font-bold tracking-tight">
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight truncate">
               {category?.name ?? "Category"}
             </h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Topics let you organise questions further - pick one to add or edit
-              questions.
-            </p>
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <FolderOpen size={11} /> {cards.length} {cards.length === 1 ? "topic" : "topics"}
+              </span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <HelpCircle size={11} /> {totalQuestions} {totalQuestions === 1 ? "question" : "questions"}
+              </span>
+            </div>
           </div>
         </div>
         <SubCategoryDialog
@@ -152,15 +160,15 @@ function CategoryDetailPage() {
           submitLabel="Create"
           onSubmit={create}
           trigger={
-            <Button className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              <Plus className="h-4 w-4" /> Add topic
+            <Button className="h-10 gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+              <Plus className="h-4 w-4" /> Add Topic
             </Button>
           }
         />
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">
           Loading topics…
         </div>
       ) : (
@@ -169,14 +177,24 @@ function CategoryDetailPage() {
           onEdit={update}
           onDelete={remove}
           emptyState={
-            <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-              <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/60" />
-              <p className="mt-3 text-sm font-medium">No topics yet</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Create one - e.g. <span className="text-foreground">World War II</span>,{" "}
-                <span className="text-foreground">Class 9</span>, or{" "}
-                <span className="text-foreground">ICS Lecture 1</span>.
-              </p>
+            <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center space-y-3">
+              <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/40" />
+              <div>
+                <p className="text-sm font-semibold">No topics yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add a topic to organise questions — e.g. <span className="text-foreground">World War II</span>, <span className="text-foreground">Class 9</span>, or <span className="text-foreground">Lecture 1</span>.
+                </p>
+              </div>
+              <SubCategoryDialog
+                title="Add topic"
+                submitLabel="Create"
+                onSubmit={create}
+                trigger={
+                  <Button size="sm" className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow">
+                    <Plus size={14} /> Add first topic
+                  </Button>
+                }
+              />
             </div>
           }
         />

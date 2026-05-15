@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DraftEditor } from "./DraftEditor";
+import { DraftEditorRouter } from "./DraftEditorRouter";
 import { validateDraft, type DraftQuestion, type QuestionSource } from "./types";
 
 type Props = {
@@ -81,7 +81,7 @@ export function DraftReview({ drafts, setDrafts, onSave, onClear, source, saving
 
       <div className="space-y-3">
         {drafts.map((d, i) => (
-          <DraftEditor
+          <DraftEditorRouter
             key={i}
             draft={d}
             index={i}

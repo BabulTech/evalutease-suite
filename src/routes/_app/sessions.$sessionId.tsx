@@ -9,6 +9,7 @@ import {
   Mail,
   PauseCircle,
   Pencil,
+  PenLine,
   PlayCircle,
   PlaySquare,
   Printer,
@@ -808,34 +809,53 @@ function SessionLobbyPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/sessions"
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="h-3.5 w-3.5" /> Back
-      </Link>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground print:hidden">
+        <Link to="/sessions" className="hover:text-foreground transition-colors flex items-center gap-1">
+          <PlayCircle size={12} /> Sessions
+        </Link>
+        <ChevronLeft className="h-3 w-3 rotate-180 shrink-0" />
+        <span className="text-foreground font-medium truncate max-w-[200px]">{session.title}</span>
+      </nav>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="font-display text-3xl font-bold tracking-tight">{session.title}</h1>
-            <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${badge.className}`}
-            >
-              {paused ? "Paused" : badge.label}
-            </span>
+      {/* Hero header card */}
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
+            isActive ? "bg-success/15 border border-success/25 text-success" :
+            isCompleted ? "bg-primary/15 border border-primary/25 text-primary" :
+            "bg-muted/40 border border-border text-muted-foreground"
+          }`}>
+            {isCompleted ? <Trophy className="h-6 w-6" /> : isActive ? <PlayCircle className="h-6 w-6" /> : <PlayCircle className="h-6 w-6" />}
           </div>
-          <p className="text-muted-foreground mt-1 text-sm flex flex-wrap gap-x-2 items-center">
-            <span>
-              {[categoryName, subcategoryName].filter(Boolean).join(" → ") || "Uncategorised"}
-            </span>
-            <span>·</span>
-            <span>
-              {questionCount} question{questionCount === 1 ? "" : "s"}
-            </span>
-            <span>·</span>
-            <span>{formatTimePerQuestion(session.default_time_per_question ?? 60)}</span>
-          </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-display text-xl font-bold tracking-tight truncate">{session.title}</h1>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${badge.className}`}>
+                {paused ? "Paused" : badge.label}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-xs text-muted-foreground">
+              <span>{[categoryName, subcategoryName].filter(Boolean).join(" → ") || "Uncategorised"}</span>
+              <span>·</span>
+              <span>{questionCount} question{questionCount === 1 ? "" : "s"}</span>
+              <span>·</span>
+              <span>{formatTimePerQuestion(session.default_time_per_question ?? 60)}</span>
+            </div>
+          </div>
+        </div>
+        {/* Stat strip */}
+        <div className="flex gap-3">
+          <div className="text-center">
+            <div className="font-display text-xl font-bold text-primary">{joined}</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Joined</div>
+          </div>
+          {!isCompleted && (
+            <div className="text-center">
+              <div className="font-display text-xl font-bold text-success">{submittedTotal}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Submitted</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -926,6 +946,11 @@ function SessionLobbyPage() {
             >
               <Download className="h-4 w-4" /> Download Excel
             </Button>
+            <Link to="/sessions/$sessionId/grade" params={{ sessionId }}>
+              <Button variant="outline" className="gap-1.5">
+                <PenLine className="h-4 w-4" /> Grade Answers
+              </Button>
+            </Link>
           </>
         )}
       </div>
@@ -1108,22 +1133,23 @@ function LobbyView({
       />
       <div className="rounded-2xl border border-border bg-card/40 p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-[220px] flex-1">
+          <div className="min-w-[200px] flex-1">
             <Input
               placeholder="Search participants..."
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
             />
           </div>
-          <Select value={sort} onValueChange={(value) => onSortChange(value as "started_at" | "name")}>
-            <SelectTrigger className="h-9 w-[170px]">
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="started_at">Newest joined</SelectItem>
-              <SelectItem value="name">Name (A-Z)</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-1">
+            {([ ["started_at", "Newest"] , ["name", "A–Z"] ] as const).map(([val, label]) => (
+              <button key={val} type="button" onClick={() => onSortChange(val)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] ${
+                  sort === val ? "border-primary bg-primary/15 text-primary" : "border-border bg-card/60 text-muted-foreground hover:border-primary/40"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <Tabs defaultValue="waiting" className="space-y-3">
           <TabsList className="grid grid-cols-2 w-full">
@@ -1242,23 +1268,27 @@ function LiveView({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-[220px] flex-1">
+          <div className="min-w-[200px] flex-1">
             <Input
               placeholder="Search participants..."
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
             />
           </div>
-          <Select value={sort} onValueChange={(value) => onSortChange(value as "score" | "completed_at" | "started_at")}> 
-            <SelectTrigger className="h-9 w-[200px]">
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="score">Score (high to low)</SelectItem>
-              <SelectItem value="completed_at">Fastest completion</SelectItem>
-              <SelectItem value="started_at">Join order</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-1 flex-wrap">
+            {([
+              ["score", "Score"],
+              ["completed_at", "Fastest"],
+              ["started_at", "Join order"],
+            ] as const).map(([val, label]) => (
+              <button key={val} type="button" onClick={() => onSortChange(val)}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] ${
+                  sort === val ? "border-primary bg-primary/15 text-primary" : "border-border bg-card/60 text-muted-foreground hover:border-primary/40"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <Suspense fallback={<LeaderboardLoading />}>
           <Leaderboard entries={entries} mode="live" />
@@ -1361,12 +1391,12 @@ function ResultsView({
                 <span>·</span>
                 <span>{new Date(createdAt).toLocaleString()}</span>
               </div>
-              <dl className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+              <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
                 <ReportDetail label="Teacher" value={teacherName} />
                 <ReportDetail label="School/Organization" value={schoolName || "Not specified"} />
                 <ReportDetail label="Subject" value={subjectLabel} />
                 <ReportDetail label="Topic" value={topicLabel || "Not specified"} />
-              </dl>
+              </div>
             </div>
           </div>
           {top && (
@@ -1472,8 +1502,8 @@ function LeaderboardLoading() {
 function ReportDetail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-semibold text-foreground">{value || "Not specified"}</dd>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-0.5 font-semibold text-foreground">{value || "Not specified"}</p>
     </div>
   );
 }
@@ -1607,7 +1637,7 @@ function JoinPanel({
           {joinUrl ? (
             <QRCodeSVG value={joinUrl} size={size} bgColor="#ffffff" fgColor="#000000" />
           ) : (
-            <div style={{ height: size, width: size }} className="rounded-md bg-slate-100" />
+            <div className={`rounded-md bg-slate-100 ${size >= 188 ? "h-[188px] w-[188px]" : "h-[148px] w-[148px]"}`} />
           )}
         </div>
       </div>

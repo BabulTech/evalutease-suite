@@ -414,10 +414,6 @@ const dictionaries: Record<Language, Dict> = {
     "hist.unattempted": "unattempted",
     "hist.pts": "pts",
     "hist.attempted": "attempted",
-    "hist.empty": "No completed quizzes yet",
-    "hist.emptyHint": "Once you close a quiz session, it will appear here.",
-    "hist.noMatch": "No quizzes match your filters",
-    "hist.clearFilters": "Clear filters",
 
     // ── Reports ──────────────────────────────────────────────────────
     "rep.title": "Reports",

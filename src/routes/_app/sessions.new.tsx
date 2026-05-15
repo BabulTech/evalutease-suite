@@ -11,6 +11,7 @@ import {
   Hash,
   Layers,
   Lock,
+  QrCode,
   Search,
   Shuffle,
   TrendingDown,
@@ -34,16 +35,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { generateAccessCode } from "@/components/sessions/types";
 import { usePlan } from "@/contexts/PlanContext";
-import { LazyUpgradeModal } from "@/components/LazyUpgradeModal";
 
 export const Route = createFileRoute("/_app/sessions/new")({ component: NewSessionPage });
 
@@ -64,11 +57,11 @@ const PICK_STRATEGY_DEFS: { value: PickStrategy; labelKey: string; descKey: stri
 ];
 
 const QUIZ_TYPES = [
-  { value: "mcq", label: "MCQ (Multiple Choice)" },
-  { value: "true_false", label: "True / False" },
-  { value: "mixed", label: "Mixed" },
-  { value: "short_answer", label: "Short Answer" },
-  { value: "descriptive", label: "Descriptive" },
+  { value: "mcq",          label: "MCQ (Multiple Choice)",  desc: "Only multiple-choice questions" },
+  { value: "true_false",   label: "True / False",           desc: "Only true/false statements" },
+  { value: "short_answer", label: "Short Answer",           desc: "Only short-answer questions" },
+  { value: "long_answer",  label: "Long Answer (Essay)",    desc: "Only essay-style questions" },
+  { value: "mixed",        label: "Mixed",                  desc: "All question types together" },
 ];
 
 type FieldErrors = {
@@ -85,41 +78,34 @@ function NewSessionPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const { isLocked, remaining, plan, loading: planLoading } = usePlan();
-  const [showUpgrade, setShowUpgrade] = useState(false);
 
   // Show locked screen when daily quiz limit is exhausted
   if (!planLoading && isLocked("quizzes_per_day")) {
     return (
-      <>
-        <div className="max-w-md mx-auto mt-20 text-center space-y-5">
-          <div className="mx-auto h-16 w-16 rounded-2xl bg-destructive/15 flex items-center justify-center">
-            <Lock className="h-8 w-8 text-destructive" />
-          </div>
-          <div>
-            <h2 className="font-display text-2xl font-bold">{t("newSess.limitTitle")}</h2>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span>{" "}
-              {t("newSess.limitDesc").replace("{n}", String(plan?.limits.quizzes_per_day ?? 5))}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              className="bg-gradient-primary text-primary-foreground shadow-glow gap-2"
-              onClick={() => setShowUpgrade(true)}
-            >
-              <Zap className="h-4 w-4" /> {t("newSess.upgradePlan")}
-            </Button>
-            <Button variant="ghost" onClick={() => void navigate({ to: "/sessions" })}>
-              {t("newSess.backToSessions")}
-            </Button>
-          </div>
+      <div className="max-w-md mx-auto mt-20 text-center space-y-5">
+        <div className="mx-auto h-16 w-16 rounded-2xl bg-destructive/15 flex items-center justify-center">
+          <Lock className="h-8 w-8 text-destructive" />
         </div>
-        <LazyUpgradeModal
-          open={showUpgrade}
-          onClose={() => setShowUpgrade(false)}
-          lockedFeature="Daily quiz creation"
-        />
-      </>
+        <div>
+          <h2 className="font-display text-2xl font-bold">{t("newSess.limitTitle")}</h2>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span>{" "}
+            {t("newSess.limitDesc").replace("{n}", String(plan?.quizzes_per_day ?? 3))}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Link
+            to="/settings"
+            search={{ tab: "plan" } as Record<string, string>}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-primary text-primary-foreground shadow-glow px-4 py-2 font-semibold text-sm hover:opacity-90"
+          >
+            <Zap className="h-4 w-4" /> {t("newSess.upgradePlan")}
+          </Link>
+          <Button variant="ghost" onClick={() => void navigate({ to: "/sessions" })}>
+            {t("newSess.backToSessions")}
+          </Button>
+        </div>
+      </div>
     );
   }
   const [categories, setCategories] = useState<CategoryRow[]>([]);
@@ -187,16 +173,17 @@ function NewSessionPage() {
 
   useEffect(() => {
     if (!subcategoryId || !user) { setSubQuestionCount(null); return; }
-    supabase.from("questions").select("id", { count: "exact", head: true })
-      .eq("owner_id", user.id).eq("subcategory_id", subcategoryId)
-      .then(({ count }) => {
-        const n = count ?? 0;
-        setSubQuestionCount(n);
-        setNumQuestions(Math.min(numQuestions || n, n));
-        setUseAllQuestions(true);
-      });
+    let q = supabase.from("questions").select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id).eq("subcategory_id", subcategoryId);
+    if (quizType && quizType !== "mixed") q = q.eq("type", quizType as any);
+    q.then(({ count }) => {
+      const n = count ?? 0;
+      setSubQuestionCount(n);
+      setNumQuestions(Math.min(numQuestions || n, n));
+      setUseAllQuestions(true);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subcategoryId, user]);
+  }, [subcategoryId, user, quizType]);
 
   const categoryNameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -261,13 +248,11 @@ function NewSessionPage() {
     const titleVal = title.trim();
     const timeNum = Number(timeText);
 
-    // Fetch all questions from subcategory with created_at for ordering
+    // Fetch questions from subcategory, filtered by type when not "mixed"
     const [{ data: qs, error: qErr }, partsResult] = await Promise.all([
-      supabase
-        .from("questions")
-        .select("id, created_at")
-        .eq("owner_id", user.id)
-        .eq("subcategory_id", subcategoryId),
+      quizType === "mixed"
+        ? supabase.from("questions").select("id, created_at").eq("owner_id", user.id).eq("subcategory_id", subcategoryId)
+        : supabase.from("questions").select("id, created_at").eq("owner_id", user.id).eq("subcategory_id", subcategoryId).eq("type", quizType as any),
       !isPublic && selectedSubtypeIds.size > 0
         ? supabase
             .from("participants")
@@ -280,8 +265,12 @@ function NewSessionPage() {
     if (partsResult.error) { toast.error(partsResult.error.message); return; }
     let allQuestions = qs ?? [];
     if (allQuestions.length === 0) {
-      setErrors((prev) => ({ ...prev, category: "That sub-category has no questions yet - add some first" }));
-      toast.error("No questions in that sub-category");
+      const typeLabel = QUIZ_TYPES.find((qt) => qt.value === quizType)?.label ?? quizType;
+      const msg = quizType === "mixed"
+        ? "That sub-category has no questions yet — add some first"
+        : `No "${typeLabel}" questions in that sub-category. Add some or choose a different quiz type.`;
+      setErrors((prev) => ({ ...prev, category: msg }));
+      toast.error(msg);
       return;
     }
 
@@ -322,6 +311,21 @@ function NewSessionPage() {
     const questionIds = selectedQs.map((q) => q.id);
     const participantIds = (partsResult.data ?? []).map((p) => p.id);
 
+    // Deduct session launch credits (if admin set cost > 0)
+    const launchCost = plan?.credit_cost_session_launch ?? 0;
+    if (launchCost > 0 && user) {
+      const { data: deducted, error: deductErr } = await supabase.rpc("deduct_credits", {
+        p_user_id: user.id,
+        p_amount: launchCost,
+        p_type: "extra_quiz",
+        p_description: `Quiz session created: ${titleVal}`,
+      });
+      if (deductErr || !deducted) {
+        toast.error(`Not enough credits to launch session. Need ${launchCost} credits.`);
+        return;
+      }
+    }
+
     setBusy(true);
     const isScheduled = mode === "schedule";
     const subcat = subcategories.find((s) => s.id === subcategoryId);
@@ -336,7 +340,10 @@ function NewSessionPage() {
         status: "scheduled",
         is_open: true,
         default_time_per_question: timeNum,
-        access_code: generateAccessCode(),
+        access_code: await (async () => {
+          const { data } = await supabase.rpc("generate_session_access_code");
+          return (data as string | null) ?? generateAccessCode(); // fallback
+        })(),
         scheduled_at: isScheduled ? new Date(scheduledAtLocal).toISOString() : null,
         started_at: null,
         topic: quizType,
@@ -395,16 +402,22 @@ function NewSessionPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        to="/sessions"
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="h-3.5 w-3.5" /> {t("newSess.allSessions")}
-      </Link>
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Link to="/sessions" className="hover:text-foreground transition-colors flex items-center gap-1">
+          <QrCode size={12} /> {t("newSess.allSessions")}
+        </Link>
+        <ChevronLeft className="h-3 w-3 rotate-180 shrink-0" />
+        <span className="text-foreground font-medium">{t("newSess.title")}</span>
+      </nav>
 
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight">{t("newSess.title")}</h1>
-        <p className="text-muted-foreground mt-1">{t("newSess.desc")}</p>
+      <div className="rounded-2xl border border-border bg-card/60 p-5 flex items-center gap-4">
+        <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+          <QrCode className="h-6 w-6" />
+        </div>
+        <div>
+          <h1 className="font-display text-xl font-bold tracking-tight">{t("newSess.title")}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t("newSess.desc")}</p>
+        </div>
       </div>
 
       {loading ? (
@@ -431,49 +444,88 @@ function NewSessionPage() {
 
           {/* Step 1: Category → Sub-category cascade */}
           <div className="rounded-2xl border border-border bg-muted/10 p-4 space-y-4">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">1</span>
-              {t("newSess.step1")}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label className="mb-1">{t("newSess.category")} <span className="text-destructive">*</span></Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.categoryHint")}</p>
-                <Select value={categoryId} onValueChange={(v) => { setCategoryId(v); setSubcategoryId(""); setErrors((p) => ({ ...p, category: undefined })); }}>
-                  <SelectTrigger className={errors.category && !categoryId ? "border-destructive" : ""}>
-                    <SelectValue placeholder={t("newSess.selectCategory")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">1</span>
+                {t("newSess.step1")}
               </div>
-              <div>
-                <Label className="mb-1">{t("newSess.subCategory")} <span className="text-destructive">*</span></Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.subCategoryHint")}</p>
-                <Select value={subcategoryId} disabled={!categoryId}
-                  onValueChange={(v) => { setSubcategoryId(v); setErrors((p) => ({ ...p, category: undefined })); }}>
-                  <SelectTrigger className={errors.category ? "border-destructive" : ""}>
-                    <SelectValue placeholder={categoryId ? t("newSess.selectSubCategory") : t("newSess.pickCategoryFirst")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {subcategories.filter((s) => s.category_id === categoryId).map((s) =>
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              {subcategoryId && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                  <Check className="h-3 w-3" /> {selectedSubcategoryLabel}
+                </span>
+              )}
+            </div>
+
+            {/* Category chips */}
+            <div>
+              <Label className="mb-2 text-xs text-muted-foreground font-medium">
+                {t("newSess.category")} <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-[11px] text-muted-foreground mb-2">{t("newSess.categoryHint")}</p>
+              <div className={`flex flex-wrap gap-2 ${errors.category && !categoryId ? "ring-1 ring-destructive rounded-lg p-2" : ""}`}>
+                {categories.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No categories yet — <Link to="/categories" className="text-primary underline">create one first</Link>.</p>
+                ) : categories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => { setCategoryId(c.id === categoryId ? "" : c.id); setSubcategoryId(""); setErrors((p) => ({ ...p, category: undefined })); }}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                      categoryId === c.id
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* Subcategory chips — progressive disclosure */}
+            {categoryId && (
+              <div>
+                <Label className="mb-2 text-xs text-muted-foreground font-medium">
+                  {t("newSess.subCategory")} <span className="text-destructive">*</span>
+                </Label>
+                <p className="text-[11px] text-muted-foreground mb-2">{t("newSess.subCategoryHint")}</p>
+                <div className={`flex flex-wrap gap-2 ${errors.category && categoryId && !subcategoryId ? "ring-1 ring-destructive rounded-lg p-2" : ""}`}>
+                  {subcategories.filter((s) => s.category_id === categoryId).length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No topics in this category yet.</p>
+                  ) : subcategories.filter((s) => s.category_id === categoryId).map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { setSubcategoryId(s.id === subcategoryId ? "" : s.id); setErrors((p) => ({ ...p, category: undefined })); }}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                        subcategoryId === s.id
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      }`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
 
             {/* Question count + pick strategy */}
             {subcategoryId && subQuestionCount !== null && (
               <div className="rounded-xl border border-border bg-card/40 p-4 space-y-4">
                 {/* Available count badge */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Layers className="h-4 w-4 text-primary shrink-0" />
                   <span className="text-sm font-semibold">
                     {subQuestionCount} {subQuestionCount !== 1 ? t("newSess.questions") : t("newSess.question")} {t("newSess.available")}
                   </span>
+                  {quizType && quizType !== "mixed" && (
+                    <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5 font-medium">
+                      {QUIZ_TYPES.find((q) => q.value === quizType)?.label ?? quizType} only
+                    </span>
+                  )}
                   {subQuestionCount === 0 && (
                     <span className="text-xs text-destructive">{t("newSess.addQuestionsFirst")}</span>
                   )}
@@ -581,28 +633,39 @@ function NewSessionPage() {
               <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-bold">2</span>
               {t("newSess.step2")}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label className="mb-1">{t("newSess.quizType")} <span className="text-destructive">*</span></Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.quizTypeHint")}</p>
-                <Select value={quizType} onValueChange={(v) => { setQuizType(v); setErrors((p) => ({ ...p, quizType: undefined })); }}>
-                  <SelectTrigger className={errors.quizType ? "border-destructive" : ""}>
-                    <SelectValue placeholder={t("newSess.selectQuizType")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUIZ_TYPES.map((qt) => <SelectItem key={qt.value} value={qt.value}>{qt.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
+
+            {/* Quiz type cards */}
+            <div>
+              <Label className="mb-2 text-xs text-muted-foreground font-medium">{t("newSess.quizType")} <span className="text-destructive">*</span></Label>
+              <p className="text-[11px] text-muted-foreground mb-2">{t("newSess.quizTypeHint")}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {QUIZ_TYPES.map((qt) => (
+                  <button
+                    key={qt.value}
+                    type="button"
+                    onClick={() => { setQuizType(qt.value === quizType ? "" : qt.value); setErrors((p) => ({ ...p, quizType: undefined })); }}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all min-h-[72px] ${
+                      quizType === qt.value
+                        ? "border-primary bg-primary/10 text-primary shadow-glow"
+                        : "border-border bg-card/40 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    } ${errors.quizType ? "ring-1 ring-destructive" : ""}`}
+                  >
+                    <span className="text-xs font-semibold leading-tight">{qt.label}</span>
+                    <span className="text-[10px] leading-tight opacity-70">{qt.desc}</span>
+                  </button>
+                ))}
               </div>
-              <div>
-                <Label className="mb-1">{t("newSess.timePerQ")}</Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.timePerQHint")}</p>
-                <Input type="number" min={5} max={3600} value={timeText}
-                  onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
-                  className={errors.time ? "border-destructive" : ""} />
-                {errors.time && <p className="mt-1 text-xs text-destructive">{errors.time}</p>}
-              </div>
+              {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
+            </div>
+
+            {/* Time per question */}
+            <div className="sm:max-w-[240px]">
+              <Label className="mb-1">{t("newSess.timePerQ")}</Label>
+              <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.timePerQHint")}</p>
+              <Input type="number" min={5} max={3600} value={timeText}
+                onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
+                className={errors.time ? "border-destructive" : ""} />
+              {errors.time && <p className="mt-1 text-xs text-destructive">{errors.time}</p>}
             </div>
 
             {/* Difficulty customization */}
@@ -781,70 +844,6 @@ function NewSessionPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function CategoryCombobox({
-  value,
-  label,
-  categories,
-  subcategories,
-  onChange,
-  disabled,
-  hasError,
-}: {
-  value: string;
-  label: string;
-  categories: CategoryRow[];
-  subcategories: SubcategoryRow[];
-  onChange: (id: string) => void;
-  disabled?: boolean;
-  hasError?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          className={`w-full justify-between font-normal ${hasError ? "border-destructive" : ""}`}
-        >
-          <span className={value ? "" : "text-muted-foreground"}>
-            {label || (disabled ? "Create a sub-category first" : "Search categories…")}
-          </span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
-        <Command>
-          <CommandInput placeholder="Type to search…" />
-          <CommandList>
-            <CommandEmpty>No matches.</CommandEmpty>
-            {categories.map((cat) => {
-              const subs = subcategories.filter((s) => s.category_id === cat.id);
-              if (subs.length === 0) return null;
-              return (
-                <CommandGroup key={cat.id} heading={cat.name}>
-                  {subs.map((s) => (
-                    <CommandItem
-                      key={s.id}
-                      value={`${cat.name} ${s.name}`}
-                      onSelect={() => { onChange(s.id); setOpen(false); }}
-                    >
-                      <Check className={`mr-2 h-4 w-4 ${value === s.id ? "opacity-100" : "opacity-0"}`} />
-                      {s.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              );
-            })}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }
 

@@ -138,15 +138,31 @@ export type Database = {
           id: string
           name: string
           slug: string
+          tier: string
           description: string | null
-          price_monthly: number
-          price_yearly: number
-          limits: Json
-          features: Json
+          price_pkr: number
+          credits_per_month: number
+          quizzes_per_day: number
+          participants_per_session: number
+          participants_total: number
+          question_bank: number
+          sessions_total: number
+          ai_enabled: boolean
+          custom_branding: boolean
+          white_label: boolean
+          credit_cost_ai_question: number
+          credit_cost_ai_feedback: number
+          credit_cost_ai_report: number
+          credit_cost_ai_10q: number
+          credit_cost_ai_scan: number
+          credit_cost_extra_quiz: number
+          credit_cost_extra_participants: number
+          credit_cost_session_launch: number
+          credit_cost_export: number
+          max_hosts: number
+          features_list: string[]
           is_active: boolean
           sort_order: number
-          stripe_price_id_monthly: string | null
-          stripe_price_id_yearly: string | null
           created_at: string
           updated_at: string
         }
@@ -154,15 +170,31 @@ export type Database = {
           id?: string
           name: string
           slug: string
+          tier?: string
           description?: string | null
-          price_monthly?: number
-          price_yearly?: number
-          limits?: Json
-          features?: Json
+          price_pkr?: number
+          credits_per_month?: number
+          quizzes_per_day?: number
+          participants_per_session?: number
+          participants_total?: number
+          question_bank?: number
+          sessions_total?: number
+          ai_enabled?: boolean
+          custom_branding?: boolean
+          white_label?: boolean
+          credit_cost_ai_question?: number
+          credit_cost_ai_feedback?: number
+          credit_cost_ai_report?: number
+          credit_cost_ai_10q?: number
+          credit_cost_ai_scan?: number
+          credit_cost_extra_quiz?: number
+          credit_cost_extra_participants?: number
+          credit_cost_session_launch?: number
+          credit_cost_export?: number
+          max_hosts?: number
+          features_list?: string[]
           is_active?: boolean
           sort_order?: number
-          stripe_price_id_monthly?: string | null
-          stripe_price_id_yearly?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -170,15 +202,31 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+          tier?: string
           description?: string | null
-          price_monthly?: number
-          price_yearly?: number
-          limits?: Json
-          features?: Json
+          price_pkr?: number
+          credits_per_month?: number
+          quizzes_per_day?: number
+          participants_per_session?: number
+          participants_total?: number
+          question_bank?: number
+          sessions_total?: number
+          ai_enabled?: boolean
+          custom_branding?: boolean
+          white_label?: boolean
+          credit_cost_ai_question?: number
+          credit_cost_ai_feedback?: number
+          credit_cost_ai_report?: number
+          credit_cost_ai_10q?: number
+          credit_cost_ai_scan?: number
+          credit_cost_extra_quiz?: number
+          credit_cost_extra_participants?: number
+          credit_cost_session_launch?: number
+          credit_cost_export?: number
+          max_hosts?: number
+          features_list?: string[]
           is_active?: boolean
           sort_order?: number
-          stripe_price_id_monthly?: string | null
-          stripe_price_id_yearly?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -190,13 +238,8 @@ export type Database = {
           user_id: string
           plan_id: string
           status: string
-          billing_cycle: string
-          stripe_customer_id: string | null
-          stripe_subscription_id: string | null
-          current_period_start: string | null
-          current_period_end: string | null
-          cancel_at_period_end: boolean
-          trial_end: string | null
+          started_at: string | null
+          expires_at: string | null
           created_at: string
           updated_at: string
         }
@@ -205,13 +248,8 @@ export type Database = {
           user_id: string
           plan_id: string
           status?: string
-          billing_cycle?: string
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          current_period_start?: string | null
-          current_period_end?: string | null
-          cancel_at_period_end?: boolean
-          trial_end?: string | null
+          started_at?: string | null
+          expires_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -220,13 +258,8 @@ export type Database = {
           user_id?: string
           plan_id?: string
           status?: string
-          billing_cycle?: string
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          current_period_start?: string | null
-          current_period_end?: string | null
-          cancel_at_period_end?: boolean
-          trial_end?: string | null
+          started_at?: string | null
+          expires_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -240,42 +273,273 @@ export type Database = {
           },
         ]
       }
-      payment_history: {
+      manual_payments: {
         Row: {
           id: string
           user_id: string
-          subscription_id: string | null
           plan_id: string | null
-          amount_cents: number
-          currency: string
+          amount_pkr: number
+          payment_method: string
+          account_holder_name: string | null
+          transaction_ref: string | null
+          screenshot_url: string | null
+          credits_to_add: number
           status: string
-          stripe_payment_intent_id: string | null
-          description: string | null
-          paid_at: string
+          notes: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          subscription_id?: string | null
           plan_id?: string | null
-          amount_cents: number
-          currency?: string
+          amount_pkr: number
+          payment_method: string
+          account_holder_name?: string | null
+          transaction_ref?: string | null
+          screenshot_url?: string | null
+          credits_to_add?: number
           status?: string
-          stripe_payment_intent_id?: string | null
-          description?: string | null
-          paid_at?: string
+          notes?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
-          subscription_id?: string | null
           plan_id?: string | null
-          amount_cents?: number
-          currency?: string
+          amount_pkr?: number
+          payment_method?: string
+          account_holder_name?: string | null
+          transaction_ref?: string | null
+          screenshot_url?: string | null
+          credits_to_add?: number
           status?: string
-          stripe_payment_intent_id?: string | null
+          notes?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payment_accounts: {
+        Row: {
+          id: string
+          method: string
+          title: string
+          account_name: string
+          account_number: string
+          instructions: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          method: string
+          title: string
+          account_name: string
+          account_number: string
+          instructions?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          method?: string
+          title?: string
+          account_name?: string
+          account_number?: string
+          instructions?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_credits: {
+        Row: {
+          id: string
+          user_id: string
+          balance: number
+          total_earned: number
+          total_spent: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          balance?: number
+          total_earned?: number
+          total_spent?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          balance?: number
+          total_earned?: number
+          total_spent?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      credit_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          type: string
+          description: string | null
+          reference_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          type: string
           description?: string | null
-          paid_at?: string
+          reference_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          type?: string
+          description?: string | null
+          reference_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      company_profiles: {
+        Row: {
+          id: string
+          admin_user_id: string
+          company_name: string
+          company_type: string
+          registration_no: string | null
+          established_year: number | null
+          total_students: number | null
+          phone: string | null
+          email: string | null
+          website: string | null
+          address: string | null
+          city: string | null
+          province: string | null
+          country: string | null
+          description: string | null
+          onboarding_completed: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          admin_user_id: string
+          company_name: string
+          company_type: string
+          registration_no?: string | null
+          established_year?: number | null
+          total_students?: number | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          address?: string | null
+          city?: string | null
+          province?: string | null
+          country?: string | null
+          description?: string | null
+          onboarding_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          admin_user_id?: string
+          company_name?: string
+          company_type?: string
+          registration_no?: string | null
+          established_year?: number | null
+          total_students?: number | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          address?: string | null
+          city?: string | null
+          province?: string | null
+          country?: string | null
+          description?: string | null
+          onboarding_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      company_members: {
+        Row: {
+          id: string
+          company_id: string
+          user_id: string | null
+          invited_email: string
+          full_name: string
+          role: string
+          status: string
+          employee_id: string | null
+          department: string | null
+          designation: string | null
+          subject_area: string | null
+          phone: string | null
+          invite_token: string | null
+          joined_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          user_id?: string | null
+          invited_email: string
+          full_name: string
+          role?: string
+          status?: string
+          employee_id?: string | null
+          department?: string | null
+          designation?: string | null
+          subject_area?: string | null
+          phone?: string | null
+          invite_token?: string | null
+          joined_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          user_id?: string | null
+          invited_email?: string
+          full_name?: string
+          role?: string
+          status?: string
+          employee_id?: string | null
+          department?: string | null
+          designation?: string | null
+          subject_area?: string | null
+          phone?: string | null
+          invite_token?: string | null
+          joined_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -410,6 +674,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          logo_url: string | null
           country: string | null
           created_at: string
           email: string | null
@@ -424,6 +689,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          logo_url?: string | null
           country?: string | null
           created_at?: string
           email?: string | null
@@ -438,6 +704,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          logo_url?: string | null
           country?: string | null
           created_at?: string
           email?: string | null
@@ -1084,6 +1351,22 @@ export type Database = {
       get_session_leaderboard: {
         Args: { p_session_id: string }
         Returns: Json
+      }
+      approve_payment: {
+        Args: { p_payment_id: string; p_admin_id: string; p_admin_notes?: string }
+        Returns: void
+      }
+      deduct_credits: {
+        Args: { p_user_id: string; p_amount: number; p_type: string; p_description?: string; p_reference_id?: string }
+        Returns: boolean
+      }
+      add_credits: {
+        Args: { p_user_id: string; p_amount: number; p_type: string; p_description?: string; p_reference_id?: string; p_performed_by?: string }
+        Returns: void
+      }
+      transfer_credits_to_host: {
+        Args: { p_admin_id: string; p_host_user_id: string; p_member_id: string; p_amount: number; p_note?: string }
+        Returns: boolean
       }
     }
     Enums: {
