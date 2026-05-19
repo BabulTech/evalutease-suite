@@ -350,13 +350,17 @@ function PublicQuizPage() {
       p_attempt_id: ph.attemptId,
     });
     const payload = data as
-      | { score: number; total: number; speed_bonus: number }
+      | { score: number; total: number; speed_bonus: number; show_results_after_quiz?: boolean }
       | { error: string };
     if (payload && "score" in payload) {
       forgetAttempt(ph.data.session.id);
+      const sessionData =
+        payload.show_results_after_quiz !== undefined
+          ? { ...ph.data.session, show_results_after_quiz: payload.show_results_after_quiz }
+          : ph.data.session;
       setPhase({
         kind: "completed",
-        data: ph.data,
+        data: { ...ph.data, session: sessionData },
         attemptId: ph.attemptId,
         score: payload.score,
         total: payload.total,
@@ -582,6 +586,16 @@ function routeForData(
 function applySessionUpdate(prev: QuizPhase, update: SessionUpdate): QuizPhase {
   if (prev.kind !== "register" && prev.kind !== "lobby" && prev.kind !== "quiz" && prev.kind !== "completed") {
     return prev;
+  }
+  // For completed phase, only allow show_results_after_quiz to update (don't re-route)
+  if (prev.kind === "completed" && update.show_results_after_quiz !== undefined) {
+    return {
+      ...prev,
+      data: {
+        ...prev.data,
+        session: { ...prev.data.session, show_results_after_quiz: update.show_results_after_quiz },
+      },
+    };
   }
   const nextData: SessionForJoin = {
     ...prev.data,

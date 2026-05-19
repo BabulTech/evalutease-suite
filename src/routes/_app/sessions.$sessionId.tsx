@@ -153,6 +153,7 @@ type ParticipantStatusBroadcast = {
   paused_at?: string | null;
   pause_offset_seconds?: number;
   is_open?: boolean;
+  show_results_after_quiz?: boolean;
 };
 
 function SessionLobbyPage() {
@@ -773,6 +774,7 @@ function SessionLobbyPage() {
       .update({ show_results_after_quiz: value })
       .eq("id", session.id);
     if (error) { toast.error(error.message); return; }
+    await broadcastParticipantStatus(session.access_code, { show_results_after_quiz: value });
     void loadSession();
   };
 
