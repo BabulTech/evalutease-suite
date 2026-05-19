@@ -172,6 +172,35 @@ const templates: Record<string, (d: Record<string, string>) => { subject: string
       ${btn("Accept Invitation", inviteLink)}
     `),
   }),
+
+  quiz_scheduled: ({ recipientName, quizTitle, scheduledAt, accessCode, joinUrl }) => ({
+    subject: `📋 You're registered: ${quizTitle}`,
+    html: layout(`
+      <h2 style="margin-top:0;color:#111827;font-size:22px;">You're registered for a quiz 📋</h2>
+      <p style="color:#374151;line-height:1.7;">Hi <strong>${recipientName}</strong>,</p>
+      <p style="color:#374151;line-height:1.7;">You've been added to <strong>${quizTitle}</strong>. Here are your details:</p>
+      <table width="100%" cellpadding="10" style="background:#f9fafb;border-radius:10px;border:1px solid #e5e7eb;margin:20px 0;font-size:14px;">
+        <tr><td style="color:#6b7280;width:140px;">Quiz</td><td style="color:#111827;font-weight:600;">${quizTitle}</td></tr>
+        <tr><td style="color:#6b7280;">Scheduled</td><td style="color:#111827;">${scheduledAt}</td></tr>
+        <tr><td style="color:#6b7280;">Access Code</td><td style="color:#6d28d9;font-weight:900;font-size:18px;letter-spacing:3px;">${accessCode}</td></tr>
+      </table>
+      <p style="color:#374151;line-height:1.7;">When it's time, use the access code above or click the button below to join.</p>
+      ${btn("Join Quiz →", joinUrl)}
+    `),
+  }),
+
+  quiz_reminder: ({ recipientName, quizTitle, scheduledAt, accessCode, joinUrl }) => ({
+    subject: `⏰ Starting in 5 min: ${quizTitle}`,
+    html: layout(`
+      <h2 style="margin-top:0;color:#d97706;font-size:22px;">⏰ Quiz starting in 5 minutes!</h2>
+      <p style="color:#374151;line-height:1.7;">Hi <strong>${recipientName}</strong>,</p>
+      <p style="color:#374151;line-height:1.7;">Get ready — <strong>${quizTitle}</strong> is about to begin at <strong>${scheduledAt}</strong>.</p>
+      <table width="100%" cellpadding="10" style="background:#fffbeb;border-radius:10px;border:1px solid #fde68a;margin:20px 0;font-size:14px;">
+        <tr><td style="color:#6b7280;width:140px;">Access Code</td><td style="color:#6d28d9;font-weight:900;font-size:20px;letter-spacing:3px;">${accessCode}</td></tr>
+      </table>
+      ${btn("Join Now →", joinUrl)}
+    `),
+  }),
 };
 
 // ─── Handler ─────────────────────────────────────────────────

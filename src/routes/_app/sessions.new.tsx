@@ -411,6 +411,51 @@ function NewSessionPage() {
       if (pErr) toast.error(`Saved session but failed to attach participants: ${pErr.message}`);
     }
 
+    // Send schedule confirmation emails to roster participants (private + scheduled only)
+    if (isScheduled && !isPublic && participantIds.length > 0) {
+      void (async () => {
+        try {
+          const { data: accessData } = await supabase
+            .from("quiz_sessions")
+            .select("access_code, scheduled_at")
+            .eq("id", sessionId)
+            .single();
+
+          if (accessData?.access_code && accessData?.scheduled_at) {
+            const { data: pData } = await supabase
+              .from("participants")
+              .select("name, email")
+              .in("id", participantIds);
+
+            const appUrl = import.meta.env.VITE_APP_URL ?? window.location.origin;
+            const joinUrl = `${appUrl}/q/${accessData.access_code}`;
+            const scheduledAtFormatted = new Date(accessData.scheduled_at).toLocaleString("en-PK", {
+              weekday: "long", year: "numeric", month: "long", day: "numeric",
+              hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi",
+            });
+
+            for (const p of (pData ?? []).filter((x) => x.email)) {
+              void supabase.functions.invoke("send-email", {
+                body: {
+                  type: "quiz_scheduled",
+                  data: {
+                    to: p.email,
+                    recipientName: p.name ?? "Participant",
+                    quizTitle: titleVal,
+                    scheduledAt: scheduledAtFormatted,
+                    accessCode: accessData.access_code,
+                    joinUrl,
+                  },
+                },
+              });
+            }
+          }
+        } catch (e) {
+          console.error("[email] could not send schedule emails:", e);
+        }
+      })();
+    }
+
     setBusy(false);
     toast.success(isScheduled ? t("newSess.sessionScheduled") : t("newSess.lobbyOpen"));
     if (isScheduled) {
@@ -803,6 +848,7 @@ function NewSessionPage() {
                             type="button"
                             onClick={() => toggleSubtype(id)}
                             className="hover:bg-primary/20 rounded-full p-0.5"
+                            aria-label={`Remove ${s.name}`}
                           >
                             <X className="h-3 w-3" />
                           </button>
