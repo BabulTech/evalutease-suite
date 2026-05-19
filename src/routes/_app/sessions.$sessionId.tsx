@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -94,6 +95,7 @@ type SessionRow = {
   subject: string | null;
   topic: string | null;
   description: string | null;
+  show_results_after_quiz: boolean;
 };
 
 type Attendee = {
@@ -192,7 +194,7 @@ function SessionLobbyPage() {
     const { data, error } = await supabase
       .from("quiz_sessions")
       .select(
-        "id, title, status, default_time_per_question, access_code, is_open, scheduled_at, started_at, paused_at, pause_offset_seconds, category_id, subcategory_id, created_at, subject, topic, description",
+        "id, title, status, default_time_per_question, access_code, is_open, show_results_after_quiz, scheduled_at, started_at, paused_at, pause_offset_seconds, category_id, subcategory_id, created_at, subject, topic, description",
       )
       .eq("id", sessionId)
       .eq("owner_id", user.id)
@@ -764,6 +766,16 @@ function SessionLobbyPage() {
     void loadSession();
   };
 
+  const toggleShowResults = async (value: boolean) => {
+    if (!session) return;
+    const { error } = await supabase
+      .from("quiz_sessions")
+      .update({ show_results_after_quiz: value })
+      .eq("id", session.id);
+    if (error) { toast.error(error.message); return; }
+    void loadSession();
+  };
+
   if (!session) {
     return (
       <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground">
@@ -969,6 +981,29 @@ function SessionLobbyPage() {
           </>
         )}
       </div>
+
+      {/* Announce results toggle — only editable before/during quiz, not after completion */}
+      {!isCompleted && (
+        <div className="rounded-2xl border border-border bg-card/40 p-4 print:hidden">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="show-results-switch" className="text-sm font-semibold">
+                Announce Results After Quiz
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {session.show_results_after_quiz
+                  ? "Participants will see their score when the quiz ends."
+                  : "Participants will NOT see their score. You announce results manually."}
+              </p>
+            </div>
+            <Switch
+              id="show-results-switch"
+              checked={session.show_results_after_quiz}
+              onCheckedChange={(v) => void toggleShowResults(v)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* === STATUS-DRIVEN MAIN AREA === */}
       {isCompleted ? (

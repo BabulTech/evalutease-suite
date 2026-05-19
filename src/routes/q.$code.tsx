@@ -612,6 +612,9 @@ function pickSessionUpdate(update: SessionUpdate): Partial<SessionForJoin["sessi
       : {}),
     ...(update.is_open !== undefined ? { is_open: update.is_open } : {}),
     ...(update.total_questions !== undefined ? { total_questions: update.total_questions } : {}),
+    ...(update.show_results_after_quiz !== undefined
+      ? { show_results_after_quiz: update.show_results_after_quiz }
+      : {}),
   };
 }
 

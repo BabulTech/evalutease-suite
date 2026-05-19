@@ -95,6 +95,9 @@ function SessionsPage() {
     if (onIndex) void loadSessions();
   }, [loadSessions, onIndex]);
 
+  const activeSessions = useMemo(() => sessions.filter((s) => s.status === "active"), [sessions]);
+  const scheduledSessions = useMemo(() => sessions.filter((s) => s.status === "scheduled"), [sessions]);
+
   if (!onIndex) return <Outlet />;
 
   const remove = async (id: string) => {
@@ -111,9 +114,6 @@ function SessionsPage() {
     setSessions((prev) => prev.filter((s) => s.id !== id));
     toast.success(t("sess.deleted"));
   };
-
-  const activeSessions = useMemo(() => sessions.filter((s) => s.status === "active"), [sessions]);
-  const scheduledSessions = useMemo(() => sessions.filter((s) => s.status === "scheduled"), [sessions]);
 
   return (
     <div className="space-y-4">

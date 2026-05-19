@@ -12,6 +12,7 @@ export type SessionPublic = {
   access_code: string;
   is_open: boolean;
   total_questions: number;
+  show_results_after_quiz: boolean;
 };
 
 export type QuizQuestionType = "mcq" | "true_false" | "short_answer" | "long_answer";

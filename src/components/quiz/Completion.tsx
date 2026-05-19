@@ -19,6 +19,7 @@ type Props = {
 };
 
 export function Completion({ session, score, total, speedBonus, participantName, participantEmail }: Props) {
+  const showResults = session.show_results_after_quiz !== false; // default true if missing
   const pct = total === 0 ? 0 : Math.round((score / Math.max(total, 1)) * 100);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -53,33 +54,43 @@ export function Completion({ session, score, total, speedBonus, participantName,
           host will announce the final results.
         </p>
 
-        <div className="mt-5 rounded-2xl border border-border bg-card/40 p-5">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your score</div>
-          <div className="mt-1 font-display text-5xl font-bold text-primary">
-            {score}
-            <span className="text-2xl text-muted-foreground"> / {total}</span>
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">{pct}% correct</div>
-          {speedBonus > 0 && (
-            <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-              <Sparkles className="h-3 w-3" /> +{speedBonus} speed bonus
+        {showResults ? (
+          <div className="mt-5 rounded-2xl border border-border bg-card/40 p-5">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your score</div>
+            <div className="mt-1 font-display text-5xl font-bold text-primary">
+              {score}
+              <span className="text-2xl text-muted-foreground"> / {total}</span>
             </div>
-          )}
-        </div>
+            <div className="mt-1 text-xs text-muted-foreground">{pct}% correct</div>
+            {speedBonus > 0 && (
+              <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                <Sparkles className="h-3 w-3" /> +{speedBonus} speed bonus
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-2xl border border-border bg-card/40 p-5">
+            <div className="text-sm text-muted-foreground">
+              The host will announce the results. Thank you for participating!
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Share result */}
-      <Suspense fallback={null}>
-        <ShareResultCard
-          mode="participant"
-          quizTitle={session.title}
-          score={score}
-          total={total}
-          pct={pct}
-          speedBonus={speedBonus}
-          participantName={participantName}
-        />
-      </Suspense>
+      {/* Share result — only when results are visible */}
+      {showResults && (
+        <Suspense fallback={null}>
+          <ShareResultCard
+            mode="participant"
+            quizTitle={session.title}
+            score={score}
+            total={total}
+            pct={pct}
+            speedBonus={speedBonus}
+            participantName={participantName}
+          />
+        </Suspense>
+      )}
 
       {/* Feedback section */}
       <div className="rounded-2xl border border-border bg-card/40 p-4 text-left">

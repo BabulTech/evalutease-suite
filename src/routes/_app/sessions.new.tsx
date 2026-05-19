@@ -126,6 +126,7 @@ function NewSessionPage() {
   const [isPublic, setIsPublic] = useState(true);
   const [selectedSubtypeIds, setSelectedSubtypeIds] = useState<Set<string>>(new Set());
   const [timeText, setTimeText] = useState("10");
+  const [showResultsAfterQuiz, setShowResultsAfterQuiz] = useState(true);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledAtLocal, setScheduledAtLocal] = useState("");
   const [busy, setBusy] = useState(false);
@@ -246,6 +247,7 @@ function NewSessionPage() {
     }
     setErrors({});
 
+    const isScheduled = mode === "schedule";
     const titleVal = title.trim();
     const timeNum = Number(timeText);
 
@@ -347,7 +349,6 @@ function NewSessionPage() {
     }
 
     setBusy(true);
-    const isScheduled = mode === "schedule";
     const subcat = subcategories.find((s) => s.id === subcategoryId);
     const { data: inserted, error: insErr } = await supabase
       .from("quiz_sessions")
@@ -359,6 +360,7 @@ function NewSessionPage() {
         mode: "qr_link",
         status: "scheduled",
         is_open: true,
+        show_results_after_quiz: showResultsAfterQuiz,
         default_time_per_question: timeNum,
         access_code: await (async () => {
           const { data } = await supabase.rpc("generate_session_access_code");
@@ -721,6 +723,27 @@ function NewSessionPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Announce results after quiz */}
+          <div className="rounded-2xl border border-border bg-card/40 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="show-results-switch" className="text-sm font-semibold">
+                  Announce Results After Quiz
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {showResultsAfterQuiz
+                    ? "Participants will see their score and percentage when the quiz ends."
+                    : "Participants will NOT see their score. The host announces results manually."}
+                </p>
+              </div>
+              <Switch
+                id="show-results-switch"
+                checked={showResultsAfterQuiz}
+                onCheckedChange={setShowResultsAfterQuiz}
+              />
             </div>
           </div>
 
