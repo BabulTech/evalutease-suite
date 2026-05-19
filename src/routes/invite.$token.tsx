@@ -102,9 +102,7 @@ function InvitePage() {
   }
 
   const data = phase.data;
-  const alreadyRedeemed = data.invite.status === "accepted";
-
-  if (phase.kind === "done" || alreadyRedeemed) {
+  if (phase.kind === "done") {
     return (
       <PageShell>
         <div className="rounded-2xl border border-success/40 bg-success/10 p-8 text-center">
@@ -143,8 +141,8 @@ function InvitePage() {
     const payload = rpcData as RpcResponse<{ participant_id: string }>;
     if ("error" in payload) {
       const msg =
-        payload.error === "already_redeemed"
-          ? "This invite has already been used."
+        payload.error === "revoked"
+          ? "This invite link has been revoked by the host."
           : payload.error === "name_required"
             ? "Name is required."
             : "Could not redeem invite.";
