@@ -2,6 +2,7 @@ import React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import {
   LayoutDashboard, Users, CreditCard, DollarSign, TrendingUp, Shield,
   Search, MoreHorizontal, Ban, CheckCircle, Edit2, ChevronUp, ChevronDown,
@@ -24,6 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { PaginationControls } from "@/components/PaginationControls";
 import { usePaginationState } from "@/hooks/use-pagination";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
@@ -147,8 +149,13 @@ const NAV: NavItem[] = [
   { key: "categories",   label: "Categories",      icon: FolderTree },
   { key: "reviews",      label: "Reviews",         icon: Star },
   { key: "appfeedback",  label: "App Feedback",    icon: MessageSquare },
+  { key: "activity",     label: "Activity Logs",    icon: Activity },
+  { key: "aiusage",      label: "AI Usage",         icon: Zap },
+  { key: "alerts",       label: "Security Alerts",  icon: AlertTriangle },
   { key: "plans",        label: "Plans",           icon: CreditCard },
   { key: "credits",      label: "Credits",         icon: Coins },
+  { key: "packages",     label: "Credit Packages", icon: Wallet },
+  { key: "domains",      label: "Blocked Domains", icon: Globe },
   { key: "promocodes",   label: "Promo Codes",     icon: Tag },
   { key: "finance",      label: "Finance",         icon: DollarSign },
 ];
@@ -158,7 +165,8 @@ const NAV_GROUPS = [
   { key: "people", label: "People", icon: Users, sections: ["users", "participants"] },
   { key: "content", label: "Content", icon: PlayCircle, sections: ["quizzes", "categories"] },
   { key: "feedback", label: "Feedback", icon: MessageSquare, sections: ["reviews", "appfeedback"] },
-  { key: "money", label: "Money", icon: Wallet, sections: ["plans", "credits", "promocodes", "finance"] },
+  { key: "monitor", label: "Monitor", icon: Activity, sections: ["activity", "aiusage", "alerts"] },
+  { key: "money", label: "Money", icon: Wallet, sections: ["plans", "credits", "packages", "domains", "promocodes", "finance"] },
 ] as const;
 
 function getNavGroup(section: string) {
@@ -175,6 +183,7 @@ function AdminPage() {
   const [section, setSection] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [feedbackBadge, setFeedbackBadge] = useState(0);
+  const [alertBadge, setAlertBadge] = useState(0);
 
   useEffect(() => {
     if (!user) { void navigate({ to: "/login" }); return; }
@@ -185,6 +194,8 @@ function AdminPage() {
         // Only fetch after admin role is confirmed
         supabase.from("app_feedback").select("id", { count: "exact", head: true }).eq("status", "open")
           .then(({ count }) => setFeedbackBadge(count ?? 0));
+        supabase.from("security_alerts").select("id", { count: "exact", head: true }).eq("status", "open")
+          .then(({ count }) => setAlertBadge(count ?? 0));
       });
   }, [user, navigate]);
 
@@ -195,7 +206,9 @@ function AdminPage() {
   );
 
   const navItems: NavItem[] = NAV.map((n) =>
-    n.key === "appfeedback" && feedbackBadge > 0 ? { ...n, badge: feedbackBadge } : n
+    n.key === "appfeedback" && feedbackBadge > 0 ? { ...n, badge: feedbackBadge } :
+    n.key === "alerts" && alertBadge > 0 ? { ...n, badge: alertBadge } :
+    n
   );
   const activeItem = navItems.find((item) => item.key === section) ?? navItems[0];
   const activeGroup = getNavGroup(section);
@@ -223,9 +236,12 @@ function AdminPage() {
           <Badge className="hidden sm:inline-flex bg-destructive/15 text-destructive border-0 text-[10px]">ADMIN</Badge>
         </div>
         <div className="ml-auto">
-          <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/dashboard" })} className="h-9 px-2 sm:px-3">
-            ← Back to App
-          </Button>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: "/dashboard" })} className="h-9 px-2 sm:px-3">
+              ← Back to App
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -288,8 +304,13 @@ function AdminPage() {
           {section === "categories"   && <CategoriesSection />}
           {section === "reviews"      && <ReviewsSection />}
           {section === "appfeedback"  && <AppFeedbackSection onCountChange={setFeedbackBadge} />}
+          {section === "activity"     && <ActivityLogsSection />}
+          {section === "aiusage"      && <AiUsageSection />}
+          {section === "alerts"       && <SecurityAlertsSection onOpenCountChange={setAlertBadge} />}
           {section === "plans"        && <PlansSection />}
           {section === "credits"      && <CreditsSection />}
+          {section === "packages"     && <CreditPackagesSection />}
+          {section === "domains"      && <BlockedDomainsSection />}
           {section === "promocodes"   && <PromoCodesSection />}
           {section === "finance"      && <FinanceSection />}
         </main>
@@ -300,7 +321,9 @@ function AdminPage() {
           {NAV_GROUPS.map(({ key, label, icon: Icon, sections }) => {
             const selected = (sections as readonly string[]).includes(section);
             const target = sections[0];
-            const groupBadge = (sections as readonly string[]).includes("appfeedback") ? feedbackBadge : 0;
+            const groupBadge = (sections as readonly string[]).includes("appfeedback") ? feedbackBadge :
+              (sections as readonly string[]).includes("alerts") ? alertBadge :
+              0;
             return (
               <button
                 key={key}
@@ -1732,6 +1755,11 @@ function PlansSection() {
       sessions_total: editing.sessions_total, max_hosts: editing.max_hosts,
       ai_enabled: editing.ai_enabled, custom_branding: editing.custom_branding,
       white_label: editing.white_label,
+      watermark_enabled: (editing as any).watermark_enabled,
+      can_buy_credits: (editing as any).can_buy_credits,
+      email_template_allowed: (editing as any).email_template_allowed,
+      trial_days: (editing as any).trial_days ?? 0,
+      trial_ai_calls: (editing as any).trial_ai_calls ?? 0,
       credit_cost_ai_10q: editing.credit_cost_ai_10q,
       credit_cost_ai_scan: editing.credit_cost_ai_scan,
       credit_cost_extra_quiz: editing.credit_cost_extra_quiz,
@@ -1780,7 +1808,11 @@ function PlansSection() {
                   <Input type="number" min={0} value={editing.price_pkr} onChange={(e) => setEditing({ ...editing, price_pkr: Number(e.target.value) })} /></div>
                 <div><label className="text-xs text-muted-foreground mb-1 block">Credits/month</label>
                   <Input type="number" min={0} value={editing.credits_per_month} onChange={(e) => setEditing({ ...editing, credits_per_month: Number(e.target.value) })} /></div>
-                <div className="sm:col-span-3"><label className="text-xs text-muted-foreground mb-1 block">Description</label>
+                <div><label className="text-xs text-muted-foreground mb-1 block">Trial Days (0=no trial)</label>
+                  <Input type="number" min={0} value={(editing as any).trial_days ?? 0} onChange={(e) => setEditing({ ...editing, trial_days: Number(e.target.value) } as any)} /></div>
+                <div><label className="text-xs text-muted-foreground mb-1 block">Trial Free AI Calls</label>
+                  <Input type="number" min={0} value={(editing as any).trial_ai_calls ?? 0} onChange={(e) => setEditing({ ...editing, trial_ai_calls: Number(e.target.value) } as any)} /></div>
+                <div className="sm:col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Description</label>
                   <Input value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
               </div>
             </div>
@@ -1820,6 +1852,9 @@ function PlansSection() {
                   { key: "ai_enabled", label: "AI Enabled" },
                   { key: "custom_branding", label: "Custom Branding" },
                   { key: "white_label", label: "White Label" },
+                  { key: "watermark_enabled", label: "Watermark on Exports" },
+                  { key: "can_buy_credits", label: "Can Buy Add-on Credits" },
+                  { key: "email_template_allowed", label: "Custom Email Templates" },
                 ] as { key: keyof PlanRow; label: string }[]).map(({ key, label }) => (
                   <label key={String(key)} className="flex items-center gap-3 rounded-xl border border-border bg-muted/10 p-3 cursor-pointer">
                     <input type="checkbox" checked={editing[key] as boolean}
@@ -1888,6 +1923,277 @@ function PlansSection() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CREDIT PACKAGES MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+function CreditPackagesSection() {
+  type PkgRow = {
+    id: string; name: string; credits: number; price_pkr: number;
+    badge_text: string | null; is_active: boolean; sort_order: number;
+    allowed_tiers: string[];
+  };
+  const [packages, setPackages] = useState<PkgRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<PkgRow | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const blankPkg = (): PkgRow => ({
+    id: "", name: "", credits: 100, price_pkr: 199,
+    badge_text: null, is_active: true, sort_order: 0,
+    allowed_tiers: ["individual", "enterprise"],
+  });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("credit_packages").select("*").order("sort_order");
+    setPackages((data ?? []) as PkgRow[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const save = async () => {
+    if (!editing) return;
+    setSaving(true);
+    const payload = {
+      name: editing.name, credits: editing.credits, price_pkr: editing.price_pkr,
+      badge_text: editing.badge_text || null, is_active: editing.is_active,
+      sort_order: editing.sort_order, allowed_tiers: editing.allowed_tiers,
+    };
+    const { error } = isNew
+      ? await supabase.from("credit_packages").insert(payload)
+      : await supabase.from("credit_packages").update(payload).eq("id", editing.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success(isNew ? "Package created" : "Package saved");
+    setEditing(null); setIsNew(false);
+    void load();
+  };
+
+  const del = async (id: string) => {
+    await supabase.from("credit_packages").delete().eq("id", id);
+    void load();
+  };
+
+  const costPer = (pkg: PkgRow) => (pkg.price_pkr / pkg.credits).toFixed(2);
+  const margin = (pkg: PkgRow) => Math.round(((pkg.price_pkr - pkg.credits * 0.7) / pkg.price_pkr) * 100);
+
+  return (
+    <div className="space-y-4">
+      <SectionHead title="Credit Packages" sub="Manage add-on credit packages users can purchase." />
+      <div className="flex justify-end">
+        <Button onClick={() => { setEditing(blankPkg()); setIsNew(true); }}
+          className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+          <Plus className="h-4 w-4" /> New Package
+        </Button>
+      </div>
+
+      {editing && (
+        <div className="rounded-2xl border border-primary/30 bg-card/60 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-lg">{isNew ? "New Package" : "Edit Package"}</span>
+            <Button variant="ghost" size="icon" onClick={() => { setEditing(null); setIsNew(false); }}><X className="h-4 w-4" /></Button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Package Name</label>
+              <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Value Pack" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Badge (optional)</label>
+              <Input value={editing.badge_text ?? ""} onChange={(e) => setEditing({ ...editing, badge_text: e.target.value || null })} placeholder="Best Value" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Credits</label>
+              <Input type="number" min={1} value={editing.credits} onChange={(e) => setEditing({ ...editing, credits: Number(e.target.value) })} /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Price (PKR)</label>
+              <Input type="number" min={1} value={editing.price_pkr} onChange={(e) => setEditing({ ...editing, price_pkr: Number(e.target.value) })} /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Sort Order</label>
+              <Input type="number" min={0} value={editing.sort_order} onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })} /></div>
+          </div>
+          <div className="rounded-xl bg-muted/20 px-4 py-3 text-sm flex gap-6">
+            <span>PKR/credit: <strong>{(editing.price_pkr / Math.max(1, editing.credits)).toFixed(2)}</strong></span>
+            <span>API cost: <strong>~{(editing.credits * 0.7).toFixed(0)} PKR</strong></span>
+            <span className={margin(editing) >= 100 ? "text-success" : "text-destructive"}>
+              Margin: <strong>{margin(editing)}%</strong>
+            </span>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={editing.is_active}
+              onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} className="h-4 w-4 accent-primary" />
+            <span className="text-sm font-medium">Active (visible to users)</span>
+          </label>
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button variant="ghost" onClick={() => { setEditing(null); setIsNew(false); }}>Cancel</Button>
+            <Button onClick={() => void save()} disabled={saving} className="bg-gradient-primary text-primary-foreground shadow-glow">
+              {saving ? "Saving…" : "Save Package"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-2">{Array.from({length:3}).map((_,i)=><div key={i} className="h-20 rounded-2xl bg-muted/30 animate-pulse"/>)}</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {packages.map((pkg) => (
+            <div key={pkg.id} className={`rounded-2xl border p-5 space-y-3 transition-all ${pkg.is_active ? "border-border bg-card/60 hover:shadow-glow" : "border-border/40 bg-card/20 opacity-50"}`}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="font-bold text-sm">{pkg.name}</div>
+                  {pkg.badge_text && <Badge className="bg-warning/15 text-warning border-0 text-[10px] mt-1">{pkg.badge_text}</Badge>}
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(pkg); setIsNew(false); }}><Edit2 className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/60 hover:text-destructive" onClick={() => void del(pkg.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="font-display text-2xl font-bold text-primary">PKR {pkg.price_pkr}</div>
+                <div className="text-xs text-warning font-semibold">{pkg.credits} credits</div>
+                <div className="text-[10px] text-muted-foreground mt-1">{costPer(pkg)} PKR/credit · {margin(pkg)}% margin</div>
+              </div>
+              <div className="flex justify-center">
+                <Badge className={`text-[10px] border-0 ${pkg.is_active ? "bg-success/10 text-success" : "bg-muted/40 text-muted-foreground"}`}>
+                  {pkg.is_active ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+            </div>
+          ))}
+          {packages.length === 0 && (
+            <div className="sm:col-span-3 rounded-2xl border border-dashed border-border p-10 text-center text-muted-foreground text-sm">
+              No packages yet. Click "New Package" to create one.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BLOCKED EMAIL DOMAINS
+// ═══════════════════════════════════════════════════════════════
+function BlockedDomainsSection() {
+  type DomainRow = { id: string; domain: string; reason: string | null; is_active: boolean; created_at: string };
+  const [domains, setDomains] = useState<DomainRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newDomain, setNewDomain] = useState("");
+  const [newReason, setNewReason] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("blocked_email_domains").select("*").order("domain");
+    setDomains((data ?? []) as DomainRow[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const add = async () => {
+    const d = newDomain.trim().toLowerCase().replace(/^@/, "");
+    if (!d) { validationError("Enter a domain"); return; }
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) { validationError("Invalid domain format (e.g. gmail.com)"); return; }
+    setAdding(true);
+    const { error } = await supabase.from("blocked_email_domains").insert({ domain: d, reason: newReason.trim() || "Public email provider" });
+    setAdding(false);
+    if (error) { toast.error(error.message); return; }
+    setNewDomain(""); setNewReason("");
+    toast.success(`${d} blocked`);
+    void load();
+  };
+
+  const toggle = async (row: DomainRow) => {
+    await supabase.from("blocked_email_domains").update({ is_active: !row.is_active }).eq("id", row.id);
+    void load();
+  };
+
+  const del = async (id: string) => {
+    await supabase.from("blocked_email_domains").delete().eq("id", id);
+    void load();
+  };
+
+  const filtered = domains.filter((d) => d.domain.includes(search.toLowerCase()));
+
+  return (
+    <div className="space-y-4">
+      <SectionHead title="Blocked Email Domains" sub="Domains blocked from Enterprise plan registration. Users must use a company email." />
+
+      {/* Add new */}
+      <div className="rounded-2xl border border-border bg-card/60 p-4 space-y-3">
+        <div className="text-sm font-semibold">Block New Domain</div>
+        <div className="flex gap-2 flex-wrap">
+          <Input className="flex-1 min-w-[160px]" placeholder="gmail.com" value={newDomain}
+            onChange={(e) => setNewDomain(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void add()} />
+          <Input className="flex-1 min-w-[160px]" placeholder="Reason (optional)" value={newReason}
+            onChange={(e) => setNewReason(e.target.value)} />
+          <Button onClick={() => void add()} disabled={adding} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+            <Plus className="h-4 w-4" /> {adding ? "Adding…" : "Block Domain"}
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">Enter domain only — no @ sign needed. Example: <code className="bg-muted px-1 rounded">gmail.com</code></p>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input className="pl-9" placeholder="Search domains…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      {/* Stats */}
+      <div className="flex gap-4 text-sm">
+        <span className="text-muted-foreground">Total: <strong>{domains.length}</strong></span>
+        <span className="text-success">Active: <strong>{domains.filter(d=>d.is_active).length}</strong></span>
+        <span className="text-muted-foreground">Inactive: <strong>{domains.filter(d=>!d.is_active).length}</strong></span>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">{Array.from({length:5}).map((_,i)=><div key={i} className="h-12 rounded-xl bg-muted/30 animate-pulse"/>)}</div>
+      ) : (
+        <div className="rounded-2xl border border-border overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Domain</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Reason</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">Added</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase sr-only">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filtered.map((row) => (
+                <tr key={row.id} className="hover:bg-muted/10 transition-colors">
+                  <td className="px-4 py-3 font-mono text-sm font-semibold">{row.domain}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{row.reason ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <Badge className={`text-[10px] border-0 ${row.is_active ? "bg-destructive/10 text-destructive" : "bg-muted/40 text-muted-foreground"}`}>
+                      {row.is_active ? "Blocked" : "Inactive"}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDateShort(row.created_at)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1 justify-end">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void toggle(row)}>
+                        {row.is_active ? <ToggleRight className="h-3.5 w-3.5 text-success" /> : <ToggleLeft className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/60 hover:text-destructive" onClick={() => void del(row.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground text-sm">No domains found.</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -1997,8 +2303,8 @@ function CreditsSection() {
   const handleAdjust = async () => {
     if (!selectedUser || !adjustAmount || !adminUser) return;
     const amt = parseInt(adjustAmount);
-    if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid positive amount"); return; }
-    if (amt > 50000) { toast.error("Single adjustment capped at 50,000 credits"); return; }
+    if (isNaN(amt) || amt <= 0) { validationError("Enter a valid positive amount"); return; }
+    if (amt > 50000) { validationError("Single adjustment capped at 50,000 credits"); return; }
     setSaving(true);
     try {
       const { data: ok, error } = await supabase.rpc("admin_adjust_credits", {
@@ -2599,9 +2905,9 @@ function PromoCodesSection() {
 
   const save = async () => {
     const code = draft.code.trim().toUpperCase();
-    if (!code) { toast.error("Code is required"); return; }
+    if (!code) { validationError("Code is required"); return; }
     if (!/^[A-Z0-9_-]{2,30}$/.test(code)) {
-      toast.error("Code must be 2–30 characters, letters/digits/dashes only");
+      validationError("Code must be 2–30 characters, letters/digits/dashes only");
       return;
     }
     setSaving(true);
@@ -2935,7 +3241,7 @@ function PromoCodesSection() {
                 <div className="text-sm font-semibold">Active</div>
                 <div className="text-xs text-muted-foreground mt-0.5">Inactive codes cannot be redeemed</div>
               </div>
-              <button type="button" onClick={() => set("is_active", !draft.is_active)}
+              <button type="button" aria-label="Toggle active" onClick={() => set("is_active", !draft.is_active)}
                 className={`relative h-6 w-11 rounded-full transition-colors ${draft.is_active ? "bg-primary" : "bg-muted"}`}>
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${draft.is_active ? "left-5" : "left-0.5"}`} />
               </button>
@@ -2972,6 +3278,365 @@ function PromoCodesSection() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+type ActivityLogRow = {
+  id: string;
+  actor_user_id: string | null;
+  actor_name: string | null;
+  actor_email: string | null;
+  action_type: string;
+  module: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  entity_label: string | null;
+  message: string;
+  details: Record<string, unknown>;
+  risk_score: number;
+  created_at: string;
+};
+
+function ActivityLogsSection() {
+  const [rows, setRows] = useState<ActivityLogRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [moduleFilter, setModuleFilter] = useState("all");
+  const [actionFilter, setActionFilter] = useState("all");
+  const [selected, setSelected] = useState<ActivityLogRow | null>(null);
+  const debouncedSearch = useDebouncedValue(search, 250);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let query = (supabase as any)
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(250);
+    if (moduleFilter !== "all") query = query.eq("module", moduleFilter);
+    if (actionFilter !== "all") query = query.eq("action_type", actionFilter);
+    if (debouncedSearch.trim()) {
+      const s = debouncedSearch.trim();
+      query = query.or(`actor_name.ilike.%${s}%,actor_email.ilike.%${s}%,message.ilike.%${s}%,entity_label.ilike.%${s}%`);
+    }
+    const { data, error } = await query;
+    setLoading(false);
+    if (error) { toast.error(error.message); return; }
+    setRows((data ?? []) as ActivityLogRow[]);
+  }, [debouncedSearch, moduleFilter, actionFilter]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const modules = Array.from(new Set(rows.map((r) => r.module))).sort();
+  const actions = Array.from(new Set(rows.map((r) => r.action_type))).sort();
+  const highRisk = rows.filter((r) => r.risk_score >= 50).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionHead title="Activity Logs" sub="Who did what, when, and on which record." />
+        <Button variant="outline" size="sm" onClick={() => void load()} className="gap-2">
+          <RefreshCw className="h-4 w-4" /> Refresh
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <StatCard label="Loaded events" value={rows.length} icon={Activity} />
+        <StatCard label="High risk" value={highRisk} icon={AlertTriangle} color="text-destructive" />
+        <StatCard label="Modules" value={modules.length} icon={Layers} color="text-primary" />
+        <StatCard label="Users active" value={new Set(rows.map((r) => r.actor_user_id).filter(Boolean)).size} icon={Users} color="text-success" />
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-[1fr_180px_180px]">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search user, email, action, entity..." className="pl-9" />
+        </div>
+        <Select value={moduleFilter} onValueChange={setModuleFilter}>
+          <SelectTrigger><SelectValue placeholder="Module" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All modules</SelectItem>
+            {modules.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={actionFilter} onValueChange={setActionFilter}>
+          <SelectTrigger><SelectValue placeholder="Action" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All actions</SelectItem>
+            {actions.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <TableShell footer="Latest 250 matching activity events">
+        <THead cols={["When", "User", "Action", "Module", "Details", "Risk", ""]} />
+        <tbody className="divide-y divide-border">
+          {loading ? <SkeletonRows cols={7} /> : rows.length === 0 ? (
+            <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">No activity logs found.</td></tr>
+          ) : rows.map((row) => (
+            <tr key={row.id} className="hover:bg-muted/20">
+              <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
+              <td className="px-4 py-3">
+                <div className="font-semibold text-sm">{row.actor_name ?? "Unknown"}</div>
+                <div className="text-[11px] text-muted-foreground">{row.actor_email ?? "-"}</div>
+              </td>
+              <td className="px-4 py-3">{statusBadge(row.action_type)}</td>
+              <td className="px-4 py-3 text-sm capitalize">{row.module}</td>
+              <td className="px-4 py-3 max-w-[360px]">
+                <div className="text-sm font-medium truncate">{row.message}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{row.entity_label ?? row.entity_type ?? "-"}</div>
+              </td>
+              <td className="px-4 py-3">
+                <Badge className={`border-0 text-[10px] ${row.risk_score >= 50 ? "bg-destructive/15 text-destructive" : row.risk_score >= 25 ? "bg-warning/15 text-warning" : "bg-muted/40 text-muted-foreground"}`}>
+                  {row.risk_score}
+                </Badge>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <Button variant="ghost" size="sm" onClick={() => setSelected(row)} className="gap-1">
+                  <Eye className="h-3.5 w-3.5" /> View
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </TableShell>
+
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Activity Details</DialogTitle></DialogHeader>
+          {selected && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-xl border border-border bg-card/50 p-3">
+                <div className="font-semibold">{selected.message}</div>
+                <div className="text-xs text-muted-foreground mt-1">{new Date(selected.created_at).toLocaleString()}</div>
+              </div>
+              <pre className="max-h-[360px] overflow-auto rounded-xl bg-muted/30 p-3 text-xs">
+                {JSON.stringify({ ...selected, details: selected.details }, null, 2)}
+              </pre>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+type AiUsageRow = {
+  id: string;
+  actor_user_id: string | null;
+  plan_owner_id: string | null;
+  feature: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  estimated_cost: number;
+  currency: string;
+  credits_charged: number;
+  request_status: string;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+
+function AiUsageSection() {
+  const [rows, setRows] = useState<AiUsageRow[]>([]);
+  const [profiles, setProfiles] = useState<Record<string, { full_name: string | null; email: string | null }>>({});
+  const [loading, setLoading] = useState(true);
+  const [featureFilter, setFeatureFilter] = useState("all");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let query = (supabase as any).from("ai_usage_logs").select("*").order("created_at", { ascending: false }).limit(250);
+    if (featureFilter !== "all") query = query.eq("feature", featureFilter);
+    const { data, error } = await query;
+    setLoading(false);
+    if (error) { toast.error(error.message); return; }
+    const usage = (data ?? []) as AiUsageRow[];
+    setRows(usage);
+    const ids = Array.from(new Set(usage.map((r) => r.actor_user_id).filter(Boolean))) as string[];
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("id,full_name,email").in("id", ids);
+      const map: Record<string, { full_name: string | null; email: string | null }> = {};
+      (profs ?? []).forEach((p) => { map[p.id] = { full_name: p.full_name, email: p.email }; });
+      setProfiles(map);
+    }
+  }, [featureFilter]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const features = Array.from(new Set(rows.map((r) => r.feature))).sort();
+  const totalCost = rows.reduce((s, r) => s + Number(r.estimated_cost ?? 0), 0);
+  const totalTokens = rows.reduce((s, r) => s + Number(r.total_tokens ?? 0), 0);
+  const totalCredits = rows.reduce((s, r) => s + Number(r.credits_charged ?? 0), 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionHead title="AI Usage" sub="Token usage, credit burn, estimated AI cost, and top AI features." />
+        <div className="flex gap-2">
+          <Select value={featureFilter} onValueChange={setFeatureFilter}>
+            <SelectTrigger className="w-[190px]"><SelectValue placeholder="Feature" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All features</SelectItem>
+              {features.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => void load()} className="gap-2">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <StatCard label="AI calls" value={rows.length} icon={Zap} color="text-primary" />
+        <StatCard label="Estimated cost" value={`$${totalCost.toFixed(4)}`} icon={DollarSign} color="text-warning" />
+        <StatCard label="Tokens" value={totalTokens.toLocaleString()} icon={Hash} color="text-success" />
+        <StatCard label="Credits charged" value={totalCredits} icon={Coins} color="text-primary" />
+      </div>
+
+      <TableShell footer="Latest 250 AI requests">
+        <THead cols={["When", "User", "Feature", "Tokens", "Cost", "Credits", "Status"]} />
+        <tbody className="divide-y divide-border">
+          {loading ? <SkeletonRows cols={7} /> : rows.length === 0 ? (
+            <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">No AI usage yet.</td></tr>
+          ) : rows.map((row) => {
+            const user = row.actor_user_id ? profiles[row.actor_user_id] : null;
+            return (
+              <tr key={row.id} className="hover:bg-muted/20">
+                <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{new Date(row.created_at).toLocaleString()}</td>
+                <td className="px-4 py-3">
+                  <div className="font-semibold text-sm">{user?.full_name ?? user?.email ?? row.actor_user_id ?? "Unknown"}</div>
+                  <div className="text-[11px] text-muted-foreground">{user?.email ?? "-"}</div>
+                </td>
+                <td className="px-4 py-3 text-sm">{row.feature}</td>
+                <td className="px-4 py-3 text-sm">
+                  <div>{Number(row.total_tokens ?? 0).toLocaleString()}</div>
+                  <div className="text-[11px] text-muted-foreground">in {row.input_tokens} / out {row.output_tokens}</div>
+                </td>
+                <td className="px-4 py-3 text-sm font-semibold">${Number(row.estimated_cost ?? 0).toFixed(6)}</td>
+                <td className="px-4 py-3 text-sm">{row.credits_charged}</td>
+                <td className="px-4 py-3">{statusBadge(row.request_status)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </TableShell>
+    </div>
+  );
+}
+
+type SecurityAlertRow = {
+  id: string;
+  severity: "low" | "medium" | "high" | "critical";
+  alert_type: string;
+  actor_user_id: string | null;
+  title: string;
+  message: string;
+  details: Record<string, unknown>;
+  status: string;
+  created_at: string;
+};
+
+function SecurityAlertsSection({ onOpenCountChange }: { onOpenCountChange?: (count: number) => void }) {
+  const [rows, setRows] = useState<SecurityAlertRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState("open");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    let query = (supabase as any).from("security_alerts").select("*").order("created_at", { ascending: false }).limit(250);
+    if (status !== "all") query = query.eq("status", status);
+    const { data, error } = await query;
+    setLoading(false);
+    if (error) { toast.error(error.message); return; }
+    const nextRows = (data ?? []) as SecurityAlertRow[];
+    setRows(nextRows);
+    if (status === "open") onOpenCountChange?.(nextRows.length);
+  }, [status, onOpenCountChange]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const updateStatus = async (id: string, next: "reviewed" | "dismissed") => {
+    const { error } = await (supabase as any).from("security_alerts").update({
+      status: next,
+      reviewed_at: new Date().toISOString(),
+    }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    setRows((prev) => {
+      const updated = prev.map((r) => r.id === id ? { ...r, status: next } : r);
+      onOpenCountChange?.(updated.filter((r) => r.status === "open").length);
+      return updated;
+    });
+    toast.success(`Alert marked ${next}`);
+  };
+
+  const severityClass: Record<string, string> = {
+    low: "bg-muted/40 text-muted-foreground",
+    medium: "bg-warning/15 text-warning",
+    high: "bg-destructive/15 text-destructive",
+    critical: "bg-destructive text-destructive-foreground",
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SectionHead title="Security Alerts" sub="Smart flags for AI overuse, cost spikes, bulk actions, and unusual behavior." />
+        <div className="flex gap-2">
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">Open</SelectItem>
+              <SelectItem value="reviewed">Reviewed</SelectItem>
+              <SelectItem value="dismissed">Dismissed</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => void load()} className="gap-2">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <StatCard label="Open alerts loaded" value={rows.filter((r) => r.status === "open").length} icon={AlertTriangle} color="text-destructive" />
+        <StatCard label="Critical" value={rows.filter((r) => r.severity === "critical").length} icon={Shield} color="text-destructive" />
+        <StatCard label="High" value={rows.filter((r) => r.severity === "high").length} icon={TrendingUp} color="text-warning" />
+        <StatCard label="Total loaded" value={rows.length} icon={Activity} />
+      </div>
+
+      <div className="space-y-3">
+        {loading ? (
+          <div className="rounded-2xl border border-border bg-card/50 p-8 text-center text-muted-foreground animate-pulse">Loading alerts...</div>
+        ) : rows.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
+            <Shield className="mx-auto h-10 w-10 text-success mb-3" />
+            <p className="font-semibold">No alerts found</p>
+            <p className="text-sm text-muted-foreground mt-1">The current filter has no suspicious activity.</p>
+          </div>
+        ) : rows.map((row) => (
+          <div key={row.id} className="rounded-2xl border border-border bg-card/60 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className={`${severityClass[row.severity]} border-0 text-[10px] uppercase`}>{row.severity}</Badge>
+                  {statusBadge(row.status)}
+                  <span className="text-xs text-muted-foreground">{new Date(row.created_at).toLocaleString()}</span>
+                </div>
+                <h3 className="font-semibold mt-2">{row.title}</h3>
+                <p className="text-sm text-muted-foreground mt-1">{row.message}</p>
+                <div className="text-[11px] text-muted-foreground mt-2">Type: {row.alert_type}</div>
+              </div>
+              {row.status === "open" && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => void updateStatus(row.id, "reviewed")}>Review</Button>
+                  <Button size="sm" variant="ghost" onClick={() => void updateStatus(row.id, "dismissed")}>Dismiss</Button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

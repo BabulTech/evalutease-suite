@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Sparkles, Wand2, Globe, Coins, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,8 @@ import { ListChecks, ToggleLeft, Shuffle, PenLine, FileText } from "lucide-react
 import { useI18n } from "@/lib/i18n";
 import { usePlan } from "@/contexts/PlanContext";
 
-const MAX_AI_COUNT = 20;
+const MAX_AI_COUNT_DEFAULT = 20;
+const MAX_AI_COUNT_TRIAL = 10;
 
 type Props = {
   disabled?: boolean;
@@ -31,7 +32,7 @@ type GenKind = "mcq" | "true_false" | "short_answer" | "long_answer" | "mix";
 
 export function AiTab({ disabled, onSave, saving }: Props) {
   const { t } = useI18n();
-  const { plan, credits, reload, isAiAllowed } = usePlan();
+  const { plan, credits, reload, isAiAllowed, loading: planLoading } = usePlan();
   const [topic, setTopic] = useState("");
   const [count, setCount] = useState(5);
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
@@ -40,11 +41,27 @@ export function AiTab({ disabled, onSave, saving }: Props) {
   const [drafts, setDrafts] = useState<DraftQuestion[]>([]);
   const [generating, setGenerating] = useState(false);
 
+  const isTrial = plan?.slug === "enterprise_starter";
+  const MAX_AI_COUNT = isTrial ? MAX_AI_COUNT_TRIAL : MAX_AI_COUNT_DEFAULT;
+  const trialLimit = plan?.trial_ai_calls ?? 10;
+
+  // Trial AI calls remaining — fetched from trial_ai_usage table
+  const [trialUsed, setTrialUsed] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isTrial) return;
+    supabase
+      .from("trial_ai_usage")
+      .select("used_calls")
+      .maybeSingle()
+      .then(({ data }) => setTrialUsed(data?.used_calls ?? 0));
+  }, [isTrial]);
+  const trialRemaining = trialLimit - (trialUsed ?? 0);
+
   // Credits cost: 1 credit per 10 questions (rounded up)
   const creditCost = plan?.credit_cost_ai_10q ?? 3;
-  // credit_cost_ai_10q = credits per 10 questions → scale per actual count
   const ratePerQuestion = creditCost / 10;
   const totalCost = Math.max(1, Math.ceil(count * ratePerQuestion));
+  const hasEnoughCredits = isTrial ? trialRemaining > 0 : credits.balance >= totalCost;
 
   const generate = async () => {
     if (!topic.trim()) {
@@ -56,8 +73,12 @@ export function AiTab({ disabled, onSave, saving }: Props) {
       return;
     }
 
-    // Pre-flight balance check (UI only — server deducts authoritatively)
-    if (credits.balance < totalCost) {
+    // Pre-flight check
+    if (isTrial && trialRemaining <= 0) {
+      toast.error("Your 10 complimentary AI calls have been used. Upgrade to Enterprise Pro for full AI access.");
+      return;
+    }
+    if (!isTrial && credits.balance < totalCost) {
       toast.error(`Not enough credits. Need ${totalCost}, you have ${credits.balance}. Buy more credits in Billing.`);
       return;
     }
@@ -75,8 +96,14 @@ export function AiTab({ disabled, onSave, saving }: Props) {
         return;
       }
       setDrafts(out);
-      reload(); // Refresh credit balance shown in UI
-      toast.success(`${out.length} ${t("q.aiGenSuccess")} · ${totalCost} credits used`);
+      if (isTrial) {
+        setTrialUsed((prev) => (prev !== null ? prev + 1 : 1));
+      } else {
+        reload();
+      }
+      toast.success(isTrial
+        ? `${out.length} ${t("q.aiGenSuccess")} · 1 trial AI call used (${trialRemaining - 1} left)`
+        : `${out.length} ${t("q.aiGenSuccess")} · ${totalCost} credits used`);
     } catch (err) {
       const msg = (err as Error)?.message ?? "AI generation failed";
       toast.error(msg);
@@ -84,6 +111,16 @@ export function AiTab({ disabled, onSave, saving }: Props) {
       setGenerating(false);
     }
   };
+
+  // Still loading plan — don't show the upgrade gate prematurely
+  if (planLoading) {
+    return (
+      <div className="rounded-2xl border border-border bg-card/30 p-8 text-center">
+        <div className="mx-auto h-8 w-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+        <p className="mt-3 text-sm text-muted-foreground">Loading AI features…</p>
+      </div>
+    );
+  }
 
   // AI not enabled on this plan — show upgrade gate
   if (!isAiAllowed) {
@@ -113,15 +150,39 @@ export function AiTab({ disabled, onSave, saving }: Props) {
           <div className="flex items-center gap-2 font-semibold text-primary">
             <Sparkles className="h-4 w-4" /> {t("q.aiTitle")}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Coins className="h-3.5 w-3.5 text-warning" />
-            <span className="text-warning font-semibold">{credits.balance}</span>
-            <span>credits · {count} questions =</span>
-            <span className="font-semibold text-foreground">{totalCost} credits</span>
-          </div>
+          {isTrial ? (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-warning" />
+              <span className="text-warning font-semibold">{trialUsed === null ? "…" : trialRemaining}</span>
+              <span>/ {trialLimit} free AI calls remaining</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Coins className="h-3.5 w-3.5 text-warning" />
+              <span className="text-warning font-semibold">{credits.balance}</span>
+              <span>credits · {count} questions =</span>
+              <span className="font-semibold text-foreground">{totalCost} credits</span>
+            </div>
+          )}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{t("q.aiDesc")}</p>
       </div>
+
+      {/* Trial notice */}
+      {isTrial && (
+        <div className={`rounded-lg border px-4 py-2.5 text-xs flex items-center gap-2 ${
+          trialRemaining <= 0
+            ? "border-destructive/30 bg-destructive/5 text-destructive"
+            : "border-warning/30 bg-warning/5 text-warning"
+        }`}>
+          <Sparkles className="h-3.5 w-3.5 shrink-0" />
+          {trialRemaining <= 0 ? (
+            <span>All <strong>{trialLimit} complimentary AI calls</strong> have been used. <a href="/billing" className="underline font-semibold">Upgrade to Enterprise Pro →</a></span>
+          ) : (
+            <span>Trial plan: <strong>{trialRemaining} of {trialLimit} AI calls remaining</strong> · max {MAX_AI_COUNT_TRIAL} questions per generation.</span>
+          )}
+        </div>
+      )}
 
       {/* Type picker */}
       <div>
@@ -230,17 +291,17 @@ export function AiTab({ disabled, onSave, saving }: Props) {
           <Button
             type="button"
             onClick={generate}
-            disabled={generating || disabled || credits.balance < totalCost}
+            disabled={generating || disabled || !hasEnoughCredits}
             className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
           >
             <Wand2 className="h-4 w-4" />
-            {generating ? t("q.aiGenerating") : `${t("q.aiGenerate")} (${totalCost} cr)`}
+            {generating ? t("q.aiGenerating") : isTrial ? `${t("q.aiGenerate")} (Free)` : `${t("q.aiGenerate")} (${totalCost} cr)`}
           </Button>
         </div>
       </div>
 
-      {/* Insufficient credits warning */}
-      {credits.balance < totalCost && (
+      {/* Insufficient credits warning — only for non-trial plans */}
+      {!isTrial && credits.balance < totalCost && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center gap-2">
           <Coins className="h-4 w-4 shrink-0" />
           <span>You need <strong>{totalCost} credits</strong> but only have <strong>{credits.balance}</strong>. <a href="/billing" className="underline font-semibold">Buy credits →</a></span>

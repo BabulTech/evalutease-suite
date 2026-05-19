@@ -20,6 +20,7 @@ import {
   type QuestionSource,
 } from "@/components/questions/types";
 import { draftToRow } from "@/components/questions/persistence";
+import { logClientActivity } from "@/lib/audit";
 
 export const Route = createFileRoute("/_app/categories/$categoryId/$subId")({
   component: SubCategoryQuestionsPage,
@@ -98,6 +99,8 @@ function SubCategoryQuestionsPage() {
   const saveDrafts = async (drafts: DraftQuestion[], source: QuestionSource) => {
     if (!user) return;
     setSaving(true);
+    // Refresh session before insert to avoid 401 on long-form questions (token may expire while editing)
+    await supabase.auth.getSession();
     const rows = drafts.map((d) => draftToRow(d, { ownerId: user.id, categoryId, subcategoryId: subId, source }));
     const { data, error } = await supabase.from("questions")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,6 +117,27 @@ function SubCategoryQuestionsPage() {
     }));
     setQuestions((prev) => [...inserted, ...prev]);
     setQuestionTotal((prev) => prev + inserted.length);
+    const methodLabel =
+      source === "manual" ? "manually" :
+      source === "ai" ? "with AI" :
+      source === "ocr" ? "from scan" :
+      "from upload";
+    void logClientActivity({
+      actionType: "created",
+      module: "questions",
+      entityType: inserted.length === 1 ? "question" : "question_batch",
+      entityId: inserted[0]?.id ?? null,
+      entityLabel: inserted.length === 1 ? inserted[0]?.text?.slice(0, 120) : `${inserted.length} questions`,
+      message: `Created ${inserted.length} question${inserted.length === 1 ? "" : "s"} ${methodLabel}`,
+      details: {
+        source,
+        count: inserted.length,
+        category_id: categoryId,
+        topic_id: subId,
+        question_ids: inserted.map((q) => q.id),
+      },
+      riskScore: inserted.length >= 50 ? 45 : inserted.length >= 20 ? 25 : 5,
+    });
     toast.success(`${inserted.length} ${inserted.length === 1 ? t("q.count") : t("q.counts")} ${t("q.saved")}`);
     // Collapse add panel after saving so user sees the new questions
     if (inserted.length > 0) setAddOpen(false);
@@ -130,14 +154,35 @@ function SubCategoryQuestionsPage() {
     const { error } = await supabase.from("questions").update(update).eq("id", id);
     if (error) { toast.error(error.message); return; }
     setQuestions((prev) => prev.map((q) => q.id === id ? { ...q, ...update } : q));
+    void logClientActivity({
+      actionType: "updated",
+      module: "questions",
+      entityType: "question",
+      entityId: id,
+      entityLabel: update.text.slice(0, 120),
+      message: "Updated question",
+      details: { category_id: categoryId, topic_id: subId },
+      riskScore: 5,
+    });
     toast.success(t("q.updated"));
   };
 
   const deleteQuestion = async (id: string) => {
+    const target = questions.find((q) => q.id === id);
     const { error } = await supabase.from("questions").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
     setQuestions((prev) => prev.filter((q) => q.id !== id));
     setQuestionTotal((prev) => Math.max(0, prev - 1));
+    void logClientActivity({
+      actionType: "deleted",
+      module: "questions",
+      entityType: "question",
+      entityId: id,
+      entityLabel: target?.text?.slice(0, 120) ?? "Question",
+      message: "Deleted question",
+      details: { category_id: categoryId, topic_id: subId },
+      riskScore: 35,
+    });
     toast.success(t("q.deleted"));
   };
 

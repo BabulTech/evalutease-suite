@@ -27,13 +27,14 @@ function PlanBanners() {
   // Hosts never see plan banners; don't flash while we resolve
   if (hostLoading || isHost) return null;
 
+  const isTrial = plan?.slug === "enterprise_starter";
   const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry <= 7 && daysUntilExpiry > 0;
-  const isPaid = plan && plan.slug !== "individual_starter";
+  const isFree = plan?.slug === "individual_starter" || plan?.slug === "enterprise_free";
 
   return (
     <>
       {/* Subscription expired — hard block notice */}
-      {isExpired && isPaid && (
+      {isExpired && !isFree && (
         <div className="bg-destructive text-destructive-foreground px-3 sm:px-4 py-3 flex items-start sm:items-center gap-3">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <div className="flex-1 text-xs sm:text-sm font-medium leading-relaxed">
@@ -45,24 +46,37 @@ function PlanBanners() {
         </div>
       )}
 
-      {/* Expiring soon warning */}
-      {isExpiringSoon && !dismissedWarning && (
-        <div className="bg-warning/90 text-warning-foreground px-3 sm:px-4 py-3 flex items-start sm:items-center gap-3">
-          <Clock className="h-4 w-4 shrink-0" />
-          <div className="flex-1 text-xs sm:text-sm font-medium leading-relaxed">
-            Your {plan?.name} plan expires in <strong>{daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"}</strong>. Renew now to avoid losing access.
+      {/* Trial active — always show days remaining */}
+      {isTrial && !isExpired && daysUntilExpiry !== null && !dismissedWarning && (
+        <div className="bg-yellow-500/15 border-b border-yellow-500/25 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-3">
+          <Clock className="h-4 w-4 text-yellow-400 shrink-0" />
+          <div className="flex-1 text-xs text-yellow-300 font-medium leading-relaxed">
+            🎉 Enterprise Trial — <strong>{daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"} remaining</strong>. Upgrade to Enterprise Pro to keep full access after trial ends.
           </div>
-          <Link to="/billing" search={{ plan: "" }} className="shrink-0 rounded-lg bg-black/20 hover:bg-black/30 px-3 py-1.5 text-xs font-semibold transition-colors">
-            Renew
+          <Link to="/billing" search={{ plan: "" }} className="shrink-0 rounded-lg bg-yellow-400 text-black px-3 py-1.5 text-xs font-semibold hover:bg-yellow-300 transition-colors">
+            Upgrade
           </Link>
-          <button type="button" title="Dismiss" onClick={() => setDismissedWarning(true)} className="shrink-0 rounded p-1 hover:bg-black/20 transition-colors">
+          <button type="button" title="Dismiss" onClick={() => setDismissedWarning(true)} className="shrink-0 rounded p-1 hover:bg-yellow-400/20 transition-colors text-yellow-400">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
+      {/* Trial expiring soon — extra urgent warning */}
+      {isTrial && isExpiringSoon && !dismissedWarning && (
+        <div className="bg-warning/90 text-warning-foreground px-3 sm:px-4 py-3 flex items-start sm:items-center gap-3">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div className="flex-1 text-xs sm:text-sm font-medium leading-relaxed">
+            ⚠️ Trial expires in <strong>{daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"}</strong>! Upgrade now to avoid losing AI access and team tools.
+          </div>
+          <Link to="/billing" search={{ plan: "" }} className="shrink-0 rounded-lg bg-black/20 hover:bg-black/30 px-3 py-1.5 text-xs font-semibold transition-colors">
+            Upgrade Now
+          </Link>
+        </div>
+      )}
+
       {/* Free plan upsell — shown once, dismissible */}
-      {!isPaid && !isExpired && !dismissedExpiry && (
+      {isFree && !isExpired && !dismissedExpiry && (
         <div className="bg-primary/10 border-b border-primary/20 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-3">
           <Zap className="h-4 w-4 text-primary shrink-0" />
           <div className="flex-1 text-xs text-primary font-medium leading-relaxed">

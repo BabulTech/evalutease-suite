@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import {
   ChevronLeft,
   Copy,
@@ -58,10 +59,12 @@ import type { LeaderboardEntry } from "@/components/sessions/Leaderboard";
 import {
   downloadQuizReportCsv,
   getQuizReportRows,
+  printQuizResults,
   type QuizReportAttempt,
 } from "@/lib/quiz-reports";
 import { copyText } from "@/lib/copy-text";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { usePlan } from "@/contexts/PlanContext";
 
 export const Route = createFileRoute("/_app/sessions/$sessionId")({
   component: SessionLobbyPage,
@@ -154,6 +157,7 @@ function SessionLobbyPage() {
   const { sessionId } = Route.useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { plan } = usePlan();
   const [session, setSession] = useState<SessionRow | null>(null);
   const isMobile = useIsMobile();
   const [categoryName, setCategoryName] = useState<string>("");
@@ -923,24 +927,35 @@ function SessionLobbyPage() {
           <>
             <Button
               variant="outline"
-              onClick={() => window.print()}
+              onClick={() => printQuizResults({
+                title: session.title,
+                teacherName,
+                schoolName,
+                subject,
+                createdAt: session.created_at,
+                questionCount: session.question_count ?? 0,
+                attempts: reportAttempts,
+              })}
               className="gap-1.5"
             >
               <Printer className="h-4 w-4" /> Print Results
             </Button>
             <Button
               onClick={() =>
-                downloadQuizReportCsv({
-                  title: session.title,
-                  categoryLabel: [categoryName, subcategoryName].filter(Boolean).join(" -> "),
-                  teacherName,
-                  schoolName,
-                  subjectLabel: subject,
-                  topicLabel: session.topic ?? "",
-                  createdAt: session.created_at,
-                  questionCount,
-                  attempts: reportAttempts,
-                })
+                downloadQuizReportCsv(
+                  {
+                    title: session.title,
+                    categoryLabel: [categoryName, subcategoryName].filter(Boolean).join(" -> "),
+                    teacherName,
+                    schoolName,
+                    subjectLabel: subject,
+                    topicLabel: session.topic ?? "",
+                    createdAt: session.created_at,
+                    questionCount,
+                    attempts: reportAttempts,
+                  },
+                  { watermark: plan?.file_export_watermark !== false },
+                )
               }
               className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
             >
@@ -1796,12 +1811,12 @@ function EditSessionDialog({
   const submit = async () => {
     const t = title.trim();
     if (!t) {
-      toast.error("Title is required");
+      validationError("Title is required");
       return;
     }
     const n = Number(time);
     if (!Number.isFinite(n) || n < 5 || n > 3600) {
-      toast.error("Time must be between 5 and 3600 seconds");
+      validationError("Time must be between 5 and 3600 seconds");
       return;
     }
     setBusy(true);

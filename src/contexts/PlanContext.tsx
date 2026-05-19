@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useHost } from "@/contexts/HostContext";
+import { ensureSelectedPlan } from "@/lib/plan.server";
 
 // ─── Plan types ───────────────────────────────────────────────
 export type PlanSlug =
@@ -9,6 +10,7 @@ export type PlanSlug =
   | "individual_pro"
   | "individual_pro_plus"
   | "enterprise_starter"
+  | "enterprise_free"
   | "enterprise_pro"
   | "enterprise_elite";
 
@@ -24,6 +26,7 @@ export type PlanInfo = {
   credits_per_month: number;
   // Hard limits (-1 = unlimited)
   quizzes_per_day: number;
+  scheduled_quizzes_per_day: number;
   participants_per_session: number;
   participants_total: number;
   question_bank: number;
@@ -36,6 +39,13 @@ export type PlanInfo = {
   white_label: boolean;
   ai_interview: boolean;
   ai_coding_test: boolean;
+  watermark_enabled: boolean;
+  file_export_watermark: boolean;
+  email_template_allowed: boolean;
+  can_buy_credits: boolean;
+  // Trial
+  trial_days: number;
+  trial_ai_calls: number;
   // Credit costs
   credit_cost_ai_10q: number;
   credit_cost_ai_scan: number;
@@ -99,17 +109,24 @@ const FREE_PLAN: PlanInfo = {
   price_pkr: 0,
   credits_per_month: 0,
   quizzes_per_day: 3,
+  scheduled_quizzes_per_day: 1,
   participants_per_session: 50,
   participants_total: 50,
-  question_bank: 50,
+  question_bank: 100,
   sessions_total: -1,
-  max_hosts: 0,
+  max_hosts: 1,
   ai_calls_per_day: 0,
   ai_enabled: false,
   custom_branding: false,
   white_label: false,
   ai_interview: false,
   ai_coding_test: false,
+  watermark_enabled: true,
+  file_export_watermark: true,
+  email_template_allowed: false,
+  can_buy_credits: false,
+  trial_days: 0,
+  trial_ai_calls: 0,
   credit_cost_ai_10q: 3,
   credit_cost_ai_scan: 2,
   credit_cost_ai_interview: 5,
@@ -148,17 +165,24 @@ function rowToPlan(raw: Record<string, unknown>): PlanInfo {
     price_pkr: (raw.price_pkr as number) ?? 0,
     credits_per_month: (raw.credits_per_month as number) ?? 0,
     quizzes_per_day: (raw.quizzes_per_day as number) ?? 3,
+    scheduled_quizzes_per_day: (raw.scheduled_quizzes_per_day as number) ?? 1,
     participants_per_session: (raw.participants_per_session as number) ?? 50,
     participants_total: (raw.participants_total as number) ?? 50,
-    question_bank: (raw.question_bank as number) ?? 50,
+    question_bank: (raw.question_bank as number) ?? 100,
     sessions_total: (raw.sessions_total as number) ?? -1,
-    max_hosts: (raw.max_hosts as number) ?? 0,
+    max_hosts: (raw.max_hosts as number) ?? 1,
     ai_calls_per_day: (raw.ai_calls_per_day as number) ?? 0,
     ai_enabled: (raw.ai_enabled as boolean) ?? false,
     custom_branding: (raw.custom_branding as boolean) ?? false,
     white_label: (raw.white_label as boolean) ?? false,
     ai_interview: (raw.ai_interview as boolean) ?? false,
     ai_coding_test: (raw.ai_coding_test as boolean) ?? false,
+    watermark_enabled: (raw.watermark_enabled as boolean) ?? true,
+    file_export_watermark: (raw.file_export_watermark as boolean) ?? true,
+    email_template_allowed: (raw.email_template_allowed as boolean) ?? false,
+    can_buy_credits: (raw.can_buy_credits as boolean) ?? false,
+    trial_days: (raw.trial_days as number) ?? 0,
+    trial_ai_calls: (raw.trial_ai_calls as number) ?? 0,
     credit_cost_ai_10q: (raw.credit_cost_ai_10q as number) ?? 3,
     credit_cost_ai_scan: (raw.credit_cost_ai_scan as number) ?? 2,
     credit_cost_ai_interview: (raw.credit_cost_ai_interview as number) ?? 5,
@@ -253,6 +277,50 @@ export function PlanProvider({ children }: { children: ReactNode }) {
     const isExpiredSub = hostInfo ? false : (expiry ? new Date(expiry) < new Date() : false);
     setPlan(planRaw && !isExpiredSub ? rowToPlan(planRaw) : { ...FREE_PLAN });
 
+
+
+    // Auto-fix: if subscription is missing OR doesn't match the user's selected_plan from signup,
+    // call ensure_my_plan to correct it (recovers from trigger failures at signup time)
+    if (!hostInfo) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("selected_plan")
+        .eq("id", user.id)
+        .maybeSingle();
+      const metadataPlan = user.user_metadata?.selected_plan as string | undefined;
+      const pendingPlan = typeof window !== "undefined"
+        ? window.localStorage.getItem("pending_signup_plan")
+        : null;
+      const wanted = [pendingPlan, metadataPlan, profile?.selected_plan].find(
+        (slug): slug is "individual_starter" | "enterprise_starter" =>
+          slug === "individual_starter" || slug === "enterprise_starter"
+      );
+      const current = (planRaw as { slug?: string } | null)?.slug ?? null;
+      if (wanted && wanted !== current) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (token) {
+            await ensureSelectedPlan({ data: { planSlug: wanted, _token: token } });
+            if (typeof window !== "undefined") window.localStorage.removeItem("pending_signup_plan");
+            // Reload subscription after fix
+            const { data: fixed } = await supabase
+              .from("user_subscriptions")
+              .select("*, plans(*)")
+              .eq("user_id", user.id)
+              .eq("status", "active")
+              .maybeSingle();
+            if (fixed?.plans) {
+              setPlan(rowToPlan(fixed.plans as Record<string, unknown>));
+              setExpiresAt((fixed.expires_at as string | null) ?? null);
+            }
+          }
+        } catch (error) {
+          console.warn("Plan repair failed", error);
+        }
+      }
+    }
+
     // Set usage
     setUsage({
       quizzes_today: quizzesToday.count ?? 0,
@@ -308,7 +376,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   // Hosts always have AI access (they pay via org credits).
   // Any paid plan (non-free, non-individual_starter) also gets AI.
   // The credit balance gates actual usage at the server level.
-  const isPaidPlan = currentPlan.slug !== "free" && currentPlan.slug !== "individual_starter";
+  const isPaidPlan = currentPlan.slug !== "free" && currentPlan.slug !== "individual_starter" && currentPlan.slug !== "enterprise_free";
   const isAiAllowed = !!hostInfo || currentPlan.ai_enabled || isPaidPlan;
   const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
   const daysUntilExpiry = expiresAt

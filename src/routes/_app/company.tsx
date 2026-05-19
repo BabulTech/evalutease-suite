@@ -9,6 +9,7 @@ import {
   PlusCircle, MinusCircle, History,
 } from "lucide-react";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { usePlan } from "@/contexts/PlanContext";
@@ -195,7 +196,7 @@ function CompanyPage() {
 
   // ── Onboarding Wizard ─────────────────────────────────────────
   const saveCompany = async (goNext: boolean) => {
-    if (!user || !company.company_name.trim()) { toast.error("Organization name is required"); return; }
+    if (!user || !company.company_name.trim()) { validationError("Organization name is required"); return; }
     setSaving(true);
     const payload = {
       admin_user_id: user.id,
@@ -397,8 +398,8 @@ function HostsStep({ companyId, members, maxHosts, plan, companyName, onMembersC
   const [draft, setDraft] = useState({ full_name: "", invited_email: "", department: "", designation: "", initial_credits: "10" });
 
   const add = async () => {
-    if (!draft.full_name.trim() || !draft.invited_email.trim()) { toast.error("Name and email required"); return; }
-    if (members.length >= maxHosts) { toast.error(`Max ${maxHosts} hosts on ${plan?.name}`); return; }
+    if (!draft.full_name.trim() || !draft.invited_email.trim()) { validationError("Name and email required"); return; }
+    if (members.length >= maxHosts) { validationError(`Max ${maxHosts} hosts on ${plan?.name}`); return; }
     const initialCredits = Math.max(0, parseInt(draft.initial_credits) || 0);
     setSaving(true);
     const token = crypto.randomUUID();
@@ -411,15 +412,18 @@ function HostsStep({ companyId, members, maxHosts, plan, companyName, onMembersC
     }).select("*").single();
     if (error) { setSaving(false); toast.error((error as Error).message); return; }
 
-    // Send invite email via Edge Function (uses Supabase configured SMTP)
     const member = data as unknown as MemberRow;
-    const { error: fnErr } = await supabase.functions.invoke("send-host-invite", {
+    const appOrigin = import.meta.env.VITE_APP_URL || window.location.origin;
+    const inviteLink1 = `${appOrigin}/accept-invite?token=${token}&member_id=${member.id}&email=${encodeURIComponent(member.invited_email)}`;
+    const { error: fnErr } = await supabase.functions.invoke("send-email", {
       body: {
-        invited_email: member.invited_email,
-        full_name: member.full_name,
-        company_name: companyName,
-        invite_token: token,
-        member_id: member.id,
+        type: "host_invite",
+        data: {
+          to: member.invited_email,
+          fullName: member.full_name,
+          companyName,
+          inviteLink: inviteLink1,
+        },
       },
     });
     setSaving(false);
@@ -480,10 +484,12 @@ function HostsStep({ companyId, members, maxHosts, plan, companyName, onMembersC
                   <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>{DESIGNATIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                 </Select></div>
-              <div className="space-y-1.5 sm:col-span-2"><Label className="text-xs">Initial Credits</Label>
-                <Input type="number" min={0} value={draft.initial_credits} onChange={(e) => setDraft({ ...draft, initial_credits: e.target.value })} placeholder="10" className="h-8 text-sm w-32" />
-                <p className="text-[10px] text-muted-foreground mt-1">Deducted from your balance when host accepts invite</p>
-              </div>
+              {plan?.can_buy_credits && (
+                <div className="space-y-1.5 sm:col-span-2"><Label className="text-xs">Initial Credits</Label>
+                  <Input type="number" min={0} value={draft.initial_credits} onChange={(e) => setDraft({ ...draft, initial_credits: e.target.value })} placeholder="10" className="h-8 text-sm w-32" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Deducted from your balance when host accepts invite</p>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}><X className="h-3.5 w-3.5 mr-1" /> Cancel</Button>
@@ -637,7 +643,7 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
   const cfg = getCfg(profileDraft.company_type);
 
   const saveProfile = async () => {
-    if (!profileDraft.company_name.trim()) { toast.error("Name required"); return; }
+    if (!profileDraft.company_name.trim()) { validationError("Name required"); return; }
     setSavingProfile(true);
     const { error } = await supabase.from("company_profiles").update({
       company_name: profileDraft.company_name.trim(),
@@ -661,11 +667,11 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
   };
 
   const addHost = async () => {
-    if (!hostDraft.full_name.trim() || !hostDraft.invited_email.trim()) { toast.error("Name and email required"); return; }
-    if (members.length >= maxHosts) { toast.error(`Max ${maxHosts} hosts on ${plan?.name}`); return; }
-    const initialCredits = Math.max(0, parseInt(hostDraft.initial_credits) || 0);
-    if (initialCredits > credits.balance) {
-      toast.error(`Initial credits (${initialCredits}) exceeds your pool (${credits.balance})`);
+    if (!hostDraft.full_name.trim() || !hostDraft.invited_email.trim()) { validationError("Name and email required"); return; }
+    if (members.length >= maxHosts) { validationError(`Max ${maxHosts} hosts on ${plan?.name}`); return; }
+    const initialCredits = plan?.can_buy_credits ? Math.max(0, parseInt(hostDraft.initial_credits) || 0) : 0;
+    if (plan?.can_buy_credits && initialCredits > credits.balance) {
+      validationError(`Initial credits (${initialCredits}) exceeds your pool (${credits.balance})`);
       return;
     }
     setAddingHost(true);
@@ -679,14 +685,18 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
     }).select("id").single();
     if (error) { setAddingHost(false); toast.error((error as Error).message); return; }
 
-    // Send invite email via Edge Function
-    const { error: fnErr } = await supabase.functions.invoke("send-host-invite", {
+    const memberId2 = (data as { id: string }).id;
+    const appOrigin2 = import.meta.env.VITE_APP_URL || window.location.origin;
+    const inviteLink2 = `${appOrigin2}/accept-invite?token=${token}&member_id=${memberId2}&email=${encodeURIComponent(hostDraft.invited_email.trim().toLowerCase())}`;
+    const { error: fnErr } = await supabase.functions.invoke("send-email", {
       body: {
-        invited_email: hostDraft.invited_email.trim().toLowerCase(),
-        full_name: hostDraft.full_name.trim(),
-        company_name: company.company_name,
-        invite_token: token,
-        member_id: (data as { id: string }).id,
+        type: "host_invite",
+        data: {
+          to: hostDraft.invited_email.trim().toLowerCase(),
+          fullName: hostDraft.full_name.trim(),
+          companyName: company.company_name,
+          inviteLink: inviteLink2,
+        },
       },
     });
     setAddingHost(false);
@@ -714,9 +724,9 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
   const doCredit = async () => {
     if (!creditTarget || !user) return;
     const amt = parseInt(creditAmt);
-    if (isNaN(amt) || amt <= 0) { toast.error("Enter a valid amount"); return; }
-    if (creditAction === "send" && amt > credits.balance) { toast.error(`You only have ${credits.balance} credits`); return; }
-    if (!creditTarget.user_id) { toast.error("Host hasn't signed up yet — share their invite link first"); return; }
+    if (isNaN(amt) || amt <= 0) { validationError("Enter a valid amount"); return; }
+    if (creditAction === "send" && amt > credits.balance) { validationError(`You only have ${credits.balance} credits`); return; }
+    if (!creditTarget.user_id) { validationError("Host hasn't signed up yet — share their invite link first"); return; }
     setTransferring(true);
     if (creditAction === "send") {
       const { error } = await supabase.rpc("transfer_credits_to_host", {
@@ -750,11 +760,14 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
     if (tab === "credits") void loadTx();
   };
 
+  const showCredits = !!plan?.can_buy_credits;
   const TABS: { id: DashTab; label: string; icon: React.ElementType; badge?: number }[] = [
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
-    { id: "team",     label: "Team",     icon: Users },
-    { id: "credits",  label: "Credits",  icon: Coins },
-    { id: "requests", label: "Requests", icon: SendHorizonal, badge: pendingCount },
+    { id: "overview",  label: "Overview", icon: LayoutDashboard },
+    { id: "team",      label: "Team",     icon: Users },
+    ...(showCredits ? [
+      { id: "credits"  as DashTab, label: "Credits",  icon: Coins },
+      { id: "requests" as DashTab, label: "Requests", icon: SendHorizonal, badge: pendingCount },
+    ] : []),
   ];
 
   return (
@@ -942,21 +955,23 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
                     <SelectTrigger className="min-h-11 sm:min-h-8 text-sm"><SelectValue placeholder="Optional" /></SelectTrigger>
                     <SelectContent>{DESIGNATIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                   </Select></div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label className="text-xs flex items-center gap-1.5">
-                    <Coins className="h-3 w-3 text-warning" /> Initial Credits
-                  </Label>
-                  <Input
-                    type="number" min={0} max={credits.balance}
-                    value={hostDraft.initial_credits}
-                    onChange={(e) => setHostDraft({ ...hostDraft, initial_credits: e.target.value })}
-                    placeholder="10"
-                    className="h-8 text-sm w-32"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Credits deducted from your pool (<span className="font-semibold text-warning">{credits.balance}</span> available) and given to host on signup.
-                  </p>
-                </div>
+                {plan?.can_buy_credits && (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs flex items-center gap-1.5">
+                      <Coins className="h-3 w-3 text-warning" /> Initial Credits
+                    </Label>
+                    <Input
+                      type="number" min={0} max={credits.balance}
+                      value={hostDraft.initial_credits}
+                      onChange={(e) => setHostDraft({ ...hostDraft, initial_credits: e.target.value })}
+                      placeholder="10"
+                      className="h-8 text-sm w-32"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Credits deducted from your pool (<span className="font-semibold text-warning">{credits.balance}</span> available) and given to host on signup.
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="ghost" onClick={() => setShowAddHost(false)} className="h-10">Cancel</Button>
@@ -996,28 +1011,34 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
                       {m.designation && <span className="inline-flex items-center gap-1 rounded-full bg-muted/50 text-muted-foreground px-2 py-0.5 text-[10px] font-medium"><Briefcase className="h-2.5 w-2.5" />{m.designation}</span>}
                     </div>
                   </div>
-                  {/* Credits */}
-                  <div className="text-center shrink-0 hidden sm:block">
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                      {m.user_id ? "Balance" : "Pre-allocated"}
+                  {/* Credits — paid plans only */}
+                  {showCredits && (
+                    <div className="text-center shrink-0 hidden sm:block">
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {m.user_id ? "Balance" : "Pre-allocated"}
+                      </div>
+                      <div className="font-bold text-warning text-lg">
+                        {m.user_id ? (m.balance ?? 0) : (m.credit_limit ?? 0)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">credits</div>
                     </div>
-                    <div className="font-bold text-warning text-lg">
-                      {m.user_id ? (m.balance ?? 0) : (m.credit_limit ?? 0)}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">credits</div>
-                  </div>
+                  )}
                   {/* Actions */}
-                  <div className="grid grid-cols-2 min-[460px]:flex min-[460px]:flex-col gap-1.5 shrink-0 w-full min-[460px]:w-auto">
-                    <Button size="sm" variant="outline" className="h-9 min-[460px]:h-7 px-2.5 text-[11px] gap-1 text-success border-success/30 hover:bg-success/10"
-                      onClick={() => { setCreditTarget(m); setCreditAction("send"); }}>
-                      <PlusCircle className="h-3 w-3" /> Send
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-9 min-[460px]:h-7 px-2.5 text-[11px] gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
-                      onClick={() => { setCreditTarget(m); setCreditAction("deduct"); }}>
-                      <MinusCircle className="h-3 w-3" /> Deduct
-                    </Button>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    {showCredits && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px] gap-1 text-success border-success/30 hover:bg-success/10"
+                          onClick={() => { setCreditTarget(m); setCreditAction("send"); }}>
+                          <PlusCircle className="h-3 w-3" /> Send
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2.5 text-[11px] gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                          onClick={() => { setCreditTarget(m); setCreditAction("deduct"); }}>
+                          <MinusCircle className="h-3 w-3" /> Deduct
+                        </Button>
+                      </>
+                    )}
                     <button type="button" title="Remove host" onClick={() => void removeHost(m.id, m.full_name)}
-                      className="h-9 min-[460px]:h-7 col-span-2 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors px-1.5">
+                      className="h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors px-1.5">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -1077,16 +1098,20 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
                       <div className="font-medium text-sm">{m.full_name}</div>
                       <div className="text-xs text-muted-foreground">{m.invited_email}</div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="font-bold text-warning">{m.user_id ? (m.balance ?? 0) : "—"}</div>
-                      <div className="text-[10px] text-muted-foreground">balance</div>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <Button size="sm" variant="outline" className="h-9 sm:h-7 px-2 text-[11px] gap-1 text-success border-success/30 hover:bg-success/10"
-                        onClick={() => { setCreditTarget(m); setCreditAction("send"); setTab("team"); }}>
-                        <SendHorizonal className="h-3 w-3" /> Send
-                      </Button>
-                    </div>
+                    {showCredits && (
+                      <div className="text-right shrink-0">
+                        <div className="font-bold text-warning">{m.user_id ? (m.balance ?? 0) : "—"}</div>
+                        <div className="text-[10px] text-muted-foreground">balance</div>
+                      </div>
+                    )}
+                    {showCredits && (
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="outline" className="h-9 sm:h-7 px-2 text-[11px] gap-1 text-success border-success/30 hover:bg-success/10"
+                          onClick={() => { setCreditTarget(m); setCreditAction("send"); setTab("team"); }}>
+                          <SendHorizonal className="h-3 w-3" /> Send
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

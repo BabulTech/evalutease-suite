@@ -398,7 +398,7 @@ function ReportsPage() {
         questionCount: selectedAttempts[0]?.totalQuestions ?? 0,
         attempts: selectedAttempts,
       },
-      { rows: filteredRows, filterSummary },
+      { rows: filteredRows, filterSummary, watermark: plan?.file_export_watermark !== false },
     );
   };
 

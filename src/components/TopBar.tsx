@@ -6,6 +6,7 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 import { useProfile } from "@/contexts/ProfileContext";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Settings, LogOut } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
 
 type Props = { onMenuClick?: () => void };
 
@@ -60,6 +61,7 @@ export function TopBar({ onMenuClick }: Props) {
 
       <div className="flex items-center gap-3">
         <LanguageSwitcher />
+        <NotificationBell />
 
         <div className="relative" ref={dropdownRef}>
           <button

@@ -23,6 +23,7 @@ import {
   Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { usePlan, type PlanInfo } from "@/contexts/PlanContext";
@@ -152,7 +153,7 @@ function HostBillingView({ hostMember, userId, creditTx }: {
 
   const handleRequest = async () => {
     const amount = parseInt(reqAmount);
-    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return; }
+    if (!amount || amount <= 0) { validationError("Enter a valid amount"); return; }
     setRequesting(true);
     const { error } = await (supabase as any).from("credit_requests").insert({
       member_id: hostMember.member_id,
@@ -252,12 +253,10 @@ function HostBillingView({ hostMember, userId, creditTx }: {
 /* ─────────────────────────────────────────
    MAIN BILLING PAGE
 ───────────────────────────────────────── */
-const CREDIT_PACKS = [
-  { credits: 100,  price_pkr: 250,  label: "Starter",    badge: null,         perCredit: "2.5" },
-  { credits: 300,  price_pkr: 650,  label: "Value",      badge: "Popular",    perCredit: "2.2" },
-  { credits: 700,  price_pkr: 1300, label: "Power",      badge: "Best Value", perCredit: "1.9" },
-  { credits: 1500, price_pkr: 2500, label: "Enterprise", badge: null,         perCredit: "1.7" },
-] as const;
+type CreditPackage = {
+  id: string; name: string; credits: number; price_pkr: number;
+  badge_text: string | null; sort_order: number;
+};
 
 function BillingPage() {
   const { user } = useAuth();
@@ -269,6 +268,7 @@ function BillingPage() {
   const [accounts,  setAccounts]  = useState<PaymentAccount[]>([]);
   const [history,   setHistory]   = useState<PaymentHistory[]>([]);
   const [creditTx,  setCreditTx]  = useState<CreditTx[]>([]);
+  const [creditPacks, setCreditPacks] = useState<CreditPackage[]>([]);
   const [selectedPlan,   setSelectedPlan]   = useState<PlanInfo | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<string>("");
   const [step,    setStep]    = useState<"overview" | "pick" | "pay" | "upload" | "done">("overview");
@@ -281,12 +281,17 @@ function BillingPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const isFreeUser = !currentPlan || currentPlan.slug === "individual_starter";
+  const canBuyCredits = currentPlan?.can_buy_credits ?? false;
   const individualPlans  = allPlans.filter((p) => p.tier === "individual"  && p.price_pkr > 0);
   const enterprisePlans  = allPlans.filter((p) => p.tier === "enterprise"  && p.price_pkr > 0);
 
   useEffect(() => {
     supabase.from("payment_accounts").select("*").eq("is_active", true)
       .then(({ data }) => { if (data) setAccounts(data as PaymentAccount[]); });
+    // Load dynamic credit packages from DB
+    supabase.from("credit_packages").select("id,name,credits,price_pkr,badge_text,sort_order")
+      .eq("is_active", true).order("sort_order")
+      .then(({ data }) => { if (data) setCreditPacks(data as CreditPackage[]); });
     if (user) {
       supabase.from("manual_payments")
         .select("id,amount_pkr,payment_method,status,credits_to_add,created_at,reviewed_at")
@@ -312,11 +317,11 @@ function BillingPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const handleBuyCreditPack = (pack: typeof CREDIT_PACKS[number]) => {
+  const handleBuyCreditPack = (pack: CreditPackage) => {
     const fakePlan = {
       ...currentPlan!,
-      id: "__credit_pack__",
-      name: `${pack.credits} Credits — ${pack.label} Pack`,
+      id: `__credit_pack__${pack.id}`,
+      name: `${pack.credits} Credits — ${pack.name}`,
       price_pkr: pack.price_pkr,
       credits_per_month: pack.credits,
       slug: currentPlan!.slug,
@@ -345,7 +350,7 @@ function BillingPage() {
     // Store the storage path only — admin generates a signed URL when reviewing
     const { error } = await supabase.from("manual_payments").insert({
       user_id:         user.id,
-      plan_id:         selectedPlan.id === "__credit_pack__" ? null : selectedPlan.id,
+      plan_id:         selectedPlan.id.startsWith("__credit_pack__") ? null : selectedPlan.id,
       amount_pkr:      selectedPlan.price_pkr,
       payment_method:  selectedMethod,
       transaction_ref: txRef.trim() || null,
@@ -420,7 +425,8 @@ function BillingPage() {
           <Zap className="h-5 w-5" /> Choose a Plan to Get Started
         </button>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
+        <div className={`grid gap-3 ${canBuyCredits ? "grid-cols-2" : "grid-cols-1"}`}>
+          {canBuyCredits && (
           <button
             type="button"
             onClick={() => { setPickMode("pack"); setStep("pick"); }}
@@ -428,6 +434,7 @@ function BillingPage() {
           >
             <Plus className="h-5 w-5" /> Buy Credits
           </button>
+          )}
           <button
             type="button"
             onClick={() => { setPickMode("plan"); setStep("pick"); }}
@@ -532,22 +539,35 @@ function BillingPage() {
 
       {pickMode === "pack" ? (
         <div className="grid grid-cols-2 gap-3">
-          {CREDIT_PACKS.map((pack) => (
+          {!canBuyCredits && (
+            <div className="col-span-2 rounded-2xl border border-warning/30 bg-warning/5 p-5 text-center space-y-2">
+              <Coins className="h-8 w-8 text-warning mx-auto" />
+              <p className="font-semibold text-sm">Add-on credits require Individual Pro or Enterprise Pro</p>
+              <button type="button" onClick={() => setPickMode("plan")}
+                className="text-xs text-primary underline">Upgrade your plan →</button>
+            </div>
+          )}
+          {canBuyCredits && creditPacks.length === 0 && (
+            <div className="col-span-2 text-center text-muted-foreground text-sm py-8">
+              No credit packages available right now.
+            </div>
+          )}
+          {canBuyCredits && creditPacks.map((pack) => (
             <button
-              key={pack.credits}
+              key={pack.id}
               type="button"
               onClick={() => handleBuyCreditPack(pack)}
               className="relative rounded-2xl border border-border bg-card/50 p-5 text-left hover:border-primary/50 hover:shadow-glow transition-all group flex flex-col gap-1"
             >
-              {pack.badge && (
+              {pack.badge_text && (
                 <span className="absolute -top-2 left-4 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold">
-                  {pack.badge}
+                  {pack.badge_text}
                 </span>
               )}
               <span className="font-display text-3xl font-bold text-warning">{pack.credits}</span>
               <span className="text-xs text-muted-foreground">credits</span>
               <span className="mt-2 font-bold text-lg">PKR {pack.price_pkr}</span>
-              <span className="text-[11px] text-muted-foreground">{pack.label} Pack · PKR {pack.perCredit}/cr</span>
+              <span className="text-[11px] text-muted-foreground">{pack.name} · PKR {(pack.price_pkr / pack.credits).toFixed(2)}/cr</span>
               <span className="mt-3 w-full text-center text-xs font-semibold text-primary bg-primary/10 rounded-lg py-1.5 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                 Buy →
               </span>

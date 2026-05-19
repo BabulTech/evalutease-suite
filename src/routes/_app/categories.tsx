@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  BookOpen, FolderPlus, Plus, Search, X, ChevronRight, HelpCircle, Layers,
+  BookOpen, FolderPlus, Plus, Search, X, ChevronRight, HelpCircle, Layers, MousePointerClick, Route as RouteIcon, WandSparkles,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -27,7 +27,7 @@ function CategoriesRoot() {
 type Cat = { id: string; name: string; icon: string | null };
 type Sub = { id: string; category_id: string; name: string; description: string | null };
 
-// ── Quick create dialog ────────────────────────────────────────────────────────
+// Section
 function QuickCreateDialog({
   open, onClose, mode, categoryId, onCreated,
 }: {
@@ -116,7 +116,7 @@ function QuickCreateDialog({
   );
 }
 
-// ── Chip selector — replaces dropdown for Hick's Law compliance ────────────────
+// Section
 function ChipSelector({
   items, selected, onSelect, onAdd, addLabel, placeholder, disabled = false,
 }: {
@@ -169,7 +169,7 @@ function ChipSelector({
   );
 }
 
-// ── Main page ──────────────────────────────────────────────────────────────────
+// Section
 function QuestionsPage() {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -303,31 +303,62 @@ function QuestionsPage() {
 
   const selectedCatName = cats.find((c) => c.id === selectedCat)?.name ?? "";
   const selectedSubName = subs.find((s) => s.id === selectedSub)?.name ?? "";
+  const canAddQuestion = !!(selectedCat && selectedSub);
+  const openAddQuestion = () => {
+    if (!canAddQuestion) {
+      toast.info("Select a category and topic first, or create them below.");
+      return;
+    }
+    navigate({
+      to: "/categories/add",
+      search: { categoryId: selectedCat, subId: selectedSub },
+    });
+  };
 
   return (
     <div className="space-y-5">
 
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" /> {t("cat.manageQuestions")}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {totalQuestions > 0
-              ? `${totalQuestions} questions across ${cats.length} ${cats.length === 1 ? "category" : "categories"}`
-              : t("cat.manageDesc")}
-          </p>
+      <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/12 via-card/70 to-card/40 p-4 sm:p-5 shadow-glow/30">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+              <RouteIcon className="h-3.5 w-3.5" /> Question bank workflow
+            </div>
+            <h1 className="mt-3 font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+              <BookOpen className="h-6 w-6 text-primary" /> {t("cat.manageQuestions")}
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
+              Pick where the question belongs first, then choose how to add it. Existing categories and topics stay visible so users recognize the next step instead of remembering it.
+            </p>
+          </div>
+          <Button
+            onClick={openAddQuestion}
+            className="h-12 gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer lg:min-w-[180px]"
+          >
+            <Plus className="h-4 w-4" /> {canAddQuestion ? t("cat.addToTopic") : t("cat.addQuestion")}
+          </Button>
         </div>
-        <Button
-          onClick={() => navigate({ to: "/categories/add" })}
-          className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer"
-        >
-          <Plus className="h-4 w-4" /> {t("cat.addQuestion")}
-        </Button>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {[
+            { label: "1. Choose category", value: selectedCatName || "Pick subject", icon: Layers, done: !!selectedCat },
+            { label: "2. Choose topic", value: selectedSubName || "Pick chapter", icon: RouteIcon, done: !!selectedSub },
+            { label: "3. Add questions", value: canAddQuestion ? "Manual, AI, scan, upload" : "Unlock after topic", icon: WandSparkles, done: canAddQuestion },
+          ].map((step) => {
+            const Icon = step.icon;
+            return (
+              <div key={step.label} className={`rounded-xl border px-3 py-3 ${step.done ? "border-primary/35 bg-primary/10" : "border-border bg-card/45"}`}>
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Icon className={`h-3.5 w-3.5 ${step.done ? "text-primary" : ""}`} /> {step.label}
+                </div>
+                <div className={`mt-1 text-sm font-semibold ${step.done ? "text-foreground" : "text-muted-foreground"}`}>{step.value}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ── Step 1: Category chips ── */}
+      {/* Section */}
       <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -345,7 +376,7 @@ function QuestionsPage() {
         </div>
 
         {cats.length === 0 ? (
-          // Empty state — prompt to create first category
+          // Empty state - prompt to create first category
           <div className="text-center py-6 space-y-3">
             <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">Create a category to organise your questions</p>
@@ -354,7 +385,7 @@ function QuestionsPage() {
             </Button>
           </div>
         ) : (
-          // Category chips — all visible at once (Hick's Law, no dropdown scan)
+          // Category chips - all visible at once (Hick's Law, no dropdown scan)
           <ChipSelector
             items={cats.map((c) => ({ id: c.id, label: c.name, count: catQuestionCounts.get(c.id) ?? 0 }))}
             selected={selectedCat}
@@ -363,14 +394,14 @@ function QuestionsPage() {
         )}
       </div>
 
-      {/* ── Step 2: Topic chips — only after category selected (progressive disclosure) ── */}
+      {/* Section */}
       {selectedCat && (
         <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <ChevronRight size={12} className="text-primary" />
               <span className="text-primary">{selectedCatName}</span>
-              <span>→</span>
+              <span>{">"}</span>
               {t("cat.topic")}
             </div>
             <button
@@ -390,7 +421,7 @@ function QuestionsPage() {
               </Button>
             </div>
           ) : (
-            // Topic chips — all visible at once (Hick's Law)
+            // Topic chips - all visible at once (Hick's Law)
             <ChipSelector
               items={filteredSubs.map((s) => ({ id: s.id, label: s.name, count: subQuestionCounts.get(s.id) ?? 0 }))}
               selected={selectedSub}
@@ -400,7 +431,7 @@ function QuestionsPage() {
         </div>
       )}
 
-      {/* ── Step 3: Questions — only after topic selected ── */}
+      {/* Section */}
       {selectedSub && (
         <div className="space-y-4">
           {/* Topic header + search + stats */}
@@ -408,7 +439,7 @@ function QuestionsPage() {
             <div>
               <div className="flex items-center gap-1.5 text-sm font-semibold flex-wrap">
                 <span className="text-muted-foreground">{selectedCatName}</span>
-                <span className="text-muted-foreground">→</span>
+                <span className="text-muted-foreground">{">"}</span>
                 <span className="text-primary">{selectedSubName}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -416,16 +447,12 @@ function QuestionsPage() {
                 {search ? ` matching "${search}"` : ""}
               </p>
             </div>
-            <Button
-              size="sm"
-              onClick={() => navigate({ to: "/categories/add" })}
-              className="h-9 gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" /> {t("cat.addToTopic")}
-            </Button>
+            <div className="hidden sm:flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+              Ready for new questions
+            </div>
           </div>
 
-          {/* Stats strip — only shown when there are questions */}
+          {/* Stats strip - only shown when there are questions */}
           {questionTotal > 0 && (
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
@@ -447,7 +474,7 @@ function QuestionsPage() {
             </div>
           )}
 
-          {/* Search — only visible once topic is selected (progressive disclosure, cognitive load) */}
+          {/* Search - only visible once topic is selected (progressive disclosure, cognitive load) */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
@@ -486,12 +513,34 @@ function QuestionsPage() {
         </div>
       )}
 
-      {/* ── Prompt when nothing selected yet ── */}
+      {/* Section */}
       {!selectedCat && cats.length > 0 && (
-        <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-          <HelpCircle className="mx-auto h-8 w-8 text-muted-foreground/40 mb-3" />
-          <p className="font-semibold text-sm">{t("cat.selectCategoryTitle")}</p>
-          <p className="text-xs text-muted-foreground mt-1">Pick a category above to browse its questions</p>
+        <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/5 p-5 sm:p-8">
+          <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+            <div>
+              <HelpCircle className="h-8 w-8 text-primary/70 mb-3" />
+              <p className="font-semibold text-base">Start with the subject area</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Categories are like folders. Choose one to reveal its topics, then the question list will appear automatically.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {cats.slice(0, 4).map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => { setSelectedCat(cat.id); setSelectedSub(""); setQuestions([]); }}
+                  className="rounded-xl border border-border bg-card/70 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm">{cat.name}</span>
+                    <MousePointerClick className="h-4 w-4 text-primary" />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{catQuestionCounts.get(cat.id) ?? 0} questions inside</p>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

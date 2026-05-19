@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import {
   ArrowLeft,
   Check,
@@ -582,9 +583,9 @@ function UploadTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Partic
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
-    if (file.size > MAX_CSV) { toast.error("File too large (max 1 MB)"); return; }
+    if (file.size > MAX_CSV) { validationError("File too large (max 1 MB)"); return; }
     const isText = file.type.startsWith("text/") || /\.(csv|tsv|txt)$/i.test(file.name);
-    if (!isText) { toast.error("Only CSV, TSV, or plain-text files are accepted"); return; }
+    if (!isText) { validationError("Only CSV, TSV, or plain-text files are accepted"); return; }
     setText(await file.text());
     setFilename(file.name);
     toast.success(`Loaded ${file.name}`);
@@ -676,8 +677,8 @@ function ScanTab({ typeId, onSave }: { typeId: string; onSave: (drafts: Particip
 
   const handleFile = async (file: File | null) => {
     if (!file) return;
-    if (!SUPPORTED_IMG.includes(file.type as SupportedMediaType)) { toast.error("JPG, PNG, GIF, or WebP only"); return; }
-    if (file.size > MAX_IMG) { toast.error("Image too large (max 5 MB)"); return; }
+    if (!SUPPORTED_IMG.includes(file.type as SupportedMediaType)) { validationError("JPG, PNG, GIF, or WebP only"); return; }
+    if (file.size > MAX_IMG) { validationError("Image too large (max 5 MB)"); return; }
     const url = URL.createObjectURL(file);
     const reader = new FileReader();
     reader.onload = (e) => {

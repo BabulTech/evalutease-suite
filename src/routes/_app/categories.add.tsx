@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft, BookOpen, ChevronRight, FileEdit, FolderPlus,
@@ -14,8 +14,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { ManualTab } from "@/components/questions/ManualTab";
 import { DEFAULT_TIME_SECONDS, type DraftQuestion, type QuestionSource } from "@/components/questions/types";
 import { draftToRow } from "@/components/questions/persistence";
+import { logClientActivity } from "@/lib/audit";
 
-export const Route = createFileRoute("/_app/categories/add")({ component: AddQuestionPage });
+export const Route = createFileRoute("/_app/categories/add")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    categoryId: typeof search.categoryId === "string" ? search.categoryId : "",
+    subId: typeof search.subId === "string" ? search.subId : "",
+  }),
+  component: AddQuestionPage,
+});
 
 const ScanTab = lazy(() =>
   import("@/components/questions/ScanTab").then((m) => ({ default: m.ScanTab })),
@@ -118,6 +125,8 @@ function AddQuestionPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { categoryId: initialCategoryId, subId: initialSubId } = Route.useSearch();
+  const appliedInitialSelection = useRef(false);
 
   const [cats, setCats] = useState<Cat[]>([]);
   const [subs, setSubs] = useState<Sub[]>([]);
@@ -140,6 +149,20 @@ function AddQuestionPage() {
 
   useEffect(() => { void loadMeta(); }, [loadMeta]);
 
+  useEffect(() => {
+    if (appliedInitialSelection.current || cats.length === 0) return;
+    if (!initialCategoryId) return;
+
+    const categoryExists = cats.some((cat) => cat.id === initialCategoryId);
+    if (!categoryExists) return;
+
+    setSelectedCat(initialCategoryId);
+    if (initialSubId && subs.some((sub) => sub.id === initialSubId && sub.category_id === initialCategoryId)) {
+      setSelectedSub(initialSubId);
+    }
+    appliedInitialSelection.current = true;
+  }, [cats, subs, initialCategoryId, initialSubId]);
+
   const filteredSubs = useMemo(() => subs.filter((s) => s.category_id === selectedCat), [subs, selectedCat]);
 
   const createCat = async (name: string) => {
@@ -147,6 +170,15 @@ function AddQuestionPage() {
     const { data, error } = await supabase.from("question_categories")
       .insert({ owner_id: user.id, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
+    void logClientActivity({
+      actionType: "created",
+      module: "questions",
+      entityType: "question_category",
+      entityId: data.id,
+      entityLabel: name,
+      message: `Created question category "${name}"`,
+      details: { category_name: name },
+    });
     toast.success(t("cat.categoryCreated").replace("{name}", name));
     setCats((prev) => [...prev, { id: data.id, name, icon: null }]);
     setSelectedCat(data.id);
@@ -158,6 +190,15 @@ function AddQuestionPage() {
     const { data, error } = await supabase.from("question_subcategories")
       .insert({ owner_id: user.id, category_id: selectedCat, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
+    void logClientActivity({
+      actionType: "created",
+      module: "questions",
+      entityType: "question_topic",
+      entityId: data.id,
+      entityLabel: name,
+      message: `Created question topic "${name}"`,
+      details: { category_id: selectedCat, topic_name: name },
+    });
     toast.success(t("cat.topicCreated").replace("{name}", name));
     setSubs((prev) => [...prev, { id: data.id, category_id: selectedCat, name }]);
     setSelectedSub(data.id);
@@ -169,13 +210,38 @@ function AddQuestionPage() {
       return;
     }
     setSaving(true);
+    // Refresh session before insert to avoid 401 on long-form questions (token may expire while editing)
+    await supabase.auth.getSession();
     const rows = drafts.map((d) =>
       draftToRow(d, { ownerId: user.id, categoryId: selectedCat, subcategoryId: selectedSub, source }),
     );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from("questions").insert(rows as any);
+    const { data: inserted, error } = await supabase.from("questions")
+      .insert(rows as any)
+      .select("id,text,source");
     setSaving(false);
     if (error) { toast.error(error.message); return; }
+    const methodLabel =
+      source === "manual" ? "manually" :
+      source === "ai" ? "with AI" :
+      source === "ocr" ? "from scan" :
+      "from upload";
+    void logClientActivity({
+      actionType: "created",
+      module: "questions",
+      entityType: rows.length === 1 ? "question" : "question_batch",
+      entityId: inserted?.[0]?.id ?? null,
+      entityLabel: rows.length === 1 ? rows[0]?.text?.slice(0, 120) : `${rows.length} questions`,
+      message: `Created ${rows.length} question${rows.length === 1 ? "" : "s"} ${methodLabel}`,
+      details: {
+        source,
+        count: rows.length,
+        category_id: selectedCat,
+        topic_id: selectedSub,
+        question_ids: (inserted ?? []).map((q) => q.id),
+      },
+      riskScore: rows.length >= 50 ? 45 : rows.length >= 20 ? 25 : 5,
+    });
     toast.success(`${rows.length} ${rows.length === 1 ? t("q.count") : t("q.counts")} ${t("q.saved")}`);
   };
 

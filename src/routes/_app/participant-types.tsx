@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Armchair, BarChart3, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp,
-  Hash, Mail, Pencil, Phone, Plus, Search, Target, Trash2, TrendingUp,
-  Trophy, UserPlus, Users, UsersRound, X, XCircle, FolderPlus,
+  ClipboardList, Hash, Mail, Pencil, Phone, Plus, Search, Send, Target, Trash2, TrendingUp,
+  Trophy, UploadCloud, UserPlus, Users, UsersRound, X, XCircle, FolderPlus,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -21,6 +21,7 @@ import { UploadParticipantsDialog } from "@/components/participants/UploadPartic
 import { ScanParticipantsDialog } from "@/components/participants/ScanParticipantsDialog";
 import { PaginationControls } from "@/components/PaginationControls";
 import { draftFromParticipant, draftToRow, type Participant, type ParticipantDraft, type ParticipantMeta } from "@/components/participants/types";
+import { logClientActivity } from "@/lib/audit";
 
 export const Route = createFileRoute("/_app/participant-types")({ component: ParticipantsPage });
 const PARTICIPANT_PAGE_SIZE = 25;
@@ -37,7 +38,7 @@ function rowToParticipant(row: ParticipantRow): Participant {
   return { id: row.id, name: row.name, email: row.email, mobile: row.mobile, metadata: meta, created_at: row.created_at };
 }
 
-/* ── Quick-create dialog ── */
+/* Section */
 function QuickCreateDialog({ open, onClose, title, placeholder, onConfirm }: {
   open: boolean; onClose: () => void; title: string; placeholder: string;
   onConfirm: (name: string) => Promise<void>;
@@ -70,7 +71,7 @@ function QuickCreateDialog({ open, onClose, title, placeholder, onConfirm }: {
   );
 }
 
-/* ── Chip selector — all options visible, one tap (Hick's Law) ── */
+/* Section */
 function ChipSelector({ items, selected, onSelect, allLabel }: {
   items: { id: string; label: string; count?: number }[];
   selected: string; onSelect: (id: string) => void; allLabel?: string;
@@ -99,7 +100,7 @@ function ChipSelector({ items, selected, onSelect, allLabel }: {
   );
 }
 
-/* ── Stats panel ── */
+/* Section */
 type ParticipantStats = {
   totalAttempts: number; totalCorrect: number; totalWrong: number;
   avgScore: number; highestScore: number; lowestScore: number;
@@ -165,7 +166,7 @@ function ParticipantStatsPanel({ participant, onClose }: { participant: Particip
           <div className="min-w-0">
             <div className="font-semibold text-sm truncate">{participant.name}</div>
             <div className="text-[10px] text-muted-foreground truncate">
-              {typeBadge && <span className="capitalize mr-1">{typeBadge} ·</span>}
+              {typeBadge && <span className="capitalize mr-1">{typeBadge} -</span>}
               {participant.email || participant.mobile || "No contact info"}
             </div>
           </div>
@@ -178,7 +179,7 @@ function ParticipantStatsPanel({ participant, onClose }: { participant: Particip
 
       <div className="p-4 space-y-4">
         {loading ? (
-          <div className="py-6 text-center text-sm text-muted-foreground animate-pulse">Loading stats…</div>
+          <div className="py-6 text-center text-sm text-muted-foreground animate-pulse">Loading stats...</div>
         ) : !stats || stats.totalAttempts === 0 ? (
           <div className="py-6 text-center">
             <BarChart3 className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
@@ -247,7 +248,7 @@ function StatTile({ icon, label, value, color, highlight }: { icon: React.ReactN
   );
 }
 
-/* ── Page router ── */
+/* Section */
 function ParticipantsPage() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onIndex = pathname === "/participant-types" || pathname === "/participant-types/";
@@ -255,7 +256,7 @@ function ParticipantsPage() {
   return <ParticipantsIndex />;
 }
 
-/* ── Main index ── */
+/* Section */
 function ParticipantsIndex() {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -347,11 +348,20 @@ function ParticipantsIndex() {
 
   const filteredParticipants = useMemo(() => rawRows.map(rowToParticipant), [rawRows]);
 
-  /* ── CRUD ── */
+  /* Section */
   const createType = async (name: string) => {
     if (!user) return;
-    const { error } = await supabase.from("participant_types").insert({ owner_id: user.id, name });
+    const { data, error } = await supabase.from("participant_types").insert({ owner_id: user.id, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
+    void logClientActivity({
+      actionType: "created",
+      module: "participants",
+      entityType: "participant_type",
+      entityId: data?.id ?? null,
+      entityLabel: name,
+      message: `Created participant type "${name}"`,
+      details: { type_name: name },
+    });
     toast.success(t("pt.typeCreated").replace("{name}", name));
     await loadWithRaw();
   };
@@ -361,6 +371,15 @@ function ParticipantsIndex() {
     const { data, error } = await supabase.from("participant_subtypes")
       .insert({ owner_id: user.id, type_id: selectedTypeId, name }).select("id").single();
     if (error) { toast.error(error.message); throw error; }
+    void logClientActivity({
+      actionType: "created",
+      module: "participants",
+      entityType: "participant_group",
+      entityId: data?.id ?? null,
+      entityLabel: name,
+      message: `Created participant group "${name}"`,
+      details: { type_id: selectedTypeId, group_name: name },
+    });
     toast.success(t("pt.groupCreated").replace("{name}", name));
     await loadWithRaw();
     if (data) setSelectedSubId(data.id);
@@ -374,7 +393,19 @@ function ParticipantsIndex() {
       .insert({ ...row, subtype_id: subtypeId })
       .select("id, name, email, mobile, metadata, subtype_id, created_at").single();
     if (error) { toast.error(error.message); throw error; }
-    if (data) { toast.success(t("pt.participantAdded").replace("{name}", data.name)); setPage(0); await loadWithRaw(); }
+    if (data) {
+      void logClientActivity({
+        actionType: "created",
+        module: "participants",
+        entityType: "participant",
+        entityId: data.id,
+        entityLabel: data.name,
+        message: `Added participant "${data.name}"`,
+        details: { subtype_id: subtypeId, email: data.email, mobile: data.mobile },
+        riskScore: 5,
+      });
+      toast.success(t("pt.participantAdded").replace("{name}", data.name)); setPage(0); await loadWithRaw();
+    }
   };
 
   const createMany = async (drafts: ParticipantDraft[]) => {
@@ -384,6 +415,20 @@ function ParticipantsIndex() {
     const { data, error } = await supabase.from("participants").insert(rows).select("id, name, email, mobile, metadata, subtype_id, created_at");
     if (error) { toast.error(error.message); throw error; }
     const inserted = (data ?? []) as ParticipantRow[];
+    void logClientActivity({
+      actionType: "created",
+      module: "participants",
+      entityType: "participant_batch",
+      entityId: inserted[0]?.id ?? null,
+      entityLabel: `${inserted.length} participants`,
+      message: `Imported ${inserted.length} participant${inserted.length === 1 ? "" : "s"}`,
+      details: {
+        count: inserted.length,
+        subtype_id: subtypeId,
+        participant_ids: inserted.map((p) => p.id),
+      },
+      riskScore: inserted.length >= 500 ? 70 : inserted.length >= 100 ? 45 : 10,
+    });
     toast.success(`${t("pt.added")} ${inserted.length} ${inserted.length === 1 ? t("pt.participant") : t("pt.participants")}`);
     setPage(0); await loadWithRaw();
   };
@@ -394,13 +439,34 @@ function ParticipantsIndex() {
     const { error } = await supabase.from("participants").update({ name: row.name, email: row.email, mobile: row.mobile, metadata: row.metadata }).eq("id", id);
     if (error) { toast.error(error.message); throw error; }
     setRawRows((prev) => prev.map((r) => r.id === id ? { ...r, name: row.name, email: row.email, mobile: row.mobile, metadata: row.metadata, meta: row.metadata as ParticipantMeta } : r));
+    void logClientActivity({
+      actionType: "updated",
+      module: "participants",
+      entityType: "participant",
+      entityId: id,
+      entityLabel: row.name,
+      message: `Updated participant "${row.name}"`,
+      details: { email: row.email, mobile: row.mobile },
+      riskScore: 5,
+    });
     toast.success(t("pt.participantUpdated"));
   };
 
   const removeParticipant = async (id: string) => {
+    const target = filteredParticipants.find((p) => p.id === id);
     const { error } = await supabase.from("participants").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
     if (selectedId === id) setSelectedId(null);
+    void logClientActivity({
+      actionType: "deleted",
+      module: "participants",
+      entityType: "participant",
+      entityId: id,
+      entityLabel: target?.name ?? "Participant",
+      message: `Deleted participant "${target?.name ?? "Participant"}"`,
+      details: { email: target?.email, mobile: target?.mobile },
+      riskScore: 30,
+    });
     toast.success(t("pt.participantRemoved"));
     await loadWithRaw();
   };
@@ -415,6 +481,16 @@ function ParticipantsIndex() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await supabase.from("participant_invites").insert(inputs as any).select("id, email, token");
     if (error) { toast.error(error.message); throw error; }
+    void logClientActivity({
+      actionType: "created",
+      module: "participants",
+      entityType: "participant_invite_batch",
+      entityId: data?.[0]?.id ?? null,
+      entityLabel: `${data?.length ?? 0} invite${(data?.length ?? 0) === 1 ? "" : "s"}`,
+      message: `Generated ${data?.length ?? 0} participant invite${(data?.length ?? 0) === 1 ? "" : "s"}`,
+      details: { subtype_id: subtypeId, count: data?.length ?? 0, emails },
+      riskScore: (data?.length ?? 0) >= 100 ? 45 : 10,
+    });
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     return (data ?? []).map((r) => ({ email: r.email, token: r.token, url: `${origin}/invite/${r.token}` }));
   };
@@ -422,31 +498,54 @@ function ParticipantsIndex() {
   const selectedParticipant = selectedId ? (filteredParticipants.find((p) => p.id === selectedId) ?? null) : null;
   const canAddSub = selectedTypeId !== "__all__";
   const totalAll  = Array.from(typeCounts.values()).reduce((a, b) => a + b, 0);
+  const selectedTypeName = types.find((t) => t.id === selectedTypeId)?.name ?? "";
+  const selectedGroupName = subs.find((s) => s.id === selectedSubId)?.name ?? "";
+  const canAddToGroup = selectedTypeId !== "__all__" && selectedSubId !== "__all__";
 
   return (
     <div className="space-y-4">
 
-      {/* ── Hero header ── */}
-      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" /> {t("pt.manageTitle")}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {totalAll > 0
-              ? `${totalAll} participants across ${types.length} ${types.length === 1 ? "type" : "types"}`
-              : t("pt.manageDesc")}
-          </p>
+      <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/12 via-card/70 to-card/40 p-4 sm:p-5 shadow-glow/30">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+              <ClipboardList className="h-3.5 w-3.5" /> Roster builder
+            </div>
+            <h1 className="mt-3 font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+              <Users className="h-6 w-6 text-primary" /> {t("pt.manageTitle")}
+            </h1>
+            <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
+              First choose who they are, then where they belong. After that, add one participant, upload a list, scan a roster, or generate invite links.
+            </p>
+          </div>
+          <Button
+            className="h-12 gap-2 bg-gradient-primary text-primary-foreground shadow-glow lg:min-w-[190px]"
+            onClick={() => navigate({ to: "/participant-types/add" })}
+          >
+            <UserPlus className="h-4 w-4" /> {canAddToGroup ? "Add to selected group" : t("pt.addParticipant")}
+          </Button>
         </div>
-        <Button
-          className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
-          onClick={() => navigate({ to: "/participant-types/add" })}
-        >
-          <UserPlus className="h-4 w-4" /> {t("pt.addParticipant")}
-        </Button>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {[
+            { label: "1. Pick type", value: selectedTypeName || "Student, teacher, employee", icon: Users, done: selectedTypeId !== "__all__" },
+            { label: "2. Pick group", value: selectedGroupName || "Class, batch, team", icon: FolderPlus, done: selectedSubId !== "__all__" },
+            { label: "3. Add roster", value: "Single, upload, scan, invite", icon: Send, done: canAddToGroup },
+          ].map((step) => {
+            const Icon = step.icon;
+            return (
+              <div key={step.label} className={`rounded-xl border px-3 py-3 ${step.done ? "border-primary/35 bg-primary/10" : "border-border bg-card/45"}`}>
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Icon className={`h-3.5 w-3.5 ${step.done ? "text-primary" : ""}`} /> {step.label}
+                </div>
+                <div className={`mt-1 text-sm font-semibold ${step.done ? "text-foreground" : "text-muted-foreground"}`}>{step.value}</div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ── Step 1: Type filter chips ── */}
+      {/* Section */}
       <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("pt.type")}</div>
@@ -471,7 +570,7 @@ function ParticipantsIndex() {
           />
         )}
 
-        {/* Step 2: Group chips — progressive disclosure */}
+        {/* Step 2: Group chips - progressive disclosure */}
         {selectedTypeId !== "__all__" && (
           <div className="pt-3 border-t border-border/50 space-y-2">
             <div className="flex items-center justify-between gap-2">
@@ -500,7 +599,7 @@ function ParticipantsIndex() {
         )}
       </div>
 
-      {/* ── Search + action row ── */}
+      {/* Section */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -526,7 +625,7 @@ function ParticipantsIndex() {
         </div>
       </div>
 
-      {/* ── Stats strip ── */}
+      {/* Section */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.totalParticipants")}</div>
@@ -542,29 +641,45 @@ function ParticipantsIndex() {
         </div>
       </div>
 
-      {/* ── Main content: table + stats panel ── */}
+      {/* Section */}
       <div className={`flex gap-4 items-start ${selectedParticipant ? "lg:flex-row flex-col" : ""}`}>
         <div className={`min-w-0 ${selectedParticipant ? "lg:flex-1" : "w-full"}`}>
           {loading ? (
             <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">{t("pt.loading")}</div>
           ) : filteredParticipants.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center space-y-3">
-              <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/40" />
-              {totalAll === 0 ? (
-                <>
-                  <p className="text-sm font-semibold">{t("pt.empty")}</p>
-                  <p className="text-xs text-muted-foreground">{t("pt.emptyHint")}</p>
-                  <Button size="sm" className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
-                    onClick={() => navigate({ to: "/participant-types/add" })}>
-                    <UserPlus size={14} /> Add first participant
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-semibold">{t("pt.noMatches")}</p>
-                  <p className="text-xs text-muted-foreground">{t("pt.noMatchesHint")}</p>
-                </>
-              )}
+            <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/5 p-5 sm:p-8 space-y-5">
+              <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr] lg:items-center">
+                <div>
+                  <UsersRound className="h-10 w-10 text-primary/70 mb-3" />
+                  {totalAll === 0 ? (
+                    <>
+                      <p className="text-base font-semibold">Build your first roster in order</p>
+                      <p className="text-sm text-muted-foreground mt-1">Create a type, create a group inside it, then add participants by the method that matches your data.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-base font-semibold">{t("pt.noMatches")}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t("pt.noMatchesHint")}</p>
+                    </>
+                  )}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    { label: "Add one", desc: "Best for a quick manual entry", icon: UserPlus, action: () => navigate({ to: "/participant-types/add" }) },
+                    { label: "Upload CSV", desc: "Fastest for Excel rosters", icon: UploadCloud, action: () => navigate({ to: "/participant-types/add" }) },
+                    { label: "Scan list", desc: "Use an image or printed sheet", icon: ScanLine, action: () => navigate({ to: "/participant-types/add" }) },
+                    { label: "Invite link", desc: "Let people fill their own details", icon: Mail, action: () => navigate({ to: "/participant-types/add" }) },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button key={item.label} type="button" onClick={item.action} className="rounded-xl border border-border bg-card/70 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10">
+                        <div className="flex items-center gap-2 font-semibold text-sm"><Icon className="h-4 w-4 text-primary" /> {item.label}</div>
+                        <p className="mt-1 text-xs text-muted-foreground">{item.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
@@ -619,7 +734,7 @@ function ParticipantsIndex() {
   );
 }
 
-/* ── Table row ── */
+/* Section */
 function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
   p: Participant; selected: boolean;
   onSelect: () => void;
@@ -628,7 +743,7 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
 }) {
   const { t } = useI18n();
   const ptype = p.metadata.participant_type;
-  const typeEmoji = ptype === "student" ? "🎓" : ptype === "teacher" ? "📚" : ptype === "employee" ? "💼" : ptype === "fun" ? "🎉" : "";
+  const typeEmoji = ptype === "student" ? "" : ptype === "teacher" ? "" : ptype === "employee" ? "" : ptype === "fun" ? "" : "";
 
   return (
     <TableRow
@@ -653,7 +768,7 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
         <div className="text-sm space-y-0.5">
           {p.email  && <div className="flex items-center gap-1.5 text-muted-foreground"><Mail className="h-3 w-3 shrink-0" /><span className="truncate max-w-[180px]">{p.email}</span></div>}
           {p.mobile && <div className="flex items-center gap-1.5 text-muted-foreground"><Phone className="h-3 w-3 shrink-0" />{p.mobile}</div>}
-          {!p.email && !p.mobile && <span className="text-xs text-muted-foreground">—</span>}
+          {!p.email && !p.mobile && <span className="text-xs text-muted-foreground">-</span>}
         </div>
       </TableCell>
       <TableCell className="hidden md:table-cell py-3">
@@ -662,11 +777,11 @@ function ParticipantTableRow({ p, selected, onSelect, onUpdate, onDelete }: {
           {p.metadata.employee_id  && <div className="flex items-center gap-1.5"><Hash className="h-3 w-3 text-muted-foreground" />{p.metadata.employee_id}</div>}
           {p.metadata.seat_number  && <div className="flex items-center gap-1.5"><Armchair className="h-3 w-3 text-muted-foreground" />{p.metadata.seat_number}</div>}
           {p.metadata.department   && <div className="text-muted-foreground">{p.metadata.department}</div>}
-          {!p.metadata.roll_number && !p.metadata.employee_id && !p.metadata.seat_number && !p.metadata.department && <span className="text-muted-foreground">—</span>}
+          {!p.metadata.roll_number && !p.metadata.employee_id && !p.metadata.seat_number && !p.metadata.department && <span className="text-muted-foreground">-</span>}
         </div>
       </TableCell>
       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground py-3">
-        {p.metadata.organization || "—"}
+        {p.metadata.organization || "-"}
       </TableCell>
       <TableCell className="text-right py-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-end gap-1">

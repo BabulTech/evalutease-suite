@@ -237,6 +237,7 @@ function NewSessionPage() {
 
   const submit = async (mode: "open" | "schedule") => {
     if (!user) return;
+    const today = new Date().toISOString().slice(0, 10) + "T00:00:00Z";
     const errs = validate(mode);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -310,6 +311,25 @@ function NewSessionPage() {
     }
     const questionIds = selectedQs.map((q) => q.id);
     const participantIds = (partsResult.data ?? []).map((p) => p.id);
+
+    // Enforce scheduled quiz daily limit
+    if (isScheduled) {
+      const scheduledLimit = plan?.scheduled_quizzes_per_day ?? 1;
+      if (scheduledLimit !== -1) {
+        const { count: scheduledToday } = await supabase
+          .from("quiz_sessions")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_id", user.id)
+          .not("scheduled_at", "is", null)
+          .gte("created_at", today);
+        if ((scheduledToday ?? 0) >= scheduledLimit) {
+          toast.error(
+            `Your ${plan?.name ?? "current"} plan allows ${scheduledLimit} scheduled quiz${scheduledLimit === 1 ? "" : "zes"} per day. Upgrade to schedule more.`,
+          );
+          return;
+        }
+      }
+    }
 
     // Deduct session launch credits (if admin set cost > 0)
     const launchCost = plan?.credit_cost_session_launch ?? 0;

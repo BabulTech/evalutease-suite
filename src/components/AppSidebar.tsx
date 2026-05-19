@@ -50,9 +50,10 @@ export function AppSidebar({ open, onToggle }: Props) {
   // Enterprise admin (not a host) sees "My Organization"
   const isEnterpriseAdmin = plan?.tier === "enterprise" && !isHost;
 
-  // Fetch pending credit-request count for enterprise admins
+  // Fetch pending credit-request count for enterprise admins with credit purchasing enabled
+  const canSeeRequests = isEnterpriseAdmin && !!plan?.can_buy_credits;
   useEffect(() => {
-    if (!user || !isEnterpriseAdmin) { setPendingReqCount(0); return; }
+    if (!user || !canSeeRequests) { setPendingReqCount(0); return; }
     let cancelled = false;
     const fetchCount = async () => {
       const { count } = await (supabase as any)
@@ -65,7 +66,7 @@ export function AppSidebar({ open, onToggle }: Props) {
     // Re-poll every 30s so badge stays fresh
     const interval = setInterval(() => void fetchCount(), 30_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [user, isEnterpriseAdmin]);
+  }, [user, canSeeRequests]);
 
   const items = [
     { to: "/dashboard", icon: LayoutDashboard, label: t("nav.dashboard") },

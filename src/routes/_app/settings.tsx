@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import {
   Settings as SettingsIcon,
   Trophy,
@@ -584,11 +585,11 @@ function ProfileForm({ userId }: { userId: string }) {
   const uploadAvatar = async (file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      toast.error("Choose an image file");
+      validationError("Choose an image file");
       return;
     }
     if (file.size > 3 * 1024 * 1024) {
-      toast.error("Profile picture must be under 3 MB");
+      validationError("Profile picture must be under 3 MB");
       return;
     }
     setUploading(true);
@@ -620,8 +621,8 @@ function ProfileForm({ userId }: { userId: string }) {
 
   const uploadLogo = async (file: File | undefined) => {
     if (!file) return;
-    if (!file.type.startsWith("image/")) { toast.error("Choose an image file"); return; }
-    if (file.size > 3 * 1024 * 1024) { toast.error("Logo must be under 3 MB"); return; }
+    if (!file.type.startsWith("image/")) { validationError("Choose an image file"); return; }
+    if (file.size > 3 * 1024 * 1024) { validationError("Logo must be under 3 MB"); return; }
     setUploadingLogo(true);
     const optimized = await optimizeLogo(file).catch(() => file);
     const path = `${userId}/logo-${Date.now()}.webp`;

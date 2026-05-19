@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import Anthropic from "@anthropic-ai/sdk";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { resolvePlanOwnerId } from "@/lib/plan.server";
+import { logAiUsage } from "@/lib/audit.server";
 import {
   emptyDraft,
   MAX_QUESTION_LENGTH,
@@ -38,6 +40,7 @@ const SUPPORTED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/gif", "image/we
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
 const MAX_TOPIC_LENGTH = 200;
 const MAX_HINT_LENGTH = 300;
+const AI_MODEL = "claude-haiku-4-5-20251001";
 
 // Patterns that indicate clearly off-topic / adversarial requests
 const OFF_TOPIC_PATTERNS: RegExp[] = [
@@ -81,14 +84,14 @@ function wrapUserField(label: string, value: string): string {
   return `<user_${label}>${stripTags(value)}</user_${label}>`;
 }
 
-async function getUserPlanCosts(userId: string): Promise<{
+async function getUserPlanCosts(planOwnerId: string): Promise<{
   costPer10q: number;
   costScan: number;
 }> {
   const { data } = await supabaseAdmin
     .from("user_subscriptions")
     .select("plans(credit_cost_ai_10q, credit_cost_ai_scan)")
-    .eq("user_id", userId)
+    .eq("user_id", planOwnerId)
     .eq("status", "active")
     .maybeSingle();
   const plan = (data as any)?.plans;
@@ -418,20 +421,72 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(data._token);
     if (userErr || !userData?.user?.id) throw new Error("Unauthorized");
     const userId = userData.user.id;
+    const planOwnerId = await resolvePlanOwnerId(userId);
 
-    // Server-side credit deduction via service role (auth.uid() IS NULL → allowed by deduct_credits FIX 1)
-    const { costPer10q } = await getUserPlanCosts(userId);
-    const ratePerQuestion = costPer10q / 10;
-    const creditCost = Math.max(1, Math.ceil(data.count * ratePerQuestion));
+    // Check org/admin plan and handle trial vs credit deduction
+    const { data: subData } = await supabaseAdmin
+      .from("user_subscriptions")
+      .select("plans(slug, ai_enabled, trial_ai_calls)")
+      .eq("user_id", planOwnerId)
+      .eq("status", "active")
+      .maybeSingle();
+    // Supabase FK join can return object or array depending on schema cache; handle both
+    const plansRaw = (subData as any)?.plans;
+    const planInfo = Array.isArray(plansRaw) ? plansRaw[0] : plansRaw;
+    const planSlug = planInfo?.slug ?? "individual_starter";
+    const TRIAL_LIMIT: number = planInfo?.trial_ai_calls ?? 10;
 
-    const { data: deducted, error: deductErr } = await supabaseAdmin.rpc("deduct_credits", {
-      p_user_id: userId,
-      p_amount: creditCost,
-      p_type: "ai_question_gen",
-      p_description: `AI generated ${data.count} questions on: ${data.topic.slice(0, 60)}`,
-    });
-    if (deductErr || !deducted) {
-      throw new Error(deductErr?.message ?? "Insufficient credits for AI generation");
+    let creditsCharged = 0;
+    if (planSlug === "enterprise_starter") {
+      // Enterprise trial: 10 free AI calls pooled per org, tracked in trial_ai_usage
+      const { data: allowed, error: consumeErr } = await supabaseAdmin.rpc("consume_trial_ai_call", { p_user_id: planOwnerId });
+
+      if (consumeErr) {
+        // RPC unavailable — fall back to direct table operations
+        const { data: usageRow, error: usageErr } = await (supabaseAdmin as any)
+          .from("trial_ai_usage")
+          .select("used_calls, trial_end")
+          .eq("user_id", planOwnerId)
+          .maybeSingle();
+
+        if (usageErr) {
+          // Table missing or inaccessible — allow generation (migration likely pending)
+          console.error("[trial_ai] trial_ai_usage not accessible:", usageErr.message);
+        } else if (!usageRow) {
+          // First call — create row and allow
+          await (supabaseAdmin as any).from("trial_ai_usage").insert({
+            user_id: planOwnerId,
+            used_calls: 1,
+            trial_start: new Date().toISOString(),
+            trial_end: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+          });
+        } else {
+          const trialExpired = usageRow.trial_end && new Date(usageRow.trial_end) < new Date();
+          const usedUp = (usageRow.used_calls ?? 0) >= TRIAL_LIMIT;
+          if (trialExpired) throw new Error("Your enterprise trial has expired. Please upgrade to Enterprise Pro.");
+          if (usedUp) throw new Error(`Your ${TRIAL_LIMIT} complimentary AI calls have been used. Upgrade to Enterprise Pro for full AI access.`);
+          await (supabaseAdmin as any).from("trial_ai_usage")
+            .update({ used_calls: (usageRow.used_calls ?? 0) + 1, updated_at: new Date().toISOString() })
+            .eq("user_id", planOwnerId);
+        }
+      } else if (!allowed) {
+        throw new Error(`Your ${TRIAL_LIMIT} complimentary AI calls have been used or your trial has expired. Upgrade to Enterprise Pro for full AI access.`);
+      }
+    } else {
+      // Paid plan: deduct credits
+      const { costPer10q } = await getUserPlanCosts(planOwnerId);
+      const ratePerQuestion = costPer10q / 10;
+      const creditCost = Math.max(1, Math.ceil(data.count * ratePerQuestion));
+      const { data: deducted, error: deductErr } = await supabaseAdmin.rpc("deduct_credits", {
+        p_user_id: planOwnerId,
+        p_amount: creditCost,
+        p_type: "ai_question_gen",
+        p_description: `AI generated ${data.count} questions on: ${data.topic.slice(0, 60)}`,
+      });
+      if (deductErr || !deducted) {
+        throw new Error(deductErr?.message ?? "Insufficient credits for AI generation");
+      }
+      creditsCharged = creditCost;
     }
 
     const client = getClient();
@@ -448,19 +503,40 @@ export const generateQuestions = createServerFn({ method: "POST" })
       wrapUserField("topic", data.topic),
     ].join("\n");
 
+    const startedAt = Date.now();
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: AI_MODEL,
       max_tokens: 16000,
       system,
       output_config: { format: { type: "json_schema", schema } },
       messages: [{ role: "user", content: userPrompt }],
     });
+    const usage = (response as any).usage ?? {};
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text" || !textBlock.text) {
       throw new Error("Claude returned no content");
     }
-    return normalizeRows(parseQuestions(textBlock.text), data.difficulty).slice(0, data.count);
+    const normalized = normalizeRows(parseQuestions(textBlock.text), data.difficulty).slice(0, data.count);
+    await logAiUsage({
+      actorUserId: userId,
+      planOwnerId,
+      feature: "question_generation",
+      model: AI_MODEL,
+      inputTokens: Number(usage.input_tokens ?? 0),
+      outputTokens: Number(usage.output_tokens ?? 0),
+      creditsCharged,
+      latencyMs: Date.now() - startedAt,
+      details: {
+        topic: data.topic.slice(0, 200),
+        requested_count: data.count,
+        returned_count: normalized.length,
+        difficulty: data.difficulty,
+        kind,
+        plan_slug: planSlug,
+      },
+    });
+    return normalized;
   });
 
 export const extractQuestionsFromImage = createServerFn({ method: "POST" })
@@ -497,17 +573,61 @@ export const extractQuestionsFromImage = createServerFn({ method: "POST" })
     const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(data._token);
     if (userErr || !userData?.user?.id) throw new Error("Unauthorized");
     const userId = userData.user.id;
+    const planOwnerId = await resolvePlanOwnerId(userId);
 
-    // Server-side credit deduction via service role
-    const { costScan } = await getUserPlanCosts(userId);
-    const { data: deducted, error: deductErr } = await supabaseAdmin.rpc("deduct_credits", {
-      p_user_id: userId,
-      p_amount: costScan,
-      p_type: "ai_image_scan",
-      p_description: "AI image scan to extract questions",
-    });
-    if (deductErr || !deducted) {
-      throw new Error(deductErr?.message ?? "Insufficient credits for AI scan");
+    // Check org/admin plan and handle trial vs credit deduction
+    const { data: subData2 } = await supabaseAdmin
+      .from("user_subscriptions")
+      .select("plans(slug, trial_ai_calls)")
+      .eq("user_id", planOwnerId)
+      .eq("status", "active")
+      .maybeSingle();
+    const plansRaw2 = (subData2 as any)?.plans;
+    const planInfo2 = Array.isArray(plansRaw2) ? plansRaw2[0] : plansRaw2;
+    const planSlug2 = planInfo2?.slug ?? "individual_starter";
+    const TRIAL_LIMIT2: number = planInfo2?.trial_ai_calls ?? 10;
+
+    let creditsCharged = 0;
+    if (planSlug2 === "enterprise_starter") {
+      const { data: allowed, error: consumeErr2 } = await supabaseAdmin.rpc("consume_trial_ai_call", { p_user_id: planOwnerId });
+      if (consumeErr2) {
+        const { data: usageRow2, error: usageErr2 } = await (supabaseAdmin as any)
+          .from("trial_ai_usage")
+          .select("used_calls, trial_end")
+          .eq("user_id", planOwnerId)
+          .maybeSingle();
+        if (!usageErr2) {
+          if (!usageRow2) {
+            await (supabaseAdmin as any).from("trial_ai_usage").insert({
+              user_id: planOwnerId, used_calls: 1,
+              trial_start: new Date().toISOString(),
+              trial_end: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
+            });
+          } else {
+            if (usageRow2.trial_end && new Date(usageRow2.trial_end) < new Date())
+              throw new Error("Your enterprise trial has expired. Please upgrade to Enterprise Pro.");
+            if ((usageRow2.used_calls ?? 0) >= TRIAL_LIMIT2)
+              throw new Error(`Your ${TRIAL_LIMIT2} complimentary AI calls have been used. Upgrade to Enterprise Pro.`);
+            await (supabaseAdmin as any).from("trial_ai_usage")
+              .update({ used_calls: (usageRow2.used_calls ?? 0) + 1, updated_at: new Date().toISOString() })
+              .eq("user_id", planOwnerId);
+          }
+        }
+      } else if (!allowed) {
+        throw new Error(`Your ${TRIAL_LIMIT2} complimentary AI calls have been used or your trial has expired. Upgrade to Enterprise Pro for full AI access.`);
+      }
+    } else {
+      const { costScan } = await getUserPlanCosts(planOwnerId);
+      const { data: deducted, error: deductErr } = await supabaseAdmin.rpc("deduct_credits", {
+        p_user_id: planOwnerId,
+        p_amount: costScan,
+        p_type: "ai_image_scan",
+        p_description: "AI image scan to extract questions",
+      });
+      if (deductErr || !deducted) {
+        throw new Error(deductErr?.message ?? "Insufficient credits for AI scan");
+      }
+      creditsCharged = costScan;
     }
 
     const client = getClient();
@@ -523,8 +643,9 @@ export const extractQuestionsFromImage = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join("\n");
 
+    const startedAt = Date.now();
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: AI_MODEL,
       max_tokens: 16000,
       system: SYSTEM_SCAN,
       output_config: { format: { type: "json_schema", schema: SCHEMA_MCQ } },
@@ -545,10 +666,29 @@ export const extractQuestionsFromImage = createServerFn({ method: "POST" })
         },
       ],
     });
+    const usage = (response as any).usage ?? {};
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text" || !textBlock.text) {
       throw new Error("Claude returned no content");
     }
-    return normalizeRows(parseQuestions(textBlock.text), data.difficulty ?? "medium");
+    const normalized = normalizeRows(parseQuestions(textBlock.text), data.difficulty ?? "medium");
+    await logAiUsage({
+      actorUserId: userId,
+      planOwnerId,
+      feature: "question_image_scan",
+      model: AI_MODEL,
+      inputTokens: Number(usage.input_tokens ?? 0),
+      outputTokens: Number(usage.output_tokens ?? 0),
+      creditsCharged,
+      latencyMs: Date.now() - startedAt,
+      details: {
+        returned_count: normalized.length,
+        media_type: data.mediaType,
+        difficulty: data.difficulty ?? "medium",
+        has_hint: Boolean(data.hint),
+        plan_slug: planSlug2,
+      },
+    });
+    return normalized;
   });

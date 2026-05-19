@@ -18,7 +18,8 @@ import { useI18n } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { downloadQuizReportCsv, getQuizReportRows, type QuizReportAttempt } from "@/lib/quiz-reports";
+import { downloadQuizReportCsv, getQuizReportRows, printQuizResults, formatDuration, type QuizReportAttempt } from "@/lib/quiz-reports";
+import { usePlan } from "@/contexts/PlanContext";
 import { PaginationControls } from "@/components/PaginationControls";
 import { paginate } from "@/lib/pagination";
 import type { HistoryTrends } from "@/components/history/HistoryTrendCharts";
@@ -80,6 +81,7 @@ const QUIZ_TYPE_LABELS: Record<string, string> = {
 function QuizHistoryPage() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const { plan } = usePlan();
   const [sessions, setSessions] = useState<SessionWithStats[]>([]);
   const [sessionTotal, setSessionTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -279,75 +281,138 @@ function QuizHistoryPage() {
     [],
   );
 
-  // Escape HTML to prevent XSS when injecting into document.write
-  const esc = (v: unknown) =>
-    String(v ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-
-  // Print only the specific quiz section. Caller must pass the full attempts (with metadata).
+  // Print a single session — reuses the shared printQuizResults layout
   const printQuiz = (s: SessionWithStats, attempts: AttemptRow[]) => {
-    const reportRows = getQuizReportRows(attempts.map(toReportAttempt));
-    const submitted = reportRows.filter((a) => a.completed);
     const teacherName = getTeacherName(profile, user?.email);
     const schoolName = profile?.organization ?? "";
+    printQuizResults({
+      title: s.title,
+      categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" → "),
+      teacherName,
+      schoolName,
+      subjectLabel: subjectLabel(s),
+      topicLabel: QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "",
+      createdAt: s.created_at,
+      questionCount: attempts[0]?.total_questions ?? 0,
+      attempts: attempts.map(toReportAttempt),
+    });
+  };
 
-    const rows = submitted
-      .map(
-        (a) => `
-      <tr>
-        <td>${esc(a.rank)}</td>
-        <td>${esc(a.name)}</td>
-        <td>${esc(a.email) || "-"}</td>
-        <td>${esc(a.rollNumber) || "-"}</td>
-        <td>${esc(a.score)}</td>
-        <td>${esc(a.attemptedQuestions)}/${esc(a.totalQuestions)}</td>
-        <td>${esc(a.correctAnswers)}</td>
-        <td>${esc(a.wrongAnswers)}</td>
-        <td>${esc(a.unattemptedQuestions)}</td>
-      </tr>`,
-      )
-      .join("");
+  // Print ALL sessions — one report block per session in a single window
+  const printAll = () => {
+    const teacherName = getTeacherName(profile, user?.email);
+    const schoolName = profile?.organization ?? "";
+    const now = new Date().toLocaleString();
+    const esc = (v: unknown) =>
+      String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
-    const html = `<!DOCTYPE html><html><head><title>${esc(s.title)} - Report</title>
-    <style>
-      body { font-family: sans-serif; padding: 24px; color: #111; }
-      h1 { font-size: 20px; margin-bottom: 4px; }
-      .meta { font-size: 12px; color: #555; margin-bottom: 16px; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th { background: #f3f4f6; text-align: left; padding: 8px 10px; border-bottom: 2px solid #e5e7eb; }
-      td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
-      tr:nth-child(even) td { background: #f9fafb; }
-    </style></head><body>
-    <h1>${esc(s.title)}</h1>
-    <div class="meta">
-      Teacher: ${esc(teacherName)} · School: ${esc(schoolName) || "Not specified"} ·
-      Type: ${esc(QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "-")} ·
-      Date: ${esc(new Date(s.created_at).toLocaleDateString())} ·
-      Avg Score: ${esc(s.avgPercent)}%
+    const sessionBlocks = sessions.map((s) => {
+      const fullAttempts = expandedAttempts[s.id] ?? s.attempts;
+      const reportRows = getQuizReportRows(fullAttempts.map(toReportAttempt)).filter((a) => a.completed);
+      const tableRows = reportRows.map((r, i) => `
+        <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
+          <td style="text-align:center;font-weight:700;">${r.rank}</td>
+          <td><strong>${esc(r.name)}</strong></td>
+          <td>${esc(r.rollNumber) || "-"}</td>
+          <td>${esc(r.email) || "-"}</td>
+          <td style="text-align:center;">${r.attemptedQuestions}</td>
+          <td style="text-align:center;color:#16a34a;font-weight:700;">${r.correctAnswers}</td>
+          <td style="text-align:center;color:#dc2626;font-weight:700;">${r.wrongAnswers}</td>
+          <td style="text-align:center;">${formatDuration(r.durationSeconds ?? null)}</td>
+          <td style="text-align:center;">${r.unattemptedQuestions}</td>
+        </tr>`).join("");
+
+      return `
+      <div class="session-block">
+        <div class="top-bar">
+          <div>
+            <div class="app-name">EvaluTease</div>
+            <div class="app-sub">Quiz Results Report</div>
+          </div>
+          <div class="print-date">
+            <div>Printed: ${esc(now)}</div>
+            <div>Total Participants: ${reportRows.length}</div>
+          </div>
+        </div>
+        <div class="info-grid">
+          <div class="info-item"><div class="lbl">Company / School</div><div class="val">${esc(schoolName) || "Not specified"}</div></div>
+          <div class="info-item"><div class="lbl">Host / Teacher</div><div class="val">${esc(teacherName)}</div></div>
+          <div class="info-item full"><div class="lbl">Quiz Topic</div><div class="val">${esc(s.title)}${s.topic ? " — " + esc(QUIZ_TYPE_LABELS[s.topic] ?? s.topic) : ""}</div></div>
+          <div class="info-item"><div class="lbl">Subject</div><div class="val">${esc(subjectLabel(s))}</div></div>
+          <div class="info-item"><div class="lbl">Total Questions</div><div class="val">${fullAttempts[0]?.total_questions ?? 0}</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th class="center">Rank</th><th>Participant Name</th><th>Roll Number</th><th>Email</th>
+              <th class="center">Attempted</th><th class="center">Correct</th><th class="center">Wrong</th>
+              <th class="center">Total Time</th><th class="center">Unattempted</th>
+            </tr></thead>
+            <tbody>${tableRows || '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:12px;">No submissions</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>All Quiz Results</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 20px; }
+    .session-block { margin-bottom: 40px; page-break-after: always; }
+    .session-block:last-child { page-break-after: auto; }
+    .top-bar { background: #6d28d9; color: #fff; padding: 14px 20px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
+    .top-bar .app-name { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+    .top-bar .app-sub { font-size: 10px; opacity: 0.8; margin-top: 2px; }
+    .top-bar .print-date { font-size: 10px; opacity: 0.8; text-align: right; }
+    .info-grid { border: 1px solid #e5e7eb; border-top: none; padding: 14px 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+    .info-item { padding: 6px 10px 6px 0; border-bottom: 1px solid #f3f4f6; }
+    .info-item .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; }
+    .info-item .val { font-size: 12px; font-weight: 600; margin-top: 1px; color: #111; }
+    .info-item.full { grid-column: 1 / -1; }
+    .table-wrap { margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    thead tr { background: #6d28d9; color: #fff; }
+    thead th { padding: 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+    thead th.center { text-align: center; }
+    tbody td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    .signature { margin-top: 20px; border-top: 2px solid #6d28d9; padding-top: 14px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .sig-left .greeting { font-size: 11px; color: #374151; margin-bottom: 3px; }
+    .sig-left .brand { font-size: 17px; font-weight: 700; color: #6d28d9; margin-bottom: 6px; }
+    .sig-left .contact { font-size: 10px; color: #6b7280; line-height: 1.8; }
+    .sig-right { font-size: 9px; color: #9ca3af; text-align: right; line-height: 1.7; }
+    @media print { body { padding: 8px; } @page { margin: 10mm; size: A4 landscape; } }
+  </style>
+</head>
+<body>
+  ${sessionBlocks}
+  <div class="signature">
+    <div class="sig-left">
+      <div class="greeting">Warm &amp; Best Regards,</div>
+      <div class="brand">BabulQ</div>
+      <div class="contact">
+        📞 +92 310 2700403<br/>
+        ✉️ contact@babultech.com<br/>
+        📍 <a href="https://maps.app.goo.gl/68znfMTx4ar17ipD9" style="color:#6d28d9;text-decoration:none;">IDC Office, Islamabad — View on Maps</a>
+      </div>
     </div>
-    <table>
-      <thead><tr>
-        <th>Rank</th><th>Name</th><th>Email</th><th>Roll</th>
-        <th>Score</th><th>Attempted</th><th>Correct</th><th>Wrong</th><th>Unattempted</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    </body></html>`;
+    <div class="sig-right">
+      <div>© 2025 BabulTech · All rights reserved</div>
+      <div>evalutease.com</div>
+    </div>
+  </div>
+  <script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
 
-    const win = window.open("", "_blank");
+    const win = window.open("", "_blank", "width=1100,height=800");
     if (!win) return;
     win.document.write(html);
     win.document.close();
-    win.print();
-  };
-
-  // Print the full history page
-  const printAll = () => {
-    window.print();
   };
 
   const hasFilters = filterTitle || filterType || filterDateFrom || filterDateTo;
@@ -643,7 +708,7 @@ function QuizHistoryPage() {
                           {downloadOpenId === s.id && (
                             <div className="absolute right-0 mt-1 w-40 rounded-xl border border-border bg-card shadow-card z-10 overflow-hidden">
                               <button type="button" className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
-                                onClick={() => { setDownloadOpenId(null); downloadQuizReportCsv({ title: s.title, categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> "), teacherName, schoolName, subjectLabel: subjectLabel(s), topicLabel: quizTypeLabel, createdAt: s.created_at, questionCount: fullAttempts[0]?.total_questions ?? 0, attempts: fullAttempts.map(toReportAttempt) }); }}>
+                                onClick={() => { setDownloadOpenId(null); downloadQuizReportCsv({ title: s.title, categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> "), teacherName, schoolName, subjectLabel: subjectLabel(s), topicLabel: quizTypeLabel, createdAt: s.created_at, questionCount: fullAttempts[0]?.total_questions ?? 0, attempts: fullAttempts.map(toReportAttempt) }, { watermark: plan?.file_export_watermark !== false }); }}>
                                 <FileSpreadsheet className="h-3.5 w-3.5 text-success" /> Excel (CSV)
                               </button>
                               <button type="button" className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"

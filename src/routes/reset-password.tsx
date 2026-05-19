@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
 
 export const Route = createFileRoute("/reset-password")({
@@ -28,7 +29,7 @@ function ResetPasswordPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) { toast.error("Min 6 characters"); return; }
+    if (password.length < 6) { validationError("Min 6 characters"); return; }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);

@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
 import { Toaster } from "@/components/ui/sonner";
 import { ProfileProvider } from "@/contexts/ProfileContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 
 import appCss from "../styles.css?url";
 
@@ -70,8 +71,10 @@ function RootComponent() {
     <I18nProvider>
       <AuthProvider>
         <ProfileProvider>
-          <Outlet />
-          <Toaster position="top-right" />
+          <NotificationProvider>
+            <Outlet />
+            <Toaster position="top-right" />
+          </NotificationProvider>
         </ProfileProvider>
       </AuthProvider>
     </I18nProvider>

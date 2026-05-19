@@ -8,47 +8,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
 import { Logo } from "@/components/Logo";
-import { Check, Zap, Star, Building2, ChevronRight, ChevronLeft, Eye, EyeOff, Loader2 } from "lucide-react";
+import { ensureSelectedPlan } from "@/lib/plan.server";
+import { Check, User, Building2, ChevronRight, ChevronLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/signup")({
   component: SignupPage,
 });
 
-const PLANS = [
+const USER_TYPES = [
   {
-    slug: "free",
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    icon: Zap,
-    color: "text-muted-foreground",
-    border: "border-border hover:border-primary/40",
-    badge: null,
-    features: ["5 quizzes / day", "30 participants / session", "100 questions"],
-  },
-  {
-    slug: "pro",
-    name: "Pro",
-    price: "$9",
-    period: "/ month",
-    icon: Star,
+    slug: "individual_starter",
+    label: "Personal / Teaching",
+    desc: "I'm an individual teacher, trainer, or student",
+    icon: User,
     color: "text-primary",
-    border: "border-primary/60 shadow-[0_0_20px_rgba(34,197,94,0.15)]",
-    badge: "Most Popular",
-    features: ["Unlimited quizzes", "500 participants / session", "AI question generator"],
+    activeBorder: "border-primary/60 bg-primary/5 ring-2 ring-primary/40",
+    inactiveBorder: "border-border bg-secondary/20 hover:border-primary/40",
+    note: "Start free forever",
   },
   {
-    slug: "enterprise",
-    name: "Enterprise",
-    price: "$29",
-    period: "/ month",
+    slug: "enterprise_starter",
+    label: "School / Organization",
+    desc: "We're a school, company, or team",
     icon: Building2,
     color: "text-yellow-400",
-    border: "border-yellow-400/40 hover:border-yellow-400/70",
-    badge: null,
-    features: ["Everything in Pro", "5,000 participants", "Dedicated support"],
+    activeBorder: "border-yellow-400/60 bg-yellow-400/5 ring-2 ring-yellow-400/40",
+    inactiveBorder: "border-border bg-secondary/20 hover:border-yellow-400/40",
+    note: "15-day free trial included",
   },
 ] as const;
 
@@ -133,7 +122,7 @@ function SignupPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
-  const [selectedPlan, setSelectedPlan] = useState<string>("pro");
+  const [selectedPlan, setSelectedPlan] = useState<string>("individual_starter");
   const [form, setForm] = useState({
     firstName: "", lastName: "", mobile: "",
     email: "", password: "", role: "", useCases: [] as string[], referral: "",
@@ -176,10 +165,11 @@ function SignupPage() {
       });
       setErrors(fe);
       // show first error as toast for accessibility
-      toast.error(parsed.error.issues[0].message);
+      validationError(parsed.error.issues[0].message);
       return;
     }
     setLoading(true);
+    window.localStorage.setItem("pending_signup_plan", selectedPlan);
     const { error } = await supabase.auth.signUp({
       email: parsed.data.email,
       password: parsed.data.password,
@@ -207,8 +197,36 @@ function SignupPage() {
         },
       },
     });
+    if (error) { setLoading(false); validationError(error.message); return; }
+
+    // Ensure correct plan is assigned (in case trigger missed it)
+    try {
+      // Wait briefly for session to be established
+      await new Promise((r) => setTimeout(r, 500));
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await ensureSelectedPlan({
+          data: {
+            planSlug: selectedPlan === "enterprise_starter" ? "enterprise_starter" : "individual_starter",
+            _token: session.access_token,
+          },
+        });
+        window.localStorage.removeItem("pending_signup_plan");
+      }
+    } catch (e) {
+      console.warn("Plan assignment fallback failed:", e);
+    }
+
+    // Send welcome email (fire-and-forget)
+    try {
+      const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
+      const name = parsed.data.fullName || parsed.data.email.split("@")[0];
+      await supabase.functions.invoke("send-email", {
+        body: { type: "welcome", data: { to: parsed.data.email, name, appUrl } },
+      });
+    } catch (e) { console.warn("Welcome email failed:", e); }
+
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
     toast.success("Account created! Welcome.");
     navigate({ to: "/dashboard" });
   };
@@ -218,7 +236,7 @@ function SignupPage() {
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin + "/dashboard",
     });
-    if (result.error) { setLoading(false); toast.error("Google sign-in failed"); return; }
+    if (result.error) { setLoading(false); validationError("Google sign-in failed"); return; }
     if (result.redirected) return;
     navigate({ to: "/dashboard" });
   };
@@ -260,68 +278,56 @@ function SignupPage() {
         </span>
       </div>
 
-      {/* ── STEP 1: Plan selection ── */}
+      {/* ── STEP 1: How will you use it? ── */}
       {step === 1 && (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground -mt-2 mb-1">{t("signup.choosePlan")}</p>
+        <div className="space-y-4">
+          <div className="-mt-2 mb-1">
+            <p className="text-base font-semibold">How will you use EvaluTease?</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Pick the one that fits you — you can always change later.</p>
+          </div>
 
-          {PLANS.map(plan => {
-            const Icon = plan.icon;
-            const active = selectedPlan === plan.slug;
-            return (
-              <button
-                key={plan.slug}
-                type="button"
-                onClick={() => setSelectedPlan(plan.slug)}
-                className={`w-full text-left rounded-2xl border p-4 transition-all relative min-h-[72px] ${plan.border} ${
-                  active ? "bg-primary/5 ring-2 ring-primary/40" : "bg-secondary/20 hover:bg-secondary/40"
-                }`}
-              >
-                {plan.badge && (
-                  <span className="absolute -top-2.5 right-4 text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
-                    {plan.badge}
-                  </span>
-                )}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2 rounded-lg bg-secondary/60 shrink-0 ${plan.color}`}>
-                      <Icon size={18} />
+          <div className="grid grid-cols-1 gap-3">
+            {USER_TYPES.map(type => {
+              const Icon = type.icon;
+              const active = selectedPlan === type.slug;
+              return (
+                <button
+                  key={type.slug}
+                  type="button"
+                  onClick={() => setSelectedPlan(type.slug)}
+                  className={`w-full text-left rounded-2xl border p-5 transition-all ${
+                    active ? type.activeBorder : type.inactiveBorder
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-2xl bg-secondary/60 shrink-0 ${type.color}`}>
+                      <Icon size={24} />
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm">{plan.name}</span>
-                        <span className={`font-bold text-base ${plan.color}`}>{plan.price}</span>
-                        <span className="text-xs text-muted-foreground">{plan.period}</span>
-                      </div>
-                      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                        {plan.features.map(f => (
-                          <li key={f} className="text-[11px] text-muted-foreground flex items-center gap-1">
-                            <Check size={10} className="text-primary/70 shrink-0" />{f}
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-base">{type.label}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{type.desc}</div>
+                      <div className={`text-xs font-semibold mt-1.5 ${type.color}`}>{type.note}</div>
+                    </div>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                      active ? "border-primary bg-primary" : "border-border"
+                    }`}>
+                      {active && <Check size={12} className="text-primary-foreground" />}
                     </div>
                   </div>
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                    active ? "border-primary bg-primary" : "border-border"
-                  }`}>
-                    {active && <Check size={10} className="text-primary-foreground" />}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
 
           <Button
             type="button"
-            className="w-full h-12 bg-gradient-primary font-semibold shadow-glow mt-2 text-base"
+            className="w-full h-12 bg-gradient-primary font-semibold shadow-glow text-base"
             onClick={() => setStep(2)}
           >
-            Continue with {PLANS.find(p => p.slug === selectedPlan)?.name}
-            <ChevronRight size={16} className="ml-1" />
+            Continue <ChevronRight size={16} className="ml-1" />
           </Button>
 
-          <div className="flex items-center gap-3 my-1">
+          <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-border" />
             <span className="text-xs text-muted-foreground">or</span>
             <div className="flex-1 h-px bg-border" />
@@ -595,11 +601,11 @@ function SignupPage() {
             <FieldError msg={errors.referral} />
           </div>
 
-          {/* Selected plan badge */}
+          {/* Selected type badge */}
           <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20">
-            <span className="text-xs text-muted-foreground">{t("signup.selectedPlan")}:</span>
+            <span className="text-xs text-muted-foreground">Account type:</span>
             <span className="text-xs font-bold text-primary">
-              {PLANS.find(p => p.slug === selectedPlan)?.name} — {PLANS.find(p => p.slug === selectedPlan)?.price}
+              {USER_TYPES.find(p => p.slug === selectedPlan)?.label}
             </span>
             <button type="button" onClick={() => setStep(1)} className="ml-auto text-xs text-primary hover:underline min-h-[32px] px-2">
               Change

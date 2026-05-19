@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import { Building2, Eye, EyeOff, CheckCircle2, LogOut, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/accept-invite")({
@@ -72,7 +73,7 @@ function AcceptInvitePage() {
       return false;
     }
     if (data === false) {
-      toast.error("This invite is invalid, expired, or has already been claimed.");
+      validationError("This invite is invalid, expired, or has already been claimed.");
       return false;
     }
     return true;
@@ -110,9 +111,9 @@ function AcceptInvitePage() {
 
   // Path B: new account
   const handleSignup = async () => {
-    if (!form.full_name.trim()) { toast.error("Full name required"); return; }
-    if (!form.email.trim()) { toast.error("Email required"); return; }
-    if (form.password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (!form.full_name.trim()) { validationError("Full name required"); return; }
+    if (!form.email.trim()) { validationError("Email required"); return; }
+    if (form.password.length < 6) { validationError("Password must be at least 6 characters"); return; }
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email: form.email.trim().toLowerCase(),
@@ -136,7 +137,7 @@ function AcceptInvitePage() {
 
   // Path C: existing account, not currently signed in
   const handleLogin = async () => {
-    if (!form.email.trim() || !form.password) { toast.error("Email and password required"); return; }
+    if (!form.email.trim() || !form.password) { validationError("Email and password required"); return; }
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({
       email: form.email.trim().toLowerCase(),

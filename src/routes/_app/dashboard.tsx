@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { usePlan } from "@/contexts/PlanContext";
 import { useHost, type HostInfo } from "@/contexts/HostContext";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 
 export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
@@ -77,7 +78,7 @@ function HostDashboard({ host, userId }: { host: HostMemberInfo; userId: string 
 
   const handleRequestCredits = async () => {
     const amount = parseInt(reqAmount);
-    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return; }
+    if (!amount || amount <= 0) { validationError("Enter a valid amount"); return; }
     setRequesting(true);
     const { error } = await (supabase as any).from("credit_requests").insert({
       member_id: host.member_id,

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
+import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
 
 export const Route = createFileRoute("/forgot-password")({
@@ -22,7 +23,7 @@ function ForgotPasswordPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const parsed = z.string().trim().email().max(255).safeParse(email);
-    if (!parsed.success) { toast.error("Invalid email"); return; }
+    if (!parsed.success) { validationError("Invalid email"); return; }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
       redirectTo: `${window.location.origin}/reset-password`,
