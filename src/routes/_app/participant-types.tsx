@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Armchair, BarChart3, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp,
-  ClipboardList, Hash, Mail, Pencil, Phone, Plus, Search, Send, Target, Trash2, TrendingUp,
+  ClipboardList, Hash, Mail, Pencil, Phone, Plus, ScanLine, Search, Send, Target, Trash2, TrendingUp,
   Trophy, UploadCloud, UserPlus, Users, UsersRound, X, XCircle, FolderPlus,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
