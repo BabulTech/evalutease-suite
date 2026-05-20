@@ -142,6 +142,27 @@ function PublicQuizPage() {
   }, [reload]);
 
   useEffect(() => {
+    const handleSessionUpdate = async (newRow: SessionUpdate) => {
+      const current = phaseRef.current;
+      const currentAttempt =
+        current.kind === "lobby" || current.kind === "quiz" || current.kind === "completed"
+          ? current.attemptId
+          : null;
+      const needsQuestions =
+        newRow.status === "active" &&
+        currentAttempt &&
+        (current.kind === "lobby" || current.kind === "quiz") &&
+        current.data.questions.length === 0;
+
+      if (needsQuestions) {
+        const playData = await fetchPlaySession(currentAttempt);
+        if (playData) setPhase((prev) => routeForData(playData, prev));
+        return;
+      }
+
+      setPhase((prev) => applySessionUpdate(prev, newRow));
+    };
+
     const channel = supabase
       .channel(`quiz-status-${code}`)
       .on(
@@ -150,25 +171,14 @@ function PublicQuizPage() {
         async (payload) => {
           const newRow = payload.payload as SessionUpdate;
           if (newRow?.access_code && newRow.access_code !== code) return;
-
-          const current = phaseRef.current;
-          const currentAttempt =
-            current.kind === "lobby" || current.kind === "quiz" || current.kind === "completed"
-              ? current.attemptId
-              : null;
-          const needsQuestions =
-            newRow.status === "active" &&
-            currentAttempt &&
-            (current.kind === "lobby" || current.kind === "quiz") &&
-            current.data.questions.length === 0;
-
-          if (needsQuestions) {
-            const playData = await fetchPlaySession(currentAttempt);
-            if (playData) setPhase((prev) => routeForData(playData, prev));
-            return;
-          }
-
-          setPhase((prev) => applySessionUpdate(prev, newRow));
+          await handleSessionUpdate(newRow);
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "quiz_sessions", filter: `access_code=eq.${code}` },
+        async (payload) => {
+          await handleSessionUpdate(payload.new as SessionUpdate);
         },
       )
       .subscribe();
@@ -269,7 +279,11 @@ function PublicQuizPage() {
 
   useEffect(() => {
     if (phase.kind !== "lobby" || !phase.data.session.scheduled_at) return;
-    const t = setInterval(() => void reload(), 15000);
+    const scheduledMs = new Date(phase.data.session.scheduled_at).getTime();
+    const isPast = Date.now() >= scheduledMs;
+    // Poll every 2s once scheduled time is reached, otherwise every 15s
+    const interval = isPast ? 2000 : 15000;
+    const t = setInterval(() => void reload(), interval);
     return () => clearInterval(t);
   }, [phase, reload]);
 
@@ -466,7 +480,7 @@ function PublicQuizPage() {
   if (phase.kind === "lobby") {
     return (
       <Wrapper>
-        <Lobby session={phase.data.session} />
+        <Lobby session={phase.data.session} onScheduledTimeReached={reload} />
       </Wrapper>
     );
   }
