@@ -7,28 +7,20 @@ import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { DynamicParticipantFields } from "@/components/participants/DynamicParticipantFields";
 import {
   emptyDraft,
   validateDraft,
   draftToRow,
   type ParticipantDraft,
-  type ParticipantType,
 } from "@/components/participants/types";
-
-const TYPE_OPTIONS: { value: ParticipantType; label: string; emoji: string }[] = [
-  { value: "student", label: "Student", emoji: "🎓" },
-  { value: "teacher", label: "Teacher", emoji: "📚" },
-  { value: "employee", label: "Employee", emoji: "💼" },
-  { value: "fun", label: "Fun / Guest", emoji: "🎉" },
-];
+import {
+  defaultHostSettings,
+  normalizeRegistrationFields,
+  normalizeRegistrationFieldsByType,
+  resolveRegistrationFields,
+  PARTICIPANT_TYPE_LABELS,
+} from "@/components/settings/host-settings";
 
 export const Route = createFileRoute("/invite/$token")({ component: InvitePage });
 
@@ -36,6 +28,9 @@ type InviteData = {
   invite: { id: string; status: string; email: string | null };
   type: { id: string; name: string; icon: string | null };
   subtype: { id: string; name: string };
+  participant_type?: string | null;
+  host_registration_fields?: unknown;
+  host_fields_by_type?: unknown;
 };
 
 type RpcResponse<T> = T | { error: string };
@@ -153,10 +148,21 @@ function InvitePage() {
     setPhase({ kind: "done", data, participantId: payload.participant_id });
   };
 
-  const set = <K extends keyof ParticipantDraft>(key: K, value: ParticipantDraft[K]) =>
-    setDraft((prev) => ({ ...prev, [key]: value }));
+  const set = (patch: Partial<ParticipantDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
   const busy = phase.kind === "submitting";
+  const lockedType = data.participant_type ?? "";
+
+  // Host field config comes directly from the RPC response — no extra fetch needed.
+  const hostSettings = {
+    registration_fields: normalizeRegistrationFields(data.host_registration_fields),
+    registration_fields_by_type: normalizeRegistrationFieldsByType(data.host_fields_by_type),
+  };
+  const fieldConfig = resolveRegistrationFields(hostSettings, lockedType);
+
+  const lockedTypeLabel = lockedType
+    ? PARTICIPANT_TYPE_LABELS[lockedType as keyof typeof PARTICIPANT_TYPE_LABELS]
+    : undefined;
 
   return (
     <PageShell>
@@ -166,115 +172,23 @@ function InvitePage() {
           {data.type.name} → {data.subtype.name}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Fill in your details below - your type and group are pre-selected.
+          Fill in your details below to join the group.
         </p>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {/* Type selector */}
-          <div className="md:col-span-2">
-            <Label className="mb-1.5">I am a…</Label>
-            <Select
-              value={draft.participant_type || "__none__"}
-              onValueChange={(v) => set("participant_type", v === "__none__" ? "" : v as ParticipantType)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select your role (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">- Not specified -</SelectItem>
-                {TYPE_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Name - always */}
-          <div className="md:col-span-2">
+        <div className="mt-6 space-y-4">
+          {/* Name — always */}
+          <div>
             <Label className="mb-1.5">Name <span className="text-destructive">*</span></Label>
-            <Input value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder="Full name" autoFocus maxLength={120} />
-          </div>
-          <div>
-            <Label className="mb-1.5">Email</Label>
-            <Input type="email" value={draft.email} onChange={(e) => set("email", e.target.value)} placeholder="you@example.com" />
-          </div>
-          <div>
-            <Label className="mb-1.5">Mobile</Label>
-            <Input type="tel" value={draft.mobile} onChange={(e) => set("mobile", e.target.value)} placeholder="+92 300 0000000" />
+            <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="Full name" autoFocus maxLength={120} />
           </div>
 
-          {/* Student / unset fields */}
-          {(draft.participant_type === "student" || draft.participant_type === "") && (
-            <>
-              <div>
-                <Label className="mb-1.5">School / Organization</Label>
-                <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
-              </div>
-              <div>
-                <Label className="mb-1.5">Class / Grade</Label>
-                <Input value={draft.grade || draft.class} onChange={(e) => { set("grade", e.target.value); set("class", e.target.value); }} placeholder="Class 10 / Year 12" />
-              </div>
-              <div>
-                <Label className="mb-1.5">Roll number</Label>
-                <Input value={draft.roll_number} onChange={(e) => set("roll_number", e.target.value)} placeholder="2026-CS-042" />
-              </div>
-              <div>
-                <Label className="mb-1.5">Seat number</Label>
-                <Input value={draft.seat_number} onChange={(e) => set("seat_number", e.target.value)} />
-              </div>
-            </>
-          )}
-
-          {/* Teacher fields */}
-          {draft.participant_type === "teacher" && (
-            <>
-              <div>
-                <Label className="mb-1.5">Employee ID</Label>
-                <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
-              </div>
-              <div>
-                <Label className="mb-1.5">School / Institution</Label>
-                <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
-              </div>
-              <div>
-                <Label className="mb-1.5">Subject / Class</Label>
-                <Input value={draft.class} onChange={(e) => set("class", e.target.value)} placeholder="Mathematics, Class 9–10" />
-              </div>
-            </>
-          )}
-
-          {/* Employee fields */}
-          {draft.participant_type === "employee" && (
-            <>
-              <div>
-                <Label className="mb-1.5">Employee ID</Label>
-                <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
-              </div>
-              <div>
-                <Label className="mb-1.5">Company / Organization</Label>
-                <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Acme Corp" />
-              </div>
-              <div>
-                <Label className="mb-1.5">Department</Label>
-                <Input value={draft.department} onChange={(e) => set("department", e.target.value)} placeholder="Engineering" />
-              </div>
-            </>
-          )}
-
-          {/* Fun / Guest */}
-          {draft.participant_type === "fun" && (
-            <div>
-              <Label className="mb-1.5">Nickname / Alias</Label>
-              <Input value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="e.g. QuizMaster99" />
-            </div>
-          )}
-
-          {draft.participant_type !== "fun" && (
-            <div className="md:col-span-2">
-              <Label className="mb-1.5">Notes</Label>
-              <Textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} rows={2} placeholder="Anything worth noting" />
-            </div>
-          )}
+          {/* Dynamic fields — driven by host config + locked type */}
+          <DynamicParticipantFields
+            draft={draft}
+            fields={fieldConfig}
+            onSet={set}
+            lockedTypeLabel={lockedTypeLabel}
+          />
         </div>
 
         <div className="mt-6 flex justify-end">

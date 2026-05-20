@@ -63,7 +63,12 @@ export function emptyDraft(): ParticipantDraft {
 
 export type DraftValidation = { ok: true } | { ok: false; reason: string };
 
-export function validateDraft(d: ParticipantDraft): DraftValidation {
+import type { RegistrationFields } from "@/components/settings/host-settings";
+
+export function validateDraft(
+  d: ParticipantDraft,
+  fields?: RegistrationFields,
+): DraftValidation {
   const name = d.name.trim();
   if (!name) return { ok: false, reason: "Name is required" };
   if (name.length > PARTICIPANT_NAME_MAX)
@@ -71,6 +76,31 @@ export function validateDraft(d: ParticipantDraft): DraftValidation {
   const email = d.email.trim();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return { ok: false, reason: "Email looks invalid" };
+
+  // Check required fields from config
+  if (fields) {
+    const FIELD_TO_DRAFT: Partial<Record<string, keyof ParticipantDraft>> = {
+      email: "email",
+      mobile: "mobile",
+      roll_number: "roll_number",
+      seat_number: "seat_number",
+      class: "class",
+      grade: "grade",
+      organization: "organization",
+      employee_id: "employee_id",
+      department: "department",
+      address: "address",
+      notes: "notes",
+    };
+    for (const [key, cfg] of Object.entries(fields)) {
+      if (!cfg.required || !cfg.visible) continue;
+      const draftKey = FIELD_TO_DRAFT[key];
+      if (draftKey && !String(d[draftKey] ?? "").trim()) {
+        return { ok: false, reason: `${key.replace(/_/g, " ")} is required` };
+      }
+    }
+  }
+
   return { ok: true };
 }
 

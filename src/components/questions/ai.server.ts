@@ -87,17 +87,26 @@ function wrapUserField(label: string, value: string): string {
 async function getUserPlanCosts(planOwnerId: string): Promise<{
   costPer10q: number;
   costScan: number;
+  costByKind: Record<string, number>;
 }> {
   const { data } = await supabaseAdmin
     .from("user_subscriptions")
-    .select("plans(credit_cost_ai_10q, credit_cost_ai_scan)")
+    .select("plans(credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_ai_tf_10q, credit_cost_ai_short_10q, credit_cost_ai_long_10q, credit_cost_ai_mix_10q)")
     .eq("user_id", planOwnerId)
     .eq("status", "active")
     .maybeSingle();
   const plan = (data as any)?.plans;
+  const mcq10q = plan?.credit_cost_ai_10q ?? 3;
   return {
-    costPer10q: plan?.credit_cost_ai_10q ?? 3,
+    costPer10q: mcq10q,
     costScan: plan?.credit_cost_ai_scan ?? 2,
+    costByKind: {
+      mcq:          mcq10q,
+      true_false:   plan?.credit_cost_ai_tf_10q    ?? mcq10q,
+      short_answer: plan?.credit_cost_ai_short_10q ?? Math.max(mcq10q * 1.5, 5),
+      long_answer:  plan?.credit_cost_ai_long_10q  ?? Math.max(mcq10q * 3, 10),
+      mix:          plan?.credit_cost_ai_mix_10q   ?? Math.max(mcq10q * 2, 6),
+    },
   };
 }
 
@@ -473,9 +482,11 @@ export const generateQuestions = createServerFn({ method: "POST" })
         throw new Error(`Your ${TRIAL_LIMIT} complimentary AI calls have been used or your trial has expired. Upgrade to Enterprise Pro for full AI access.`);
       }
     } else {
-      // Paid plan: deduct credits
-      const { costPer10q } = await getUserPlanCosts(planOwnerId);
-      const ratePerQuestion = costPer10q / 10;
+      // Paid plan: deduct credits using per-question-type rate
+      const { costByKind } = await getUserPlanCosts(planOwnerId);
+      const kind = data.kind ?? "mcq";
+      const rate10q = costByKind[kind] ?? costByKind.mcq;
+      const ratePerQuestion = rate10q / 10;
       const creditCost = Math.max(1, Math.ceil(data.count * ratePerQuestion));
       const { data: deducted, error: deductErr } = await supabaseAdmin.rpc("deduct_credits", {
         p_user_id: planOwnerId,

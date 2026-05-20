@@ -37,10 +37,16 @@ import { useHost, type HostInfo } from "@/contexts/HostContext";
 import {
   defaultHostSettings,
   normalizeRegistrationFields,
+  normalizeRegistrationFieldsByType,
   REGISTRATION_FIELD_KEYS,
   REGISTRATION_FIELD_LABELS,
+  PARTICIPANT_TYPE_KEYS,
+  PARTICIPANT_TYPE_LABELS,
+  DEFAULT_FIELDS_BY_TYPE,
   type HostSettings,
   type RegistrationFieldKey,
+  type RegistrationFields,
+  type FieldTypeKey,
 } from "@/components/settings/host-settings";
 
 export const Route = createFileRoute("/_app/settings")({
@@ -984,6 +990,9 @@ function HostSettingsForm({
     if (data) {
       setSettings({
         registration_fields: normalizeRegistrationFields(data.registration_fields),
+        registration_fields_by_type: normalizeRegistrationFieldsByType(
+          (data as Record<string, unknown>).registration_fields_by_type,
+        ),
         marks_per_correct: data.marks_per_correct ?? 1,
         speed_bonus_enabled: data.speed_bonus_enabled ?? false,
         speed_bonus_max: data.speed_bonus_max ?? 1,
@@ -1004,6 +1013,7 @@ function HostSettingsForm({
     const payload = {
       owner_id: userId,
       registration_fields: settings.registration_fields,
+      registration_fields_by_type: settings.registration_fields_by_type,
       marks_per_correct: settings.marks_per_correct,
       speed_bonus_enabled: settings.speed_bonus_enabled,
       speed_bonus_max: settings.speed_bonus_max,
@@ -1033,7 +1043,9 @@ function HostSettingsForm({
       {section === "registration" ? (
         <RegistrationFieldsEditor
           value={settings.registration_fields}
+          byType={settings.registration_fields_by_type}
           onChange={(rf) => setSettings({ ...settings, registration_fields: rf })}
+          onChangeByType={(bt) => setSettings({ ...settings, registration_fields_by_type: bt })}
         />
       ) : (
         <ScoringEditor value={settings} onChange={(s) => setSettings({ ...settings, ...s })} />
@@ -1052,32 +1064,117 @@ function HostSettingsForm({
 
 function RegistrationFieldsEditor({
   value,
+  byType,
   onChange,
+  onChangeByType,
 }: {
   value: HostSettings["registration_fields"];
+  byType: HostSettings["registration_fields_by_type"];
   onChange: (next: HostSettings["registration_fields"]) => void;
+  onChangeByType: (next: HostSettings["registration_fields_by_type"]) => void;
 }) {
   const { t } = useI18n();
+  const [activeType, setActiveType] = useState<FieldTypeKey>("default");
+
+  const isDefault = activeType === "default";
+  const hasOverride = !isDefault && Boolean(byType[activeType]);
+
+  // Effective config being edited
+  const effective: RegistrationFields = isDefault
+    ? value
+    : (byType[activeType] ?? value);
+
   const update = (
     key: RegistrationFieldKey,
     patch: Partial<{ visible: boolean; required: boolean }>,
   ) => {
-    const next = { ...value, [key]: { ...value[key], ...patch } };
+    const next = { ...effective, [key]: { ...effective[key], ...patch } };
     if (key === "name") {
       next.name = { visible: true, required: true };
     } else if (!next[key].visible) {
       next[key].required = false;
     }
-    onChange(next);
+    if (isDefault) {
+      onChange(next);
+    } else {
+      onChangeByType({ ...byType, [activeType]: next });
+    }
+  };
+
+  const enableOverride = () => {
+    if (isDefault) return;
+    const seed = DEFAULT_FIELDS_BY_TYPE[activeType] ?? value;
+    onChangeByType({ ...byType, [activeType]: structuredClone(seed) });
+  };
+
+  const removeOverride = () => {
+    if (isDefault) return;
+    const next = { ...byType };
+    delete next[activeType];
+    onChangeByType(next);
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <h3 className="font-semibold">{t("settings.registrationTitle")}</h3>
         <p className="text-xs text-muted-foreground mt-1">{t("settings.registrationDesc")}</p>
       </div>
-      <div className="rounded-xl border border-border overflow-hidden">
+
+      {/* Per-type selector chips */}
+      <div>
+        <Label className="mb-2 text-xs text-muted-foreground font-medium">
+          Configure for participant type
+        </Label>
+        <div className="flex flex-wrap gap-2">
+          {PARTICIPANT_TYPE_KEYS.map((key) => {
+            const hasCustom = key !== "default" && Boolean(byType[key]);
+            const active = activeType === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveType(key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                  active
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                }`}
+              >
+                {PARTICIPANT_TYPE_LABELS[key]}
+                {hasCustom && (
+                  <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-primary" aria-label="customized" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {isDefault
+            ? "These fields show when participant type is not set or unknown."
+            : hasOverride
+              ? "This type has a custom field config. Switch the toggles below to edit."
+              : "This type uses the default config above. Click \"Customize for this type\" to override."}
+        </p>
+      </div>
+
+      {/* Override actions */}
+      {!isDefault && (
+        <div className="flex flex-wrap gap-2">
+          {!hasOverride ? (
+            <Button type="button" variant="outline" size="sm" onClick={enableOverride}>
+              Customize for this type
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={removeOverride} className="text-destructive hover:text-destructive">
+              Reset to default
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Field grid */}
+      <div className={`rounded-xl border border-border overflow-hidden ${!isDefault && !hasOverride ? "opacity-60 pointer-events-none" : ""}`}>
         <div className="grid grid-cols-[1fr_auto_auto] items-center px-3 sm:px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/30">
           <span>{t("settings.colField")}</span>
           <span className="px-3">{t("settings.colVisible")}</span>
@@ -1085,7 +1182,7 @@ function RegistrationFieldsEditor({
         </div>
         <ul className="divide-y divide-border/60">
           {REGISTRATION_FIELD_KEYS.map((key) => {
-            const cfg = value[key];
+            const cfg = effective[key];
             const isName = key === "name";
             return (
               <li

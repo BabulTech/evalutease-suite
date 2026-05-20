@@ -1,4 +1,5 @@
 import type { RegistrationFieldKey, RegistrationFields } from "@/components/settings/host-settings";
+import type { FieldTypeKey } from "@/components/settings/host-settings";
 
 export type SessionPublic = {
   id: string;
@@ -29,6 +30,7 @@ export type QuizQuestion = {
 export type SessionForJoin = {
   session: SessionPublic;
   registration_fields: RegistrationFields;
+  registration_fields_by_type: Partial<Record<FieldTypeKey, RegistrationFields>>;
   questions: QuizQuestion[];
 };
 

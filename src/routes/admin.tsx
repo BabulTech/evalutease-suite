@@ -1714,6 +1714,8 @@ function PlansSection() {
     participants_total: number; question_bank: number; sessions_total: number;
     max_hosts: number; ai_enabled: boolean; custom_branding: boolean; white_label: boolean;
     credit_cost_ai_10q: number; credit_cost_ai_scan: number;
+    credit_cost_ai_tf_10q: number; credit_cost_ai_short_10q: number;
+    credit_cost_ai_long_10q: number; credit_cost_ai_mix_10q: number;
     credit_cost_extra_quiz: number; credit_cost_extra_participants: number;
     credit_cost_session_launch: number; credit_cost_export: number;
     features_list: string[];
@@ -1762,6 +1764,10 @@ function PlansSection() {
       trial_ai_calls: (editing as any).trial_ai_calls ?? 0,
       credit_cost_ai_10q: editing.credit_cost_ai_10q,
       credit_cost_ai_scan: editing.credit_cost_ai_scan,
+      credit_cost_ai_tf_10q: editing.credit_cost_ai_tf_10q,
+      credit_cost_ai_short_10q: editing.credit_cost_ai_short_10q,
+      credit_cost_ai_long_10q: editing.credit_cost_ai_long_10q,
+      credit_cost_ai_mix_10q: editing.credit_cost_ai_mix_10q,
       credit_cost_extra_quiz: editing.credit_cost_extra_quiz,
       credit_cost_extra_participants: editing.credit_cost_extra_participants,
       credit_cost_session_launch: editing.credit_cost_session_launch,
@@ -1834,14 +1840,18 @@ function PlansSection() {
             <div>
               <div className="flex items-center gap-2 mb-3"><div className="h-6 w-1 rounded-full bg-warning" /><span className="text-sm font-semibold">Credit Costs per Action</span></div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {numField("AI: Generate 10 Qs", editing.credit_cost_ai_10q, "credit_cost_ai_10q")}
+                {numField("AI: MCQ 10 Qs", editing.credit_cost_ai_10q, "credit_cost_ai_10q")}
+                {numField("AI: True/False 10 Qs", editing.credit_cost_ai_tf_10q, "credit_cost_ai_tf_10q")}
+                {numField("AI: Short Answer 10 Qs", editing.credit_cost_ai_short_10q, "credit_cost_ai_short_10q")}
+                {numField("AI: Long Answer 10 Qs", editing.credit_cost_ai_long_10q, "credit_cost_ai_long_10q")}
+                {numField("AI: Mix 10 Qs", editing.credit_cost_ai_mix_10q, "credit_cost_ai_mix_10q")}
                 {numField("AI: OCR Image Scan", editing.credit_cost_ai_scan, "credit_cost_ai_scan")}
                 {numField("Launch Session", editing.credit_cost_session_launch, "credit_cost_session_launch")}
                 {numField("Export PDF/Excel", editing.credit_cost_export, "credit_cost_export")}
                 {numField("Extra Quiz Slot", editing.credit_cost_extra_quiz, "credit_cost_extra_quiz")}
                 {numField("Extra 10 Participants", editing.credit_cost_extra_participants, "credit_cost_extra_participants")}
               </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">Set 0 to make an action free. AI costs scale per-question (e.g. 10 credits per 10q = 1 credit/question). Session launch and export default to 0.</p>
+              <p className="mt-2 text-[10px] text-muted-foreground">AI costs are per 10 questions; each type can be priced differently. Set 0 to make an action free.</p>
             </div>
 
             {/* Feature flags */}
@@ -2223,6 +2233,8 @@ function CreditsSection() {
   type CostRow = {
     id: string; name: string; slug: string;
     credit_cost_ai_10q: number; credit_cost_ai_scan: number;
+    credit_cost_ai_tf_10q: number; credit_cost_ai_short_10q: number;
+    credit_cost_ai_long_10q: number; credit_cost_ai_mix_10q: number;
     credit_cost_session_launch: number; credit_cost_export: number;
     credit_cost_extra_quiz: number; credit_cost_extra_participants: number;
   };
@@ -2232,7 +2244,7 @@ function CreditsSection() {
 
   const loadCosts = useCallback(async () => {
     const { data } = await supabase.from("plans")
-      .select("id, name, slug, credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_session_launch, credit_cost_export, credit_cost_extra_quiz, credit_cost_extra_participants")
+      .select("id, name, slug, credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_ai_tf_10q, credit_cost_ai_short_10q, credit_cost_ai_long_10q, credit_cost_ai_mix_10q, credit_cost_session_launch, credit_cost_export, credit_cost_extra_quiz, credit_cost_extra_participants")
       .order("sort_order");
     if (data) setCostPlans(data as CostRow[]);
   }, []);
@@ -2243,6 +2255,10 @@ function CreditsSection() {
     const { error } = await supabase.from("plans").update({
       credit_cost_ai_10q: editingCosts.credit_cost_ai_10q,
       credit_cost_ai_scan: editingCosts.credit_cost_ai_scan,
+      credit_cost_ai_tf_10q: editingCosts.credit_cost_ai_tf_10q,
+      credit_cost_ai_short_10q: editingCosts.credit_cost_ai_short_10q,
+      credit_cost_ai_long_10q: editingCosts.credit_cost_ai_long_10q,
+      credit_cost_ai_mix_10q: editingCosts.credit_cost_ai_mix_10q,
       credit_cost_session_launch: editingCosts.credit_cost_session_launch,
       credit_cost_export: editingCosts.credit_cost_export,
       credit_cost_extra_quiz: editingCosts.credit_cost_extra_quiz,
@@ -2540,7 +2556,11 @@ function CreditsSection() {
             <thead className="bg-muted/20 border-b border-border">
               <tr>
                 <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Plan</th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Gen<br/><span className="font-normal normal-case">per 10 Q</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI MCQ<br/><span className="font-normal normal-case">per 10 Q</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI T/F<br/><span className="font-normal normal-case">per 10 Q</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Short<br/><span className="font-normal normal-case">per 10 Q</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Long<br/><span className="font-normal normal-case">per 10 Q</span></th>
+                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Mix<br/><span className="font-normal normal-case">per 10 Q</span></th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Scan<br/><span className="font-normal normal-case">per image</span></th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Session<br/><span className="font-normal normal-case">launch</span></th>
                 <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Export<br/><span className="font-normal normal-case">per report</span></th>
@@ -2551,7 +2571,7 @@ function CreditsSection() {
             </thead>
             <tbody className="divide-y divide-border">
               {costPlans.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground text-sm">Loading plans…</td></tr>
+                <tr><td colSpan={12} className="px-4 py-6 text-center text-muted-foreground text-sm">Loading plans…</td></tr>
               ) : costPlans.map((plan) => {
                 const isEditing = editingCosts?.id === plan.id;
                 const row = isEditing ? editingCosts! : plan;
@@ -2573,7 +2593,11 @@ function CreditsSection() {
                       <div className="font-medium">{plan.name}</div>
                       <div className="text-[10px] text-muted-foreground">{plan.slug}</div>
                     </td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_10q", "AI gen per 10 questions")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_10q", "AI MCQ per 10 questions")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_tf_10q", "AI T/F per 10 questions")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_short_10q", "AI Short Answer per 10 questions")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_long_10q", "AI Long Answer per 10 questions")}</td>
+                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_mix_10q", "AI Mix per 10 questions")}</td>
                     <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_scan", "AI scan per image")}</td>
                     <td className="px-3 py-3 text-center">{numInput("credit_cost_session_launch", "Session launch cost")}</td>
                     <td className="px-3 py-3 text-center">{numInput("credit_cost_export", "Export cost")}</td>

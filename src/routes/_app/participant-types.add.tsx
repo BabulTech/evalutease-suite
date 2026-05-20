@@ -23,7 +23,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -35,6 +34,7 @@ import {
 import { copyText } from "@/lib/copy-text";
 import { ParticipantDraftReview } from "@/components/participants/ParticipantDraftReview";
 import { parseParticipantsCsv } from "@/components/participants/parser";
+import { DynamicParticipantFields } from "@/components/participants/DynamicParticipantFields";
 import {
   emptyDraft,
   validateDraft,
@@ -42,12 +42,19 @@ import {
   type ParticipantDraft,
   type ParticipantType,
 } from "@/components/participants/types";
+import {
+  defaultHostSettings,
+  normalizeRegistrationFields,
+  normalizeRegistrationFieldsByType,
+  resolveRegistrationFields,
+  type HostSettings,
+} from "@/components/settings/host-settings";
 
 export const Route = createFileRoute("/_app/participant-types/add")({ component: AddParticipantPage });
 
 type TypeRow = { id: string; name: string };
 type SubRow = { id: string; type_id: string; name: string };
-type InviteRow = { email: string | null; token: string; url: string };
+type InviteRow = { email: string | null; token: string; url: string; participant_type?: string };
 
 type SupportedMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 const SUPPORTED_IMG: SupportedMediaType[] = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -197,18 +204,29 @@ function AddParticipantPage() {
   const [subs, setSubs] = useState<SubRow[]>([]);
   const [typeId, setTypeId] = useState("");
   const [subId, setSubId] = useState("");
+  const [hostSettings, setHostSettings] = useState<HostSettings>(() => defaultHostSettings());
 
   const [createTypeOpen, setCreateTypeOpen] = useState(false);
   const [createSubOpen, setCreateSubOpen] = useState(false);
 
   const loadGroups = useCallback(async () => {
     if (!user) return;
-    const [tRes, sRes] = await Promise.all([
+    const [tRes, sRes, hsRes] = await Promise.all([
       supabase.from("participant_types").select("id, name").eq("owner_id", user.id).order("created_at"),
       supabase.from("participant_subtypes").select("id, type_id, name").eq("owner_id", user.id).order("created_at"),
+      supabase.from("host_settings").select("registration_fields, registration_fields_by_type").eq("owner_id", user.id).maybeSingle(),
     ]);
     if (tRes.data) setTypes(tRes.data);
     if (sRes.data) setSubs(sRes.data);
+    if (hsRes.data) {
+      setHostSettings({
+        ...defaultHostSettings(),
+        registration_fields: normalizeRegistrationFields(hsRes.data.registration_fields),
+        registration_fields_by_type: normalizeRegistrationFieldsByType(
+          (hsRes.data as Record<string, unknown>).registration_fields_by_type,
+        ),
+      });
+    }
   }, [user]);
 
   useEffect(() => { void loadGroups(); }, [loadGroups]);
@@ -248,15 +266,15 @@ function AddParticipantPage() {
     toast.success(`${t("pt.added")} ${drafts.length} ${drafts.length === 1 ? t("pt.participant") : t("pt.participants")}`);
   };
 
-  const generateInvite = async (): Promise<InviteRow | null> => {
+  const generateInvite = async (participantType?: string): Promise<InviteRow | null> => {
     if (!user || !subId) { toast.error(t("pt.selectGroupFirst")); return null; }
     const { data, error } = await supabase.from("participant_invites")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert([{ owner_id: user.id, subtype_id: subId, email: null as any }])
+      .insert([{ owner_id: user.id, subtype_id: subId, email: null as any, participant_type: participantType || null }])
       .select("id, email, token").single();
     if (error) { toast.error(error.message); return null; }
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return { email: data.email, token: data.token, url: `${origin}/invite/${data.token}` };
+    return { email: data.email, token: data.token, url: `${origin}/invite/${data.token}`, participant_type: participantType };
   };
 
   const [method, setMethod] = useState<"manual" | "invite" | "upload" | "scan">("manual");
@@ -330,10 +348,10 @@ function AddParticipantPage() {
         {/* Active method content */}
         <div className="pt-2 border-t border-border">
           {method === "manual" && (
-            <ManualTab typeId={typeId} onSave={async (d) => { await insertOne(d); toast.success(t("pt.participantAdded").replace("{name}", d.name)); }} />
+            <ManualTab typeId={typeId} hostSettings={hostSettings} onSave={async (d) => { await insertOne(d); toast.success(t("pt.participantAdded").replace("{name}", d.name)); }} />
           )}
           {method === "invite" && (
-            <InviteTab subId={subId} onGenerate={generateInvite} />
+            <InviteTab subId={subId} onGenerate={(pt) => generateInvite(pt)} />
           )}
           {method === "upload" && (
             <UploadTab typeId={typeId} onSave={insertMany} />
@@ -352,17 +370,22 @@ function AddParticipantPage() {
 }
 
 /* ── Manual tab ── */
-function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: ParticipantDraft) => Promise<void> }) {
+function ManualTab({ typeId, hostSettings, onSave }: {
+  typeId: string;
+  hostSettings: HostSettings;
+  onSave: (d: ParticipantDraft) => Promise<void>;
+}) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<ParticipantDraft>(() => emptyDraft());
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const set = <K extends keyof ParticipantDraft>(key: K, val: ParticipantDraft[K]) =>
-    setDraft((p) => ({ ...p, [key]: val }));
+  const set = (patch: Partial<ParticipantDraft>) => setDraft((p) => ({ ...p, ...patch }));
+  const ptype = draft.participant_type;
+  const fieldConfig = resolveRegistrationFields(hostSettings, ptype);
 
   const submit = async () => {
-    const v = validateDraft(draft);
+    const v = validateDraft(draft, fieldConfig);
     if (!v.ok) { toast.error(v.reason); return; }
     setBusy(true);
     try {
@@ -380,113 +403,42 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
     </div>
   );
 
-  const ptype = draft.participant_type;
-
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <Label className="mb-2 text-xs text-muted-foreground font-medium">{t("ptAdd.participantType")}</Label>
-          <div className="flex flex-wrap gap-2">
-            {TYPE_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => set("participant_type", ptype === o.value ? "" : o.value as ParticipantType)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
-                  ptype === o.value
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                }`}
-              >
-                {o.emoji} {o.label}
-              </button>
-            ))}
-          </div>
+      {/* Participant type chips — host selects before adding */}
+      <div>
+        <Label className="mb-2 text-xs text-muted-foreground font-medium">{t("ptAdd.participantType")}</Label>
+        <div className="flex flex-wrap gap-2">
+          {TYPE_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => set({ participant_type: ptype === o.value ? "" : o.value as ParticipantType })}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                ptype === o.value
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              }`}
+            >
+              {o.emoji} {o.label}
+            </button>
+          ))}
         </div>
-
-        <div className="md:col-span-2">
-          <Label className="mb-1.5">{t("ptAdd.name")} <span className="text-destructive">*</span></Label>
-          <Input value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder={t("ptAdd.fullName")} autoFocus />
-        </div>
-        <div>
-          <Label className="mb-1.5">{t("ptAdd.email")}</Label>
-          <Input type="email" value={draft.email} onChange={(e) => set("email", e.target.value)} placeholder="participant@example.com" />
-        </div>
-        <div>
-          <Label className="mb-1.5">{t("ptAdd.mobile")}</Label>
-          <Input type="tel" value={draft.mobile} onChange={(e) => set("mobile", e.target.value)} placeholder="+92 300 0000000" />
-        </div>
-
-        {(ptype === "student" || ptype === "") && (
-          <>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.schoolOrg")}</Label>
-              <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.classGrade")}</Label>
-              <Input value={draft.grade || draft.class} onChange={(e) => { set("grade", e.target.value); set("class", e.target.value); }} placeholder="Class 10 / Year 12" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.rollNumber")}</Label>
-              <Input value={draft.roll_number} onChange={(e) => set("roll_number", e.target.value)} placeholder="2026-CS-042" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.seatNumber")}</Label>
-              <Input value={draft.seat_number} onChange={(e) => set("seat_number", e.target.value)} placeholder="A-12" />
-            </div>
-          </>
-        )}
-
-        {ptype === "teacher" && (
-          <>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.employeeId")}</Label>
-              <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.schoolInstitution")}</Label>
-              <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Babul Academy" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.subjectClass")}</Label>
-              <Input value={draft.class} onChange={(e) => set("class", e.target.value)} placeholder="Mathematics, Class 9–10" />
-            </div>
-          </>
-        )}
-
-        {ptype === "employee" && (
-          <>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.employeeId")}</Label>
-              <Input value={draft.employee_id} onChange={(e) => set("employee_id", e.target.value)} placeholder="EMP-1234" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.companyOrg")}</Label>
-              <Input value={draft.organization} onChange={(e) => set("organization", e.target.value)} placeholder="Acme Corp" />
-            </div>
-            <div>
-              <Label className="mb-1.5">{t("ptAdd.department")}</Label>
-              <Input value={draft.department} onChange={(e) => set("department", e.target.value)} placeholder="Engineering" />
-            </div>
-          </>
-        )}
-
-        {ptype === "fun" && (
-          <div>
-            <Label className="mb-1.5">{t("ptAdd.nicknameAlias")}</Label>
-            <Input value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="QuizMaster99" />
-          </div>
-        )}
-
-        {ptype !== "fun" && (
-          <div className="md:col-span-2">
-            <Label className="mb-1.5">{t("ptAdd.notes")}</Label>
-            <Textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder={t("ptAdd.anythingNoting")} rows={2} />
-          </div>
-        )}
       </div>
+
+      {/* Name — always required */}
+      <div>
+        <Label className="mb-1.5">{t("ptAdd.name")} <span className="text-destructive">*</span></Label>
+        <Input
+          value={draft.name}
+          onChange={(e) => set({ name: e.target.value })}
+          placeholder={t("ptAdd.fullName")}
+          autoFocus
+        />
+      </div>
+
+      {/* Dynamic fields based on host's per-type config */}
+      <DynamicParticipantFields draft={draft} fields={fieldConfig} onSet={set} />
 
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={() => setDraft(emptyDraft())} disabled={busy}>{t("ptAdd.reset")}</Button>
@@ -499,16 +451,17 @@ function ManualTab({ typeId, onSave }: { typeId: string; onSave: (d: Participant
 }
 
 /* ── Invite link tab ── */
-function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Promise<InviteRow | null> }) {
+function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: (participantType?: string) => Promise<InviteRow | null> }) {
   const { t } = useI18n();
   const [invite, setInvite] = useState<InviteRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selectedType, setSelectedType] = useState<string>("");
 
   const generate = async () => {
     setBusy(true);
     try {
-      const row = await onGenerate();
+      const row = await onGenerate(selectedType || undefined);
       if (row) setInvite(row);
     } finally { setBusy(false); }
   };
@@ -532,10 +485,36 @@ function InviteTab({ subId, onGenerate }: { subId: string; onGenerate: () => Pro
       <p className="text-sm text-muted-foreground">{t("ptAdd.inviteDesc")}</p>
 
       {!invite ? (
-        <div className="flex justify-center">
-          <Button onClick={generate} disabled={busy} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow px-8">
-            {busy ? t("ptAdd.generating") : <><Mail className="h-4 w-4" /> {t("ptAdd.generateInvite")}</>}
-          </Button>
+        <div className="space-y-4">
+          {/* Host selects participant type before generating invite */}
+          <div>
+            <Label className="mb-2 text-xs text-muted-foreground font-medium">Participant type for this invite</Label>
+            <div className="flex flex-wrap gap-2">
+              {TYPE_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setSelectedType(selectedType === o.value ? "" : o.value)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                    selectedType === o.value
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
+                >
+                  {o.emoji} {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Participant will see fields for the selected type. They cannot change this.
+            </p>
+          </div>
+
+          <div className="flex justify-center">
+            <Button onClick={generate} disabled={busy} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow px-8">
+              {busy ? t("ptAdd.generating") : <><Mail className="h-4 w-4" /> {t("ptAdd.generateInvite")}</>}
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col items-center gap-5">

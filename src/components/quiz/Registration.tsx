@@ -1,29 +1,45 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  REGISTRATION_FIELD_KEYS,
   REGISTRATION_FIELD_LABELS,
+  resolveRegistrationFields,
   type RegistrationFieldKey,
   type RegistrationFields,
+  type FieldTypeKey,
 } from "@/components/settings/host-settings";
 import type { RegistrationValues, SessionPublic } from "./types";
+
+const TYPE_OPTIONS: { value: string; label: string; emoji: string }[] = [
+  { value: "student",  label: "Student",    emoji: "🎓" },
+  { value: "teacher",  label: "Teacher",    emoji: "📚" },
+  { value: "employee", label: "Employee",   emoji: "💼" },
+  { value: "fun",      label: "Fun / Guest", emoji: "🎉" },
+];
 
 type Props = {
   session: SessionPublic;
   fields: RegistrationFields;
+  fieldsByType?: Partial<Record<FieldTypeKey, RegistrationFields>>;
   onSubmit: (values: RegistrationValues) => Promise<void>;
 };
 
-export function Registration({ session, fields, onSubmit }: Props) {
+export function Registration({ session, fields, fieldsByType, onSubmit }: Props) {
   const [values, setValues] = useState<RegistrationValues>({});
+  const [participantType, setParticipantType] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const visibleKeys = useMemo(
-    () => REGISTRATION_FIELD_KEYS.filter((k) => fields[k].visible),
-    [fields],
+  const hasPerTypeConfig = fieldsByType && Object.keys(fieldsByType).length > 0;
+
+  const resolvedFields = resolveRegistrationFields(
+    { registration_fields: fields, registration_fields_by_type: fieldsByType ?? {} },
+    participantType,
+  );
+
+  const visibleKeys = (Object.keys(resolvedFields) as RegistrationFieldKey[]).filter(
+    (k) => resolvedFields[k].visible,
   );
 
   const set = (key: RegistrationFieldKey, value: string) =>
@@ -31,7 +47,7 @@ export function Registration({ session, fields, onSubmit }: Props) {
 
   const submit = async () => {
     for (const key of visibleKeys) {
-      if (fields[key].required && !values[key]?.trim()) {
+      if (resolvedFields[key].required && !values[key]?.trim()) {
         toast.error(`${REGISTRATION_FIELD_LABELS[key]} is required`);
         return;
       }
@@ -40,9 +56,11 @@ export function Registration({ session, fields, onSubmit }: Props) {
       toast.error("Email looks invalid");
       return;
     }
+    const submitValues = { ...values };
+    if (participantType) (submitValues as Record<string, string>).participant_type = participantType;
     setSubmitting(true);
     try {
-      await onSubmit(values);
+      await onSubmit(submitValues);
     } finally {
       setSubmitting(false);
     }
@@ -60,12 +78,35 @@ export function Registration({ session, fields, onSubmit }: Props) {
         </p>
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-6 space-y-4">
+        {/* Participant type selector — only shown when host has per-type configs */}
+        {hasPerTypeConfig && (
+          <div>
+            <Label className="mb-2 text-xs text-muted-foreground font-medium">I am a…</Label>
+            <div className="flex flex-wrap gap-2">
+              {TYPE_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setParticipantType(participantType === o.value ? "" : o.value)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                    participantType === o.value
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                  }`}
+                >
+                  {o.emoji} {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {visibleKeys.map((key) => (
           <div key={key}>
             <Label className="mb-1.5">
               {REGISTRATION_FIELD_LABELS[key]}
-              {fields[key].required && <span className="text-destructive"> *</span>}
+              {resolvedFields[key].required && <span className="text-destructive"> *</span>}
             </Label>
             <Input
               value={values[key] ?? ""}
@@ -74,13 +115,7 @@ export function Registration({ session, fields, onSubmit }: Props) {
               placeholder={placeholderFor(key)}
               autoFocus={key === "name"}
               autoComplete={
-                key === "email"
-                  ? "email"
-                  : key === "name"
-                    ? "name"
-                    : key === "mobile"
-                      ? "tel"
-                      : "off"
+                key === "email" ? "email" : key === "name" ? "name" : key === "mobile" ? "tel" : "off"
               }
             />
           </div>
@@ -99,20 +134,19 @@ export function Registration({ session, fields, onSubmit }: Props) {
 }
 
 function placeholderFor(key: RegistrationFieldKey): string {
-  switch (key) {
-    case "name":
-      return "Your full name";
-    case "email":
-      return "you@example.com";
-    case "mobile":
-      return "+92 300 0000000";
-    case "roll_number":
-      return "2026-CS-042";
-    case "seat_number":
-      return "A-12";
-    case "class":
-      return "Class 10";
-    case "organization":
-      return "Babul Academy";
-  }
+  const map: Partial<Record<RegistrationFieldKey, string>> = {
+    name:         "Your full name",
+    email:        "you@example.com",
+    mobile:       "+92 300 0000000",
+    roll_number:  "2026-CS-042",
+    seat_number:  "A-12",
+    class:        "Class 10",
+    grade:        "Grade 10",
+    organization: "Babul Academy",
+    employee_id:  "EMP-1234",
+    department:   "Engineering",
+    address:      "Street, City",
+    notes:        "Anything worth noting",
+  };
+  return map[key] ?? "";
 }

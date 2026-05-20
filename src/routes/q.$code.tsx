@@ -16,7 +16,7 @@ import {
   type RegistrationValues,
   type SessionForJoin,
 } from "@/components/quiz/types";
-import { normalizeRegistrationFields } from "@/components/settings/host-settings";
+import { normalizeRegistrationFields, normalizeRegistrationFieldsByType } from "@/components/settings/host-settings";
 
 export const Route = createFileRoute("/q/$code")({ component: PublicQuizPage });
 
@@ -24,6 +24,7 @@ type RpcResponse<T> = T | { error: string };
 type SessionPayload = {
   session: SessionForJoin["session"];
   registration_fields: unknown;
+  registration_fields_by_type?: unknown;
   questions: SessionForJoin["questions"];
 };
 type SessionUpdate = Partial<SessionForJoin["session"]> & { access_code?: string | null };
@@ -83,6 +84,7 @@ function PublicQuizPage() {
     return {
       session: payload.session,
       registration_fields: normalizeRegistrationFields(payload.registration_fields),
+      registration_fields_by_type: normalizeRegistrationFieldsByType(payload.registration_fields_by_type),
       // Default missing/unknown type to "mcq" so old sessions keep working
       // until the player payload migration is run.
       questions: (payload.questions ?? []).map((q) => ({
@@ -455,6 +457,7 @@ function PublicQuizPage() {
         <Registration
           session={phase.data.session}
           fields={phase.data.registration_fields}
+          fieldsByType={phase.data.registration_fields_by_type}
           onSubmit={join}
         />
       </Wrapper>
