@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -47,7 +48,7 @@ function planBadge(slug: string) {
   const cls = isEnterprise ? "bg-warning/15 text-warning" : isFree ? "bg-muted/40 text-muted-foreground" : "bg-primary/15 text-primary";
   const label = slug.replace("individual_", "").replace("enterprise_", "Org ").replace("_", " ");
   return (
-    <Badge className={`${cls} border-0 text-[10px] capitalize`}>
+    <Badge className={`${cls} border-0 text-[10px] capitalize whitespace-nowrap`}>
       {isEnterprise ? <Building2 className="h-3 w-3 mr-0.5 inline" /> :
        isFree ? <Zap className="h-3 w-3 mr-0.5 inline" /> :
        <Star className="h-3 w-3 mr-0.5 inline" />}
@@ -184,6 +185,7 @@ function AdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [feedbackBadge, setFeedbackBadge] = useState(0);
   const [alertBadge, setAlertBadge] = useState(0);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (!user) { void navigate({ to: "/login" }); return; }
@@ -246,7 +248,8 @@ function AdminPage() {
       </header>
 
       <div className="md:hidden sticky top-[57px] z-40 border-b border-border bg-background/95 backdrop-blur px-3 py-2">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Wrap chips instead of horizontal scroll so nothing hides off-screen */}
+        <div className="flex items-center flex-wrap gap-2 pb-1">
           {mobileSubNav.map(({ key, label, icon: Icon, badge }) => (
             <button
               key={key}
@@ -318,7 +321,8 @@ function AdminPage() {
 
       <nav className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
         <div className="grid grid-cols-5 gap-1">
-          {NAV_GROUPS.map(({ key, label, icon: Icon, sections }) => {
+          {/* 4 primary groups + More button (matches main-app bottom nav pattern) */}
+          {NAV_GROUPS.slice(0, 4).map(({ key, label, icon: Icon, sections }) => {
             const selected = (sections as readonly string[]).includes(section);
             const target = sections[0];
             const groupBadge = (sections as readonly string[]).includes("appfeedback") ? feedbackBadge :
@@ -328,7 +332,7 @@ function AdminPage() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setSection(target)}
+                onClick={() => { setSection(target); setMoreOpen(false); }}
                 className={`relative min-h-14 rounded-xl px-1.5 py-1.5 text-[10px] font-semibold transition-colors flex flex-col items-center justify-center gap-1 ${
                   selected
                     ? "bg-primary/15 text-primary"
@@ -336,7 +340,7 @@ function AdminPage() {
                 }`}
               >
                 <Icon className="h-5 w-5" />
-                <span className="leading-none">{label}</span>
+                <span className="leading-none truncate max-w-full">{label}</span>
                 {groupBadge > 0 && (
                   <span className="absolute right-2 top-1.5 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1.5 py-0.5">
                     {groupBadge}
@@ -345,8 +349,86 @@ function AdminPage() {
               </button>
             );
           })}
+          {(() => {
+            const moreGroups = NAV_GROUPS.slice(4);
+            const isMoreActive = moreGroups.some((g) => (g.sections as readonly string[]).includes(section));
+            const moreBadge = moreGroups.some((g) =>
+              ((g.sections as readonly string[]).includes("appfeedback") && feedbackBadge > 0) ||
+              ((g.sections as readonly string[]).includes("alerts") && alertBadge > 0)
+            );
+            return (
+              <button
+                type="button"
+                onClick={() => setMoreOpen((v) => !v)}
+                className={`relative min-h-14 rounded-xl px-1.5 py-1.5 text-[10px] font-semibold transition-colors flex flex-col items-center justify-center gap-1 ${
+                  isMoreActive || moreOpen ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                }`}
+              >
+                <MoreHorizontal className="h-5 w-5" />
+                <span className="leading-none">More</span>
+                {moreBadge && <span className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-destructive" />}
+              </button>
+            );
+          })()}
         </div>
       </nav>
+
+      {/* "More" overlay — surfaces remaining groups (monitor, money) */}
+      {moreOpen && (
+        <div className="md:hidden fixed inset-0 z-40">
+          <button
+            type="button"
+            aria-label="Close more menu"
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+            onClick={() => setMoreOpen(false)}
+          />
+          <div className="absolute inset-x-3 bottom-24 rounded-2xl border border-border bg-card p-3 shadow-card">
+            <div className="flex items-center justify-between px-1 pb-2">
+              <div>
+                <div className="text-sm font-semibold">More</div>
+                <div className="text-xs text-muted-foreground">Monitoring and money</div>
+              </div>
+              <button
+                type="button"
+                title="Close"
+                onClick={() => setMoreOpen(false)}
+                className="h-9 w-9 rounded-xl hover:bg-muted/40 text-muted-foreground inline-flex items-center justify-center"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {NAV_GROUPS.slice(4).map(({ key, label, icon: Icon, sections }) => {
+                const selected = (sections as readonly string[]).includes(section);
+                const target = sections[0];
+                const groupBadge = (sections as readonly string[]).includes("appfeedback") ? feedbackBadge :
+                  (sections as readonly string[]).includes("alerts") ? alertBadge :
+                  0;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { setSection(target); setMoreOpen(false); }}
+                    className={`relative min-h-16 rounded-xl border px-3 py-2.5 transition-colors flex items-center gap-3 ${
+                      selected
+                        ? "border-primary/35 bg-primary/15 text-primary"
+                        : "border-border bg-muted/20 text-muted-foreground"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1 text-sm font-medium text-left">{label}</span>
+                    {groupBadge > 0 && (
+                      <span className="shrink-0 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
+                        {groupBadge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -768,6 +850,9 @@ function UsersSection() {
   const [planFilter, setPlanFilter] = useState("all");
   const [detail, setDetail] = useState<UserRow | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Paginate the (potentially long) "Individual Users" list. Groups always shown.
+  const [indPage, setIndPage] = useState(0);
+  const IND_PAGE_SIZE = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -955,7 +1040,7 @@ function UsersSection() {
             <SelectItem value="enterprise_elite">Org Elite</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={() => void load()} className="h-11 sm:h-8 gap-1.5"><RefreshCw className="h-4 w-4" />Refresh</Button>
+        <Button variant="outline" size="icon" onClick={() => void load()} className="h-11 w-11 sm:h-8 sm:w-8 shrink-0" title="Refresh"><RefreshCw className="h-4 w-4" /></Button>
       </div>
 
       <TableShell footer={`${filtered.length} of ${rows.length} users · ${grouped.groups.length} companies`}>
@@ -998,13 +1083,14 @@ function UsersSection() {
                       </div>
                     </td>
                   </tr>
-                  {grouped.independent.map((u) => renderUserRow(u, "none"))}
+                  {grouped.independent.slice(indPage * IND_PAGE_SIZE, indPage * IND_PAGE_SIZE + IND_PAGE_SIZE).map((u) => renderUserRow(u, "none"))}
                 </>
               )}
             </>
           )}
         </tbody>
       </TableShell>
+      <PaginationControls page={indPage} pageSize={IND_PAGE_SIZE} total={grouped.independent.length} label="individual users" onPageChange={setIndPage} />
     </div>
   );
 }
@@ -1173,6 +1259,8 @@ function QuizzesSection() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
 
   useEffect(() => {
     void (async () => {
@@ -1225,6 +1313,10 @@ function QuizzesSection() {
     return r;
   }, [rows, search, statusFilter]);
 
+  // Reset to first page whenever filters change
+  useEffect(() => { setPage(0); }, [search, statusFilter]);
+  const paged = useMemo(() => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE), [filtered, page]);
+
   return (
     <div className="space-y-4">
       <SectionHead title="Quiz Sessions" sub={`${rows.length} sessions created across all hosts.`} />
@@ -1246,9 +1338,9 @@ function QuizzesSection() {
       <TableShell footer={`${filtered.length} of ${rows.length} sessions`}>
         <THead cols={["Quiz Title", "Host", "Type", "Status", "Questions", "Attempts", "Avg Score", "Created"]} />
         <tbody className="divide-y divide-border/40">
-          {loading ? <SkeletonRows cols={8} /> : filtered.length === 0 ? (
+          {loading ? <SkeletonRows cols={8} /> : paged.length === 0 ? (
             <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No sessions found.</td></tr>
-          ) : filtered.map((r) => (
+          ) : paged.map((r) => (
             <tr key={r.id} className="hover:bg-muted/10 transition-colors">
               <td className="px-4 py-3">
                 <div className="text-xs font-medium max-w-[180px] truncate">{r.title}</div>
@@ -1275,6 +1367,7 @@ function QuizzesSection() {
           ))}
         </tbody>
       </TableShell>
+      <PaginationControls page={page} pageSize={PAGE_SIZE} total={filtered.length} label="sessions" onPageChange={setPage} />
     </div>
   );
 }
@@ -1531,6 +1624,8 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1580,6 +1675,9 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
     return r;
   }, [rows, statusFilter, typeFilter]);
 
+  useEffect(() => { setPage(0); }, [statusFilter, typeFilter]);
+  const paged = useMemo(() => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE), [filtered, page]);
+
   const typeIcon: Record<string, React.ElementType> = {
     bug: Bug, feature: Lightbulb, improvement: TrendingUp, other: HelpCircle,
   };
@@ -1624,9 +1722,9 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
       <TableShell footer={`${filtered.length} of ${rows.length} submissions`}>
         <THead cols={["Teacher", "Type", "Title", "Priority", "Status", "Date", ""]} />
         <tbody className="divide-y divide-border/40">
-          {loading ? <SkeletonRows cols={7} /> : filtered.length === 0 ? (
+          {loading ? <SkeletonRows cols={7} /> : paged.length === 0 ? (
             <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">No feedback yet.</td></tr>
-          ) : filtered.map((r) => {
+          ) : paged.map((r) => {
             const TypeIcon = typeIcon[r.type] ?? HelpCircle;
             return (
               <tr key={r.id} className="hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => { setDetail(r); setReplyText(r.admin_reply ?? ""); }}>
@@ -1653,6 +1751,7 @@ function AppFeedbackSection({ onCountChange }: { onCountChange: (n: number) => v
           })}
         </tbody>
       </TableShell>
+      <PaginationControls page={page} pageSize={PAGE_SIZE} total={filtered.length} label="submissions" onPageChange={setPage} />
 
       {/* Detail & reply dialog */}
       <Dialog open={!!detail} onOpenChange={() => setDetail(null)}>
@@ -1716,6 +1815,7 @@ function PlansSection() {
     credit_cost_ai_10q: number; credit_cost_ai_scan: number;
     credit_cost_ai_tf_10q: number; credit_cost_ai_short_10q: number;
     credit_cost_ai_long_10q: number; credit_cost_ai_mix_10q: number;
+    credit_cost_ai_grade_short: number; credit_cost_ai_grade_long: number;
     credit_cost_extra_quiz: number; credit_cost_extra_participants: number;
     credit_cost_session_launch: number; credit_cost_export: number;
     features_list: string[];
@@ -1846,6 +1946,8 @@ function PlansSection() {
                 {numField("AI: Long Answer 10 Qs", editing.credit_cost_ai_long_10q, "credit_cost_ai_long_10q")}
                 {numField("AI: Mix 10 Qs", editing.credit_cost_ai_mix_10q, "credit_cost_ai_mix_10q")}
                 {numField("AI: OCR Image Scan", editing.credit_cost_ai_scan, "credit_cost_ai_scan")}
+                {numField("AI: Grade Short Answer", (editing as any).credit_cost_ai_grade_short ?? 1, "credit_cost_ai_grade_short")}
+                {numField("AI: Grade Long Answer", (editing as any).credit_cost_ai_grade_long ?? 3, "credit_cost_ai_grade_long")}
                 {numField("Launch Session", editing.credit_cost_session_launch, "credit_cost_session_launch")}
                 {numField("Export PDF/Excel", editing.credit_cost_export, "credit_cost_export")}
                 {numField("Extra Quiz Slot", editing.credit_cost_extra_quiz, "credit_cost_extra_quiz")}
@@ -2235,6 +2337,7 @@ function CreditsSection() {
     credit_cost_ai_10q: number; credit_cost_ai_scan: number;
     credit_cost_ai_tf_10q: number; credit_cost_ai_short_10q: number;
     credit_cost_ai_long_10q: number; credit_cost_ai_mix_10q: number;
+    credit_cost_ai_grade_short: number; credit_cost_ai_grade_long: number;
     credit_cost_session_launch: number; credit_cost_export: number;
     credit_cost_extra_quiz: number; credit_cost_extra_participants: number;
   };
@@ -2244,7 +2347,7 @@ function CreditsSection() {
 
   const loadCosts = useCallback(async () => {
     const { data } = await supabase.from("plans")
-      .select("id, name, slug, credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_ai_tf_10q, credit_cost_ai_short_10q, credit_cost_ai_long_10q, credit_cost_ai_mix_10q, credit_cost_session_launch, credit_cost_export, credit_cost_extra_quiz, credit_cost_extra_participants")
+      .select("id, name, slug, credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_ai_tf_10q, credit_cost_ai_short_10q, credit_cost_ai_long_10q, credit_cost_ai_mix_10q, credit_cost_ai_grade_short, credit_cost_ai_grade_long, credit_cost_session_launch, credit_cost_export, credit_cost_extra_quiz, credit_cost_extra_participants")
       .order("sort_order");
     if (data) setCostPlans(data as CostRow[]);
   }, []);
@@ -2259,6 +2362,8 @@ function CreditsSection() {
       credit_cost_ai_short_10q: editingCosts.credit_cost_ai_short_10q,
       credit_cost_ai_long_10q: editingCosts.credit_cost_ai_long_10q,
       credit_cost_ai_mix_10q: editingCosts.credit_cost_ai_mix_10q,
+      credit_cost_ai_grade_short: editingCosts.credit_cost_ai_grade_short,
+      credit_cost_ai_grade_long: editingCosts.credit_cost_ai_grade_long,
       credit_cost_session_launch: editingCosts.credit_cost_session_launch,
       credit_cost_export: editingCosts.credit_cost_export,
       credit_cost_extra_quiz: editingCosts.credit_cost_extra_quiz,
@@ -2544,93 +2649,125 @@ function CreditsSection() {
 
       {/* Credit cost configuration per plan */}
       <div className="rounded-2xl border border-border overflow-hidden">
-        <div className="px-4 py-3 bg-muted/40 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-sm">Credit Cost Settings per Plan</span>
-          </div>
-          <span className="text-[10px] text-muted-foreground">Click a row to edit, then save</span>
+        <div className="px-5 py-3 bg-muted/40 border-b border-border flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary" />
+          <span className="font-semibold text-sm">Credit Cost Settings per Plan</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
-            <thead className="bg-muted/20 border-b border-border">
-              <tr>
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Plan</th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI MCQ<br/><span className="font-normal normal-case">per 10 Q</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI T/F<br/><span className="font-normal normal-case">per 10 Q</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Short<br/><span className="font-normal normal-case">per 10 Q</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Long<br/><span className="font-normal normal-case">per 10 Q</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Mix<br/><span className="font-normal normal-case">per 10 Q</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">AI Scan<br/><span className="font-normal normal-case">per image</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Session<br/><span className="font-normal normal-case">launch</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Export<br/><span className="font-normal normal-case">per report</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Extra Quiz<br/><span className="font-normal normal-case">overage</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Extra Ptcp<br/><span className="font-normal normal-case">overage</span></th>
-                <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {costPlans.length === 0 ? (
-                <tr><td colSpan={12} className="px-4 py-6 text-center text-muted-foreground text-sm">Loading plans…</td></tr>
-              ) : costPlans.map((plan) => {
-                const isEditing = editingCosts?.id === plan.id;
-                const row = isEditing ? editingCosts! : plan;
-                const numInput = (field: keyof CostRow, label: string) => (
-                  <input
-                    type="number"
-                    min={0}
-                    aria-label={label}
-                    value={row[field] as number}
-                    readOnly={!isEditing}
-                    onChange={(e) => isEditing && setEditingCosts({ ...editingCosts!, [field]: parseInt(e.target.value) || 0 })}
-                    className={`w-16 text-center rounded-lg border px-2 py-1 text-sm font-semibold outline-none transition-colors
-                      ${isEditing ? "border-primary bg-primary/5 focus:ring-2 focus:ring-primary/30" : "border-transparent bg-transparent text-foreground cursor-default"}`}
-                  />
-                );
-                return (
-                  <tr key={plan.id} className={`transition-colors ${isEditing ? "bg-primary/5" : "hover:bg-muted/20"}`}>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{plan.name}</div>
-                      <div className="text-[10px] text-muted-foreground">{plan.slug}</div>
-                    </td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_10q", "AI MCQ per 10 questions")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_tf_10q", "AI T/F per 10 questions")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_short_10q", "AI Short Answer per 10 questions")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_long_10q", "AI Long Answer per 10 questions")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_mix_10q", "AI Mix per 10 questions")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_ai_scan", "AI scan per image")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_session_launch", "Session launch cost")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_export", "Export cost")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_extra_quiz", "Extra quiz overage")}</td>
-                    <td className="px-3 py-3 text-center">{numInput("credit_cost_extra_participants", "Extra participants overage")}</td>
-                    <td className="px-3 py-3 text-center">
-                      {isEditing ? (
-                        <div className="flex items-center gap-1.5 justify-center">
-                          <Button size="sm" className="h-7 px-3 text-[11px] bg-success hover:bg-success/90 text-white"
-                            onClick={() => void saveCosts()} disabled={savingCosts}>
-                            {savingCosts ? "…" : "Save"}
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]"
-                            onClick={() => setEditingCosts(null)}>
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button size="sm" variant="outline" className="h-7 px-3 text-[11px] gap-1"
-                          onClick={() => setEditingCosts({ ...plan })}>
-                          <Edit2 className="h-3 w-3" /> Edit
+
+        {costPlans.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">Loading plans…</div>
+        ) : (
+          <Tabs defaultValue={costPlans[0]?.id} className="w-full">
+            <TabsList className="w-full justify-start rounded-none border-b border-border bg-muted/20 px-4 gap-1 h-10">
+              {costPlans.map((plan) => (
+                <TabsTrigger
+                  key={plan.id}
+                  value={plan.id}
+                  onClick={() => setEditingCosts(null)}
+                  className="text-xs h-8 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  {plan.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {costPlans.map((plan) => {
+              const isEditing = editingCosts?.id === plan.id;
+              const row = isEditing ? editingCosts! : plan;
+
+              const numInput = (field: keyof CostRow, label: string) => (
+                <div key={field} className="flex flex-col gap-1.5">
+                  <span className="text-[10px] text-muted-foreground leading-tight">{label}</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      aria-label={label}
+                      value={row[field] as number}
+                      readOnly={!isEditing}
+                      onChange={(e) => isEditing && setEditingCosts({ ...editingCosts!, [field]: parseInt(e.target.value) || 0 })}
+                      className={`w-16 text-center rounded-lg border px-2 py-1.5 text-sm font-bold outline-none transition-colors
+                        ${isEditing ? "border-primary bg-primary/5 focus:ring-2 focus:ring-primary/30" : "border-border/50 bg-muted/20 text-foreground cursor-default"}`}
+                    />
+                    <span className="text-[10px] text-muted-foreground">cr</span>
+                  </div>
+                </div>
+              );
+
+              return (
+                <TabsContent key={plan.id} value={plan.id} className="mt-0 p-5 space-y-5">
+                  {/* Action bar */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-sm">{plan.name}</span>
+                      <span className="ml-2 text-[10px] font-mono text-muted-foreground">{plan.slug}</span>
+                    </div>
+                    {isEditing ? (
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" className="h-8 px-4 text-xs bg-success hover:bg-success/90 text-white"
+                          onClick={() => void saveCosts()} disabled={savingCosts}>
+                          {savingCosts ? "Saving…" : "Save changes"}
                         </Button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-2.5 bg-muted/10 border-t border-border text-[10px] text-muted-foreground">
-          AI Gen cost is per 10 questions; actual per-question cost is prorated (e.g. 5 questions at 10cr/10q = 5cr). Set 0 for free activities.
-        </div>
+                        <Button size="sm" variant="ghost" className="h-8 px-3 text-xs"
+                          onClick={() => setEditingCosts(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-8 px-4 text-xs gap-1.5"
+                        onClick={() => setEditingCosts({ ...plan })}>
+                        <Edit2 className="h-3 w-3" /> Edit
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* AI Generation */}
+                  <div className="rounded-xl border border-border bg-card/40 p-4 space-y-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                      AI Question Generation
+                      <span className="ml-1.5 normal-case font-normal text-muted-foreground">per 10 questions</span>
+                    </p>
+                    <div className="flex flex-wrap gap-5">
+                      {numInput("credit_cost_ai_10q", "MCQ")}
+                      {numInput("credit_cost_ai_tf_10q", "True / False")}
+                      {numInput("credit_cost_ai_short_10q", "Short Answer")}
+                      {numInput("credit_cost_ai_long_10q", "Long Answer")}
+                      {numInput("credit_cost_ai_mix_10q", "Mixed")}
+                      {numInput("credit_cost_ai_scan", "OCR Scan")}
+                    </div>
+                  </div>
+
+                  {/* AI Grading */}
+                  <div className="rounded-xl border border-border bg-card/40 p-4 space-y-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-warning">
+                      AI Answer Grading
+                      <span className="ml-1.5 normal-case font-normal text-muted-foreground">per answer checked</span>
+                    </p>
+                    <div className="flex flex-wrap gap-5">
+                      {numInput("credit_cost_ai_grade_short", "Short Answer")}
+                      {numInput("credit_cost_ai_grade_long", "Long Answer")}
+                    </div>
+                  </div>
+
+                  {/* Other */}
+                  <div className="rounded-xl border border-border bg-card/40 p-4 space-y-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Other Actions</p>
+                    <div className="flex flex-wrap gap-5">
+                      {numInput("credit_cost_session_launch", "Session Launch")}
+                      {numInput("credit_cost_export", "Export Report")}
+                      {numInput("credit_cost_extra_quiz", "Extra Quiz Slot")}
+                      {numInput("credit_cost_extra_participants", "Extra Participants")}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground">
+                    AI Gen cost is per 10 questions — prorated for smaller counts (e.g. 5 questions at 10cr/10q = 5cr). Set 0 to make an action free.
+                  </p>
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        )}
       </div>
     </div>
   );
@@ -2653,6 +2790,8 @@ function FinanceSection() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [actioning, setActioning] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 20;
 
   const load = async () => {
     setLoading(true);
@@ -2706,6 +2845,8 @@ function FinanceSection() {
   };
 
   const filtered = statusFilter === "all" ? payments : payments.filter((p) => p.status === statusFilter);
+  useEffect(() => { setPage(0); }, [statusFilter]);
+  const paged = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const thisMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
   const approved = payments.filter((p) => p.status === "approved");
   const pending = payments.filter((p) => p.status === "pending");
@@ -2770,9 +2911,9 @@ function FinanceSection() {
       <TableShell footer={`${filtered.length} payment${filtered.length !== 1 ? "s" : ""}`}>
         <THead cols={["Date", "User", "Plan", "Amount", "Method", "Credits", "Status", "Actions"]} />
         <tbody className="divide-y divide-border/40">
-          {loading ? <SkeletonRows cols={8} /> : filtered.length === 0 ? (
+          {loading ? <SkeletonRows cols={8} /> : paged.length === 0 ? (
             <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">No payments found.</td></tr>
-          ) : filtered.map((p) => (
+          ) : paged.map((p) => (
             <tr key={p.id} className="hover:bg-muted/10 transition-colors">
               <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(p.created_at)}</td>
               <td className="px-4 py-3">
@@ -2829,6 +2970,7 @@ function FinanceSection() {
           ))}
         </tbody>
       </TableShell>
+      <PaginationControls page={page} pageSize={PAGE_SIZE} total={filtered.length} label="payments" onPageChange={setPage} />
 
       {/* Screenshot preview dialog */}
       <Dialog open={!!screenshotUrl} onOpenChange={() => setScreenshotUrl(null)}>

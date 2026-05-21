@@ -3,7 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { toast } from "sonner";
 import {
   ArrowLeft, BookOpen, ChevronRight, FileEdit, FolderPlus,
-  Plus, ScanLine, Sparkles, Upload, Check,
+  Plus, ScanLine, Sparkles, Check,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -30,19 +30,14 @@ const ScanTab = lazy(() =>
 const AiTab = lazy(() =>
   import("@/components/questions/AiTab").then((m) => ({ default: m.AiTab })),
 );
-const UploadTab = lazy(() =>
-  import("@/components/questions/UploadTab").then((m) => ({ default: m.UploadTab })),
-);
-
 type Cat = { id: string; name: string; icon: string | null };
 type Sub = { id: string; category_id: string; name: string };
-type Method = "manual" | "ai" | "scan" | "upload";
+type Method = "manual" | "ai" | "scan";
 
 const METHODS: { id: Method; label: string; desc: string; icon: typeof FileEdit; accent: string }[] = [
   { id: "manual", label: "Manual",  desc: "Type questions yourself",       icon: FileEdit, accent: "border-primary/40 bg-primary/5 text-primary" },
   { id: "ai",     label: "AI",      desc: "Generate with Claude AI",       icon: Sparkles, accent: "border-purple-500/40 bg-purple-500/5 text-purple-400" },
   { id: "scan",   label: "Scan",    desc: "Extract from image or PDF",     icon: ScanLine, accent: "border-blue-500/40 bg-blue-500/5 text-blue-400" },
-  { id: "upload", label: "Upload",  desc: "Import from file (CSV / JSON)", icon: Upload,   accent: "border-orange-500/40 bg-orange-500/5 text-orange-400" },
 ];
 
 /* ── Quick-create dialog ── */
@@ -405,11 +400,6 @@ function AddQuestionPage() {
             {method === "scan" && (
               <Suspense fallback={<TabLoading />}>
                 <ScanTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "ocr")} />
-              </Suspense>
-            )}
-            {method === "upload" && (
-              <Suspense fallback={<TabLoading />}>
-                <UploadTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "import")} />
               </Suspense>
             )}
           </div>

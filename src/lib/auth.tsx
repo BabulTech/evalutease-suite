@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { logClientActivity } from "@/lib/audit";
 
 type AuthCtx = {
   user: User | null;
@@ -33,6 +34,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // Log BEFORE signOut while auth.uid() is still valid
+    if (user) {
+      await logClientActivity({
+        actionType: "signed_out",
+        module: "auth",
+        entityType: "session",
+        entityLabel: user.email ?? null,
+        message: "Signed out",
+        details: { user_email: user.email },
+        riskScore: 0,
+      });
+    }
     await supabase.auth.signOut();
   };
 

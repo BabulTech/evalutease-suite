@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { Trash2, X, Plus, AlertCircle } from "lucide-react";
+import { Trash2, X, Plus, AlertCircle, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { useI18n } from "@/lib/i18n";
 import {
   type ShortAnswerDraft,
@@ -33,7 +32,6 @@ export function ShortAnswerEditor({ draft, index, onChange, onRemove, compact }:
   const remaining = MAX_QUESTION_LENGTH - draft.text.length;
   const overLimit = remaining < 0;
 
-  // We always render at least one slot so the host has something to type into.
   const answers = draft.acceptableAnswers.length === 0 ? [""] : draft.acceptableAnswers;
 
   const updateAnswerAt = (i: number, value: string) => {
@@ -54,10 +52,7 @@ export function ShortAnswerEditor({ draft, index, onChange, onRemove, compact }:
       setNewAnswer("");
       return;
     }
-    onChange({
-      ...draft,
-      acceptableAnswers: [...answers.filter((a) => a.trim()), trimmed],
-    });
+    onChange({ ...draft, acceptableAnswers: [...answers.filter((a) => a.trim()), trimmed] });
     setNewAnswer("");
   };
 
@@ -78,125 +73,76 @@ export function ShortAnswerEditor({ draft, index, onChange, onRemove, compact }:
           </div>
           <Textarea
             value={draft.text}
-            onChange={(e) =>
-              onChange({ ...draft, text: e.target.value.slice(0, MAX_QUESTION_LENGTH) })
-            }
+            onChange={(e) => onChange({ ...draft, text: e.target.value.slice(0, MAX_QUESTION_LENGTH) })}
             placeholder="Ask a short-answer question, e.g. 'What is the capital of Pakistan?'"
             maxLength={MAX_QUESTION_LENGTH}
             className="min-h-[64px] resize-none"
           />
         </div>
         {onRemove && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-            className="text-muted-foreground hover:text-destructive"
-          >
+          <Button type="button" variant="ghost" size="icon" onClick={onRemove}
+            className="text-muted-foreground hover:text-destructive">
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
       </div>
 
-      {/* Manual grading toggle */}
-      <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-3">
-        <div>
-          <div className="text-sm font-medium">Grade manually (or with AI)</div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {draft.requiresManualGrading
-              ? "You'll review each student's answer after the quiz ends."
-              : "Auto-grade by matching against the accepted answers below."}
-          </p>
+      {/* Accepted answers for auto-matching */}
+      <div className="space-y-2">
+        <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+          Accepted Answers
+          <span className="ml-2 normal-case text-muted-foreground/70 font-normal">
+            (optional — used for auto-matching. You can also grade manually or with AI after the quiz.)
+          </span>
+        </Label>
+        <div className="space-y-1.5">
+          {answers.map((ans, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-2">
+              <Input
+                value={ans}
+                onChange={(e) => updateAnswerAt(i, e.target.value)}
+                placeholder={i === 0 ? "e.g. Islamabad" : "Another accepted answer"}
+                className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-8"
+              />
+              {answers.length > 1 && (
+                <button type="button" title="Remove answer" onClick={() => removeAnswerAt(i)}
+                  className="text-muted-foreground hover:text-destructive">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
         </div>
-        <Switch
-          checked={draft.requiresManualGrading}
-          onCheckedChange={(v) => onChange({ ...draft, requiresManualGrading: v })}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            value={newAnswer}
+            onChange={(e) => setNewAnswer(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAnswer(); } }}
+            placeholder="Add another accepted answer…"
+            className="h-9"
+          />
+          <Button type="button" variant="outline" size="sm" onClick={addAnswer}
+            disabled={!newAnswer.trim()} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        </div>
+        {!hasAcceptable && (
+          <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-warning" />
+            <span>No accepted answers set — grading will need to be done manually or with AI after the quiz.</span>
+          </div>
+        )}
       </div>
 
-      {/* Accepted answers (auto-grade only) */}
-      {!draft.requiresManualGrading && (
-        <div className="space-y-2">
-          <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-            Accepted Answers
-            <span className="ml-2 normal-case text-muted-foreground/70 font-normal">
-              (case-insensitive, exact text match)
-            </span>
-          </Label>
-          <div className="space-y-1.5">
-            {answers.map((ans, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 rounded-xl border border-border bg-background/40 px-3 py-2"
-              >
-                <Input
-                  value={ans}
-                  onChange={(e) => updateAnswerAt(i, e.target.value)}
-                  placeholder={i === 0 ? "e.g. Islamabad" : "Another accepted answer"}
-                  className="border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-8"
-                />
-                {answers.length > 1 && (
-                  <button
-                    type="button"
-                    title="Remove this answer"
-                    onClick={() => removeAnswerAt(i)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              value={newAnswer}
-              onChange={(e) => setNewAnswer(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addAnswer();
-                }
-              }}
-              placeholder="Add another accepted answer…"
-              className="h-9"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addAnswer}
-              disabled={!newAnswer.trim()}
-              className="gap-1.5"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add
-            </Button>
-          </div>
-          {!hasAcceptable && (
-            <div className="flex items-start gap-1.5 text-[11px] text-warning">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-              <span>
-                Add at least one accepted answer, or enable manual grading above.
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
       {!compact && (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
               {t("q.difficulty")}
             </Label>
-            <Select
-              value={draft.difficulty}
-              onValueChange={(v) => onChange({ ...draft, difficulty: v as Difficulty })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+            <Select value={draft.difficulty}
+              onValueChange={(v) => onChange({ ...draft, difficulty: v as Difficulty })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="easy">{t("q.easy")}</SelectItem>
                 <SelectItem value="medium">{t("q.medium")}</SelectItem>
@@ -205,30 +151,52 @@ export function ShortAnswerEditor({ draft, index, onChange, onRemove, compact }:
             </Select>
           </div>
           <div>
-            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              {t("q.timeSec")}
+            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Time Limit
             </Label>
-            <Input
-              type="number"
-              min={5}
-              max={3600}
-              value={draft.timeSeconds}
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={String(Math.floor(draft.timeSeconds / 60))}
+                onValueChange={(v) => onChange({ ...draft, timeSeconds: Number(v) * 60 + (draft.timeSeconds % 60) })}
+              >
+                <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0,1,2,3,4,5,10,15,20,30].map((m) => (
+                    <SelectItem key={m} value={String(m)}>{m}m</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(draft.timeSeconds % 60)}
+                onValueChange={(v) => onChange({ ...draft, timeSeconds: Math.floor(draft.timeSeconds / 60) * 60 + Number(v) })}
+              >
+                <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[0,15,30,45].map((s) => (
+                    <SelectItem key={s} value={String(s)}>{s}s</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">= {draft.timeSeconds}s total</p>
+          </div>
+          <div>
+            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
+              Max Points
+            </Label>
+            <Input type="number" min={1} max={100} value={draft.maxPoints}
               onChange={(e) => {
                 const n = Number(e.target.value);
-                onChange({ ...draft, timeSeconds: Number.isFinite(n) ? n : 30 });
-              }}
-              placeholder="30"
-            />
+                onChange({ ...draft, maxPoints: Number.isFinite(n) && n >= 1 ? Math.min(n, 100) : 1 });
+              }} placeholder="1" />
           </div>
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
               {t("q.explanation")}
             </Label>
-            <Input
-              value={draft.explanation}
+            <Input value={draft.explanation}
               onChange={(e) => onChange({ ...draft, explanation: e.target.value })}
-              placeholder={t("q.explanationPlaceholder")}
-            />
+              placeholder={t("q.explanationPlaceholder")} />
           </div>
         </div>
       )}

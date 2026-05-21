@@ -1,4 +1,4 @@
-export type SessionStatus = "draft" | "scheduled" | "active" | "completed" | "expired";
+export type SessionStatus = "draft" | "scheduled" | "active" | "grading" | "completed" | "expired";
 
 export type Category = { id: string; name: string };
 export type QuestionLite = {
@@ -107,6 +107,7 @@ export function generateAccessCode(): string {
 
 export function statusBadge(s: Session): { label: string; className: string } {
   if (s.status === "active") return { label: "Live", className: "bg-success/15 text-success" };
+  if (s.status === "grading") return { label: "Needs Grading", className: "bg-warning/15 text-warning" };
   if (s.status === "completed")
     return { label: "Completed", className: "bg-muted text-muted-foreground" };
   if (s.status === "expired")

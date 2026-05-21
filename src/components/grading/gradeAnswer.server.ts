@@ -37,6 +37,102 @@ Rules:
 - If there is no model answer or rubric, use your subject-matter knowledge.
 - Keep feedback constructive and brief.`;
 
+// ─── Batch grading ────────────────────────────────────────────────
+
+type BatchQuestion = {
+  id: string;
+  questionText: string;
+  questionType: "short_answer" | "long_answer";
+  studentAnswer: string;
+  maxPoints: number;
+  modelAnswer?: string;
+  rubric?: string;
+};
+
+type BatchResult = {
+  id: string;
+  points: number;
+  comment: string;
+  reasoning: string;
+};
+
+const BATCH_SYSTEM = `You are a fair, experienced examiner grading student answers.
+You will receive a list of questions with student answers and max points for each.
+
+CRITICAL OUTPUT FORMAT:
+- Respond with ONLY a raw JSON array. No prose, no explanation, no markdown code fences.
+- Your entire response must start with [ and end with ].
+- Each element must match this exact schema:
+  { "id": "<question id from input>", "points": <integer 0 to maxPoints>, "comment": "<one sentence feedback>", "reasoning": "<one sentence why>" }
+- Include exactly one element per question in the input, using the exact id provided.
+
+Grading rules:
+- Award full points for correct, complete answers even if worded differently from the model answer.
+- Award partial points when partially correct or shows understanding but lacks completeness.
+- Award 0 for wrong, blank, or completely off-topic answers.
+- Keep feedback constructive and brief.`;
+
+export const gradeAllAnswersWithAi = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown): { questions: BatchQuestion[] } => {
+    if (typeof data !== "object" || data === null) throw new Error("Invalid input");
+    const v = data as Record<string, unknown>;
+    if (!Array.isArray(v.questions) || v.questions.length === 0) throw new Error("questions array required");
+    return { questions: v.questions as BatchQuestion[] };
+  })
+  .handler(async ({ data }): Promise<{ results: BatchResult[] }> => {
+    const client = getClient();
+
+    const questionsText = data.questions.map((q, i) => [
+      `--- Question ${i + 1} (id: ${q.id}) ---`,
+      `Question: ${q.questionText}`,
+      q.modelAnswer ? `Model Answer: ${q.modelAnswer}` : "",
+      q.rubric ? `Rubric: ${q.rubric}` : "",
+      `Student's Answer: ${q.studentAnswer || "(no answer submitted)"}`,
+      `Maximum Points: ${q.maxPoints}`,
+    ].filter(Boolean).join("\n")).join("\n\n");
+
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 256 * data.questions.length,
+      system: BATCH_SYSTEM,
+      messages: [{ role: "user", content: questionsText }],
+    });
+
+    const block = response.content.find((b) => b.type === "text");
+    if (!block || block.type !== "text") throw new Error("AI returned no content");
+
+    let parsed: { id?: string; points?: number; comment?: string; reasoning?: string }[];
+    const raw = block.text.trim();
+    // Try direct parse, then extract from markdown fences, then find first [ ... ] block
+    const tryParse = (s: string) => { try { const v = JSON.parse(s); return Array.isArray(v) ? v : null; } catch { return null; } };
+    parsed = tryParse(raw)
+      ?? tryParse(raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, ""))
+      ?? (() => {
+        const start = raw.indexOf("[");
+        const end = raw.lastIndexOf("]");
+        return start >= 0 && end > start ? tryParse(raw.slice(start, end + 1)) : null;
+      })()
+      ?? null as any;
+    if (!parsed) {
+      console.error("AI returned non-JSON:", raw.slice(0, 500));
+      throw new Error("Could not parse AI batch grading response");
+    }
+
+    const qMap = Object.fromEntries(data.questions.map((q) => [q.id, q]));
+    const results: BatchResult[] = parsed.map((item) => {
+      const q = qMap[item.id ?? ""];
+      const maxPts = q?.maxPoints ?? 1;
+      return {
+        id: String(item.id ?? ""),
+        points: Math.max(0, Math.min(maxPts, Math.round(Number(item.points ?? 0)))),
+        comment: String(item.comment ?? "").trim(),
+        reasoning: String(item.reasoning ?? "").trim(),
+      };
+    });
+
+    return { results };
+  });
+
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("AI grading is not configured: ANTHROPIC_API_KEY missing.");
@@ -69,22 +165,10 @@ export const gradeAnswerWithAi = createServerFn({ method: "POST" })
       `Maximum Points: ${data.maxPoints}`,
     ].filter(Boolean).join("\n\n");
 
-    const SCHEMA = {
-      type: "object",
-      additionalProperties: false,
-      required: ["points", "comment", "reasoning"],
-      properties: {
-        points: { type: "integer" },
-        comment: { type: "string" },
-        reasoning: { type: "string" },
-      },
-    } as const;
-
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
       system: GRADE_SYSTEM,
-      output_config: { format: { type: "json_schema", schema: SCHEMA } },
       messages: [{ role: "user", content: parts }],
     });
 

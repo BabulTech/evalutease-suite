@@ -116,10 +116,10 @@ const dictionaries: Record<Language, Dict> = {
     "nav.dashboard": "Dashboard",
     "nav.questions": "Questions",
     "nav.participants": "Participants",
-    "nav.manageCategories": "Manage Questions",
-    "nav.manageParticipants": "Manage Participants",
-    "nav.sessions": "Quiz Sessions",
-    "nav.quizHistory": "Quiz History",
+    "nav.manageCategories": "Questions",
+    "nav.manageParticipants": "Participants",
+    "nav.sessions": "Sessions",
+    "nav.quizHistory": "History",
     "nav.reports": "Reports",
     "nav.settings": "Settings",
 
@@ -277,7 +277,7 @@ const dictionaries: Record<Language, Dict> = {
     "pt.deleting": "Deleting…",
 
     // ── Categories page ──────────────────────────────────────────────
-    "cat.manageQuestions": "Manage Questions",
+    "cat.manageQuestions": "Questions Bank",
     "cat.manageDesc": "Select a category and topic to view, add, edit, or delete questions.",
     "cat.addQuestion": "Add Question",
     "cat.browseByCategory": "Browse Questions by Category",
@@ -876,10 +876,10 @@ const dictionaries: Record<Language, Dict> = {
     "nav.dashboard": "ڈیش بورڈ",
     "nav.questions": "سوالات",
     "nav.participants": "شرکاء",
-    "nav.manageCategories": "سوالات منظم کریں",
-    "nav.manageParticipants": "شرکاء منظم کریں",
-    "nav.sessions": "کوئز سیشنز",
-    "nav.quizHistory": "کوئز ہسٹری",
+    "nav.manageCategories": "سوالات",
+    "nav.manageParticipants": "شرکاء",
+    "nav.sessions": "سیشنز",
+    "nav.quizHistory": "ہسٹری",
     "nav.reports": "رپورٹس",
     "nav.settings": "ترتیبات",
 

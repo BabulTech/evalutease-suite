@@ -37,27 +37,13 @@ type AlertInput = {
   details?: Record<string, unknown>;
 };
 
-async function getProfile(userId: string) {
-  const { data } = await supabaseAdmin
-    .from("profiles")
-    .select("id, full_name, email")
-    .eq("id", userId)
-    .maybeSingle();
-  return data;
-}
-
 export async function logActivity(input: ActivityInput) {
   try {
-    const profile = await getProfile(input.actorUserId);
-    const actorName =
-      profile?.full_name ||
-      profile?.email?.split("@")[0] ||
-      "Unknown user";
-
+    // actor_name and actor_email columns were removed in migration 23.
+    // Reader RPCs (get_session_activity, get_my_recent_activity) join
+    // profiles on actor_user_id to surface the display name on read.
     await (supabaseAdmin as any).from("activity_logs").insert({
       actor_user_id: input.actorUserId,
-      actor_name: actorName,
-      actor_email: profile?.email ?? null,
       plan_owner_id: input.planOwnerId ?? input.actorUserId,
       action_type: input.actionType,
       module: input.module,
@@ -193,26 +179,10 @@ export async function logAiUsage(input: AiUsageInput) {
       details: input.details ?? {},
     });
 
-    await logActivity({
-      actorUserId: input.actorUserId,
-      planOwnerId: input.planOwnerId,
-      actionType: "generated",
-      module: "ai",
-      entityType: "ai_request",
-      entityLabel: input.feature,
-      message: `AI ${input.feature} used ${inputTokens + outputTokens} tokens`,
-      details: {
-        feature: input.feature,
-        model: input.model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        estimated_cost: cost,
-        credits_charged: input.creditsCharged ?? 0,
-        status: input.requestStatus ?? "success",
-        ...(input.details ?? {}),
-      },
-      riskScore: cost >= 1 ? 60 : (input.creditsCharged ?? 0) >= 20 ? 50 : 10,
-    });
+    // Note: we used to ALSO write an activity_logs row here for every AI
+    // call. That duplicated storage — ai_usage_logs already has richer
+    // detail (tokens, cost, latency). The credit_transactions trigger
+    // logs the credit spend separately, which is the user-facing event.
 
     await runAiAlertRules(input, cost);
   } catch (error) {

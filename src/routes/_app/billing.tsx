@@ -282,6 +282,14 @@ function BillingPage() {
 
   const isFreeUser = !currentPlan || currentPlan.slug === "individual_starter";
   const canBuyCredits = currentPlan?.can_buy_credits ?? false;
+
+  const FREE_SLUGS = ["individual_starter", "enterprise_starter", "enterprise_free"];
+  useEffect(() => {
+    if (hostLoading) return;
+    if (!isHost && currentPlan && FREE_SLUGS.includes(currentPlan.slug)) {
+      void navigate({ to: "/settings", search: { tab: "plan" } });
+    }
+  }, [currentPlan, isHost, hostLoading, navigate]);
   const individualPlans  = allPlans.filter((p) => p.tier === "individual"  && p.price_pkr > 0);
   const enterprisePlans  = allPlans.filter((p) => p.tier === "enterprise"  && p.price_pkr > 0);
 

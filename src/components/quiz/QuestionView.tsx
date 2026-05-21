@@ -10,7 +10,9 @@ type Props = {
   index: number;
   secondsLeft: number;
   totalSeconds: number;
+  quizSecondsLeft?: number | null;
   onLockAnswer: (answer: string) => Promise<void> | void;
+  onTyping?: (value: string) => void;
   isAnswered: boolean;
   paused?: boolean;
 };
@@ -23,7 +25,9 @@ export function QuestionView({
   index,
   secondsLeft,
   totalSeconds,
+  quizSecondsLeft,
   onLockAnswer,
+  onTyping,
   isAnswered,
   paused = false,
 }: Props) {
@@ -68,22 +72,33 @@ export function QuestionView({
             {index + 1} / {total}
           </span>
         </span>
-        <span className="inline-flex items-center gap-1.5">
-          <Clock className="h-3 w-3" />
-          <span
-            className={`font-mono font-semibold ${secondsLeft <= 5 ? "text-destructive" : "text-foreground"}`}
-          >
-            {secondsLeft}s
+        <div className="flex items-center gap-3">
+          {quizSecondsLeft != null && (
+            <span className={`inline-flex items-center gap-1 ${quizSecondsLeft <= 30 ? "text-destructive" : "text-muted-foreground"}`}>
+              <Clock className="h-3 w-3" />
+              <span className="font-mono font-semibold">
+                Quiz: {Math.floor(quizSecondsLeft / 60)}:{String(quizSecondsLeft % 60).padStart(2, "0")}
+              </span>
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            <span
+              className={`font-mono font-semibold ${secondsLeft <= 5 ? "text-destructive" : "text-foreground"}`}
+            >
+              {secondsLeft}s
+            </span>
           </span>
-        </span>
+        </div>
       </div>
 
       <div className="mt-3 h-1.5 rounded-full bg-muted/50 overflow-hidden">
         <div
           className={`h-full transition-[width] duration-1000 ease-linear ${
             secondsLeft <= 5 ? "bg-destructive" : "bg-gradient-primary"
-          }`}
-          style={{ width: `${pct}%` }}
+          } w-[var(--timer-pct)]`}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          style={{ "--timer-pct": `${pct}%` } as any}
         />
       </div>
 
@@ -129,7 +144,11 @@ export function QuestionView({
             <input
               type="text"
               value={typedAnswer}
-              onChange={(e) => setTypedAnswer(e.target.value.slice(0, MAX_SHORT_ANSWER_CHARS))}
+              onChange={(e) => {
+                const v = e.target.value.slice(0, MAX_SHORT_ANSWER_CHARS);
+                setTypedAnswer(v);
+                onTyping?.(v);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && typedAnswer.trim() && !disabled) {
                   e.preventDefault();
@@ -167,7 +186,11 @@ export function QuestionView({
         <div className="mt-6 space-y-3">
           <textarea
             value={typedAnswer}
-            onChange={(e) => setTypedAnswer(e.target.value.slice(0, 4000))}
+            onChange={(e) => {
+              const v = e.target.value.slice(0, 4000);
+              setTypedAnswer(v);
+              onTyping?.(v);
+            }}
             disabled={disabled}
             rows={8}
             placeholder="Write your answer…"

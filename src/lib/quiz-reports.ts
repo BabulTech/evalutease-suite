@@ -6,6 +6,7 @@ export type QuizReportAttempt = {
   seatNumber?: string | null;
   score: number;
   totalQuestions: number;
+  totalMaxPoints?: number | null;  // sum of all question max_points for the session
   attemptedQuestions: number;
   correctAnswers: number;
   wrongAnswers: number;
@@ -46,7 +47,7 @@ export function getQuizReportRows(attempts: QuizReportAttempt[]): QuizReportRow[
     .map((a, index) => ({
       ...a,
       rank: index + 1,
-      percent: Math.round((a.score / Math.max(1, a.totalQuestions)) * 100),
+      percent: Math.min(100, Math.round((a.score / Math.max(1, a.totalMaxPoints ?? a.totalQuestions)) * 100)),
     }));
 }
 

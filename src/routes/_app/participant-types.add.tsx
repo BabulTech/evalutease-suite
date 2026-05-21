@@ -5,9 +5,11 @@ import { validationError } from "@/components/ui/validation-toast";
 import {
   ArrowLeft,
   Check,
+  CheckCircle,
   Copy,
   FileText,
   Image as ImageIcon,
+  Loader2,
   Mail,
   Plus,
   Save,
@@ -15,6 +17,7 @@ import {
   Upload,
   UserPlus,
   X,
+  XCircle,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/lib/auth";
@@ -252,6 +255,20 @@ function AddParticipantPage() {
   /* Shared insert helpers */
   const insertOne = async (draft: ParticipantDraft) => {
     if (!user) return;
+    // Check for duplicate email within this owner's participants
+    if (draft.email?.trim()) {
+      const { data: existing } = await supabase
+        .from("participants")
+        .select("id, name")
+        .eq("owner_id", user.id)
+        .ilike("email", draft.email.trim())
+        .maybeSingle();
+      if (existing) {
+        const err = new Error(`A participant with this email already exists: "${existing.name}"`);
+        toast.error(err.message);
+        throw err;
+      }
+    }
     const row = draftToRow(draft, user.id);
     const { error } = await supabase.from("participants").insert({ ...row, subtype_id: subId || null });
     if (error) { toast.error(error.message); throw error; }
@@ -259,6 +276,20 @@ function AddParticipantPage() {
 
   const insertMany = async (drafts: ParticipantDraft[]) => {
     if (!user || !drafts.length) return;
+    // Check for duplicate emails in bulk
+    const emails = drafts.map(d => d.email?.trim().toLowerCase()).filter(Boolean) as string[];
+    if (emails.length > 0) {
+      const { data: dupes } = await supabase
+        .from("participants")
+        .select("name, email")
+        .eq("owner_id", user.id)
+        .in("email", emails);
+      if (dupes && dupes.length > 0) {
+        const list = dupes.map((d: { name: string; email: string }) => d.email).join(", ");
+        toast.error(`${dupes.length} duplicate email(s) found: ${list}. Remove them and try again.`);
+        throw new Error("Duplicate emails");
+      }
+    }
     const rows = drafts.map((d) => ({ ...draftToRow(d, user.id), subtype_id: subId || null }));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await supabase.from("participants").insert(rows as any);
@@ -277,10 +308,11 @@ function AddParticipantPage() {
     return { email: data.email, token: data.token, url: `${origin}/invite/${data.token}`, participant_type: participantType };
   };
 
-  const [method, setMethod] = useState<"manual" | "invite" | "upload" | "scan">("manual");
+  const [method, setMethod] = useState<"manual" | "invite" | "upload" | "scan" | "existing">("manual");
 
-  const METHODS: { value: "manual" | "invite" | "upload" | "scan"; icon: React.ReactNode; label: string; desc: string }[] = [
+  const METHODS: { value: "manual" | "invite" | "upload" | "scan" | "existing"; icon: React.ReactNode; label: string; desc: string }[] = [
     { value: "manual", icon: <UserPlus className="h-5 w-5" />, label: t("ptAdd.tabManual"), desc: "Fill in details one at a time" },
+    { value: "existing", icon: <Plus className="h-5 w-5" />, label: "From Existing", desc: "Re-add from another group" },
     { value: "invite", icon: <Mail className="h-5 w-5" />, label: t("ptAdd.tabInvite"), desc: "Send a self-join link or QR" },
     { value: "upload", icon: <Upload className="h-5 w-5" />, label: t("ptAdd.tabUpload"), desc: "Bulk import from CSV file" },
     { value: "scan", icon: <ScanLine className="h-5 w-5" />, label: t("ptAdd.tabScan"), desc: "Extract from a photo or scan" },
@@ -326,7 +358,7 @@ function AddParticipantPage() {
         </div>
 
         {/* Method cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {METHODS.map((m) => (
             <button
               key={m.value}
@@ -348,7 +380,7 @@ function AddParticipantPage() {
         {/* Active method content */}
         <div className="pt-2 border-t border-border">
           {method === "manual" && (
-            <ManualTab typeId={typeId} hostSettings={hostSettings} onSave={async (d) => { await insertOne(d); toast.success(t("pt.participantAdded").replace("{name}", d.name)); }} />
+            <ManualTab typeId={typeId} hostSettings={hostSettings} ownerId={user?.id ?? ""} onSave={async (d) => { await insertOne(d); toast.success(t("pt.participantAdded").replace("{name}", d.name)); }} />
           )}
           {method === "invite" && (
             <InviteTab subId={subId} onGenerate={(pt) => generateInvite(pt)} />
@@ -358,6 +390,9 @@ function AddParticipantPage() {
           )}
           {method === "scan" && (
             <ScanTab typeId={typeId} onSave={insertMany} />
+          )}
+          {method === "existing" && (
+            <ExistingTab ownerId={user?.id ?? ""} subId={subId} />
           )}
         </div>
       </div>
@@ -370,27 +405,53 @@ function AddParticipantPage() {
 }
 
 /* ── Manual tab ── */
-function ManualTab({ typeId, hostSettings, onSave }: {
+function ManualTab({ typeId, hostSettings, ownerId, onSave }: {
   typeId: string;
   hostSettings: HostSettings;
+  ownerId: string;
   onSave: (d: ParticipantDraft) => Promise<void>;
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<ParticipantDraft>(() => emptyDraft());
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [emailCheck, setEmailCheck] = useState<"idle" | "checking" | "taken" | "available">("idle");
+  const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const set = (patch: Partial<ParticipantDraft>) => setDraft((p) => ({ ...p, ...patch }));
+  const set = (patch: Partial<ParticipantDraft>) => {
+    setDraft((p) => ({ ...p, ...patch }));
+    if ("email" in patch) {
+      const email = patch.email?.trim() ?? "";
+      if (emailTimer.current) clearTimeout(emailTimer.current);
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setEmailCheck("idle");
+        return;
+      }
+      setEmailCheck("checking");
+      emailTimer.current = setTimeout(async () => {
+        const { data: existing } = await supabase
+          .from("participants")
+          .select("id")
+          .eq("owner_id", ownerId)
+          .ilike("email", email)
+          .maybeSingle();
+        setEmailCheck(existing ? "taken" : "available");
+      }, 600);
+    }
+  };
+
   const ptype = draft.participant_type;
   const fieldConfig = resolveRegistrationFields(hostSettings, ptype);
 
   const submit = async () => {
     const v = validateDraft(draft, fieldConfig);
     if (!v.ok) { toast.error(v.reason); return; }
+    if (emailCheck === "taken") { toast.error("A participant with this email already exists."); return; }
     setBusy(true);
     try {
       await onSave(draft);
       setDraft(emptyDraft());
+      setEmailCheck("idle");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch { /* toast shown by caller */ } finally { setBusy(false); }
@@ -440,12 +501,130 @@ function ManualTab({ typeId, hostSettings, onSave }: {
       {/* Dynamic fields based on host's per-type config */}
       <DynamicParticipantFields draft={draft} fields={fieldConfig} onSet={set} />
 
+      {/* Email duplicate feedback */}
+      {draft.email && emailCheck !== "idle" && (
+        <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+          emailCheck === "checking" ? "bg-muted/30 text-muted-foreground" :
+          emailCheck === "taken"    ? "bg-destructive/10 text-destructive border border-destructive/30" :
+          "bg-success/10 text-success border border-success/30"
+        }`}>
+          {emailCheck === "checking"  && <Loader2 size={13} className="animate-spin shrink-0" />}
+          {emailCheck === "taken"     && <XCircle size={13} className="shrink-0" />}
+          {emailCheck === "available" && <CheckCircle size={13} className="shrink-0" />}
+          {emailCheck === "checking"  && "Checking email…"}
+          {emailCheck === "taken"     && "A participant with this email already exists."}
+          {emailCheck === "available" && "Email is available ✓"}
+        </div>
+      )}
+
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => setDraft(emptyDraft())} disabled={busy}>{t("ptAdd.reset")}</Button>
-        <Button onClick={submit} disabled={busy} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+        <Button variant="ghost" onClick={() => { setDraft(emptyDraft()); setEmailCheck("idle"); }} disabled={busy}>{t("ptAdd.reset")}</Button>
+        <Button onClick={submit} disabled={busy || emailCheck === "checking" || emailCheck === "taken"} className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
           {saved ? <><Check className="h-4 w-4" /> {t("ptAdd.added")}</> : busy ? t("ptAdd.saving") : <><UserPlus className="h-4 w-4" /> {t("ptAdd.addParticipant")}</>}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/* ── From Existing tab ── */
+type ExistingParticipant = { id: string; name: string; email: string | null; mobile: string | null; participant_type: string | null; metadata: Record<string, unknown> };
+
+function ExistingTab({ ownerId, subId }: { ownerId: string; subId: string }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<ExistingParticipant[]>([]);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [added, setAdded] = useState<Set<string>>(new Set());
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const search = (q: string) => {
+    setQuery(q);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q.trim()) { setResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from("participants")
+        .select("id, name, email, mobile, metadata")
+        .eq("owner_id", ownerId)
+        .or(`name.ilike.%${q.trim()}%,email.ilike.%${q.trim()}%`)
+        .order("name")
+        .limit(20);
+      setResults((data ?? []).map((r) => ({ ...r, participant_type: null })) as ExistingParticipant[]);
+    }, 400);
+  };
+
+  const addToGroup = async (p: ExistingParticipant) => {
+    if (!subId) { toast.error("Please select a group first."); return; }
+    setAdding(p.id);
+    // check duplicate in target subtype
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: exists } = await (supabase.rpc as any)("check_participant_email_in_subtype", {
+      p_subtype_id: subId,
+      p_email: p.email ?? "",
+    });
+    if (exists && p.email) {
+      toast.error("This participant's email is already in the target group.");
+      setAdding(null);
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await supabase.from("participants").insert({
+      owner_id: ownerId,
+      subtype_id: subId,
+      name: p.name,
+      email: p.email,
+      mobile: p.mobile,
+      metadata: p.metadata ?? {},
+    } as any);
+    if (error) { toast.error(error.message); }
+    else {
+      setAdded((prev) => new Set(prev).add(p.id));
+      toast.success(`${p.name} added to group.`);
+    }
+    setAdding(null);
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">Search participants you've already added elsewhere and add them to this group in one click.</p>
+      <Input
+        value={query}
+        onChange={(e) => search(e.target.value)}
+        placeholder="Search by name or email…"
+        autoFocus
+      />
+      {results.length === 0 && query.trim() && (
+        <p className="text-center text-sm text-muted-foreground py-6">No participants found for "{query}"</p>
+      )}
+      {results.length > 0 && (
+        <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+          {results.map((p) => {
+            const isAdded = added.has(p.id);
+            const isBusy = adding === p.id;
+            return (
+              <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-card/50">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{p.name}</p>
+                  {p.email && <p className="text-xs text-muted-foreground truncate">{p.email}</p>}
+                </div>
+                <Button
+                  size="sm"
+                  variant={isAdded ? "ghost" : "default"}
+                  disabled={isBusy || isAdded || !subId}
+                  onClick={() => addToGroup(p)}
+                  className={`shrink-0 gap-1.5 ${isAdded ? "text-success" : "bg-gradient-primary text-primary-foreground shadow-glow"}`}
+                >
+                  {isBusy ? <Loader2 size={14} className="animate-spin" /> : isAdded ? <Check size={14} /> : <Plus size={14} />}
+                  {isBusy ? "Adding…" : isAdded ? "Added" : "Add"}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!subId && query.trim() && (
+        <p className="text-xs text-amber-400 text-center">Select a group above before adding participants.</p>
+      )}
     </div>
   );
 }

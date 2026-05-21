@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
+import { logClientActivity } from "@/lib/audit";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
@@ -34,6 +35,13 @@ function ResetPasswordPage() {
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
+    void logClientActivity({
+      actionType: "password_reset_completed",
+      module: "auth",
+      entityType: "account",
+      message: "Password reset completed",
+      riskScore: 40,
+    });
     toast.success("Password updated");
     navigate({ to: "/dashboard" });
   };

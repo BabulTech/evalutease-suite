@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, CheckCircle2, UserPlus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, UserPlus, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,8 @@ function InvitePage() {
   const { token } = Route.useParams();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [draft, setDraft] = useState<ParticipantDraft>(() => emptyDraft());
+  const [emailCheck, setEmailCheck] = useState<"idle" | "checking" | "taken" | "available">("idle");
+  const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.rpc("get_invite_for_token", { p_token: token });
@@ -66,7 +68,17 @@ function InvitePage() {
     }
     setPhase({ kind: "ready", data: payload });
     if (payload.invite.email) {
-      setDraft((d) => ({ ...d, email: payload.invite.email ?? "" }));
+      const prefillEmail = payload.invite.email;
+      setDraft((d) => ({ ...d, email: prefillEmail }));
+      // check if this prefilled email is already in this subtype
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefillEmail)) {
+        setEmailCheck("checking");
+        const { data: exists } = await supabase.rpc("check_participant_email_in_subtype", {
+          p_subtype_id: payload.subtype.id,
+          p_email: prefillEmail,
+        });
+        setEmailCheck(exists ? "taken" : "available");
+      }
     }
   }, [token]);
 
@@ -115,8 +127,9 @@ function InvitePage() {
 
   const submit = async () => {
     const v = validateDraft(draft);
-    if (!v.ok) {
-      toast.error(v.reason);
+    if (!v.ok) { toast.error(v.reason); return; }
+    if (emailCheck === "taken") {
+      toast.error("A participant with this email is already in this group.");
       return;
     }
     const row = draftToRow(draft, "00000000-0000-0000-0000-000000000000");
@@ -140,7 +153,9 @@ function InvitePage() {
           ? "This invite link has been revoked by the host."
           : payload.error === "name_required"
             ? "Name is required."
-            : "Could not redeem invite.";
+            : payload.error === "email_taken"
+              ? "A participant with this email is already in this group."
+              : "Could not redeem invite.";
       toast.error(msg);
       setPhase({ kind: "ready", data });
       return;
@@ -148,7 +163,27 @@ function InvitePage() {
     setPhase({ kind: "done", data, participantId: payload.participant_id });
   };
 
-  const set = (patch: Partial<ParticipantDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
+  const set = (patch: Partial<ParticipantDraft>) => {
+    setDraft((prev) => ({ ...prev, ...patch }));
+    if ("email" in patch && phase.kind !== "submitting") {
+      const email = patch.email?.trim() ?? "";
+      if (emailTimer.current) clearTimeout(emailTimer.current);
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setEmailCheck("idle");
+        return;
+      }
+      setEmailCheck("checking");
+      const subtypeId = (phase as { kind: "ready"; data: InviteData }).data?.subtype?.id;
+      if (!subtypeId) return;
+      emailTimer.current = setTimeout(async () => {
+        const { data: exists } = await supabase.rpc("check_participant_email_in_subtype", {
+          p_subtype_id: subtypeId,
+          p_email: email,
+        });
+        setEmailCheck(exists ? "taken" : "available");
+      }, 600);
+    }
+  };
 
   const busy = phase.kind === "submitting";
   const lockedType = data.participant_type ?? "";
@@ -189,16 +224,32 @@ function InvitePage() {
             onSet={set}
             lockedTypeLabel={lockedTypeLabel}
           />
+
+          {/* Email duplicate feedback */}
+          {draft.email && emailCheck !== "idle" && (
+            <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+              emailCheck === "checking" ? "bg-muted/30 text-muted-foreground" :
+              emailCheck === "taken"    ? "bg-destructive/10 text-destructive border border-destructive/30" :
+              "bg-success/10 text-success border border-success/30"
+            }`}>
+              {emailCheck === "checking" && <Loader2 size={13} className="animate-spin shrink-0" />}
+              {emailCheck === "taken"    && <XCircle size={13} className="shrink-0" />}
+              {emailCheck === "available" && <CheckCircle size={13} className="shrink-0" />}
+              {emailCheck === "checking"  && "Checking email…"}
+              {emailCheck === "taken"     && "This email is already registered in this group."}
+              {emailCheck === "available" && "Email is available ✓"}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end">
           <Button
             onClick={submit}
-            disabled={busy}
+            disabled={busy || emailCheck === "checking" || emailCheck === "taken"}
             className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
           >
-            <UserPlus className="h-4 w-4" />
-            {busy ? "Submitting…" : "Join group"}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            {busy ? "Submitting…" : emailCheck === "checking" ? "Checking…" : "Join group"}
           </Button>
         </div>
       </div>

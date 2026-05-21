@@ -4,11 +4,14 @@ import {
   ArrowDownAZ,
   BarChart3,
   CalendarRange,
+  ChevronDown,
+  ChevronRight,
   Download,
   FileText,
   Filter,
   Flame,
   ListFilter,
+  Loader2,
   RotateCcw,
   Search,
   Target,
@@ -238,20 +241,50 @@ function ReportsPage() {
         return;
       }
       setAttemptsLoading(true);
-      const { data, error } = await supabase
-        .from("quiz_attempts")
-        .select(
-          "id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, participants ( metadata )",
-        )
-        .eq("session_id", selectedId)
-        .order("score", { ascending: false });
-      setAttemptsLoading(false);
-      if (error) {
-        toast.error(error.message);
+      const [attemptsRes, maxPtsRes] = await Promise.all([
+        supabase
+          .from("quiz_attempts")
+          .select(
+            "id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, participants ( metadata )",
+          )
+          .eq("session_id", selectedId)
+          .order("score", { ascending: false }),
+        supabase
+          .from("quiz_session_questions")
+          .select("questions(max_points)")
+          .eq("session_id", selectedId),
+      ]);
+      if (attemptsRes.error) {
+        setAttemptsLoading(false);
+        toast.error(attemptsRes.error.message);
         setSelectedAttempts([]);
         return;
       }
-      setSelectedAttempts(((data ?? []) as AttemptRow[]).map(toReportAttempt));
+      const totalMaxPoints = maxPtsRes.data
+        ? maxPtsRes.data.reduce(
+            (sum, r) => sum + ((r.questions as { max_points?: number } | null)?.max_points ?? 1),
+            0,
+          )
+        : null;
+
+      // Recompute live scores from quiz_answers (self-heals stale quiz_attempts.score)
+      const attemptIds = (attemptsRes.data ?? []).map((a) => a.id);
+      let liveScores: Record<string, number> = {};
+      if (attemptIds.length > 0) {
+        const { data: ansData } = await (supabase as any)
+          .from("quiz_answers")
+          .select("attempt_id, points_awarded")
+          .in("attempt_id", attemptIds);
+        for (const r of (ansData ?? []) as { attempt_id: string; points_awarded: number | null }[]) {
+          liveScores[r.attempt_id] = (liveScores[r.attempt_id] ?? 0) + (r.points_awarded ?? 0);
+        }
+      }
+      setAttemptsLoading(false);
+      setSelectedAttempts(
+        ((attemptsRes.data ?? []) as AttemptRow[]).map((a) =>
+          toReportAttempt({ ...a, score: liveScores[a.id] ?? a.score }, totalMaxPoints),
+        ),
+      );
     };
     void loadSelectedAttempts();
   }, [selectedId]);
@@ -329,10 +362,37 @@ function ReportsPage() {
         toast.error(error.message);
         return;
       }
+      // Fetch total max points per session
+      const maxPtsRes = await supabase
+        .from("quiz_session_questions")
+        .select("session_id, questions(max_points)")
+        .in("session_id", sessionIds);
+      const sessionMaxPts: Record<string, number> = {};
+      for (const r of maxPtsRes.data ?? []) {
+        const sid = r.session_id as string;
+        sessionMaxPts[sid] = (sessionMaxPts[sid] ?? 0) + ((r.questions as { max_points?: number } | null)?.max_points ?? 1);
+      }
+      // Recompute live scores from quiz_answers
+      const attemptIds = (data ?? []).map((a) => a.id);
+      const liveScores: Record<string, number> = {};
+      if (attemptIds.length > 0) {
+        const { data: ansData } = await (supabase as any)
+          .from("quiz_answers")
+          .select("attempt_id, points_awarded")
+          .in("attempt_id", attemptIds);
+        for (const r of (ansData ?? []) as { attempt_id: string; points_awarded: number | null }[]) {
+          liveScores[r.attempt_id] = (liveScores[r.attempt_id] ?? 0) + (r.points_awarded ?? 0);
+        }
+      }
       const grouped: Record<string, QuizReportAttempt[]> = {};
       for (const sessionId of sessionIds) grouped[sessionId] = [];
       for (const attempt of (data ?? []) as (AttemptRow & { session_id: string })[]) {
-        grouped[attempt.session_id].push(toReportAttempt(attempt));
+        grouped[attempt.session_id].push(
+          toReportAttempt(
+            { ...attempt, score: liveScores[attempt.id] ?? attempt.score },
+            sessionMaxPts[attempt.session_id] ?? null,
+          ),
+        );
       }
       setStudentAttempts(grouped);
     };
@@ -547,6 +607,8 @@ function ReportsPage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="range" min={0} max={100} step={5} value={passMark}
+                    aria-label={`${t("rep.passMark")} ${passMark}%`}
+                    title={`${t("rep.passMark")} ${passMark}%`}
                     onChange={(e) => setPassMark(Number(e.target.value))}
                     className="flex-1 accent-primary"
                   />
@@ -804,43 +866,114 @@ function QuizReportHeader({
   );
 }
 
+type AttemptAnswer = {
+  id: string;
+  attempt_id: string;
+  question_id: string;
+  question_text: string;
+  question_type: string;
+  answer: string | null;
+  points_awarded: number | null;
+  max_points: number;
+  is_correct: boolean | null;
+  graded_at: string | null;
+  model_answer: string | null;
+  rubric: string | null;
+};
+
+function AnswerCard({ a, i }: { a: AttemptAnswer; i: number }) {
+  const isPending = !a.graded_at && (a.question_type === "short_answer" || a.question_type === "long_answer");
+  const typeLabel = a.question_type === "mcq" ? "MCQ" : a.question_type === "true_false" ? "T/F" : a.question_type === "short_answer" ? "Short" : "Long";
+  const pts = a.points_awarded;
+  const pointColor = isPending ? "text-warning" : pts === a.max_points ? "text-success" : pts === 0 ? "text-destructive" : "text-warning";
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-3 space-y-1.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <span className="shrink-0 text-[10px] font-bold uppercase rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground mt-0.5">{typeLabel}</span>
+          <p className="text-sm font-medium text-foreground leading-snug">
+            <span className="text-muted-foreground mr-1">Q{i + 1}.</span>
+            {a.question_text}
+          </p>
+        </div>
+        <div className={`shrink-0 text-sm font-bold ${pointColor}`}>
+          {isPending ? (
+            <span className="text-warning text-xs font-medium">Pending</span>
+          ) : (
+            <>{pts ?? 0}<span className="text-xs text-muted-foreground font-normal">/{a.max_points}</span></>
+          )}
+        </div>
+      </div>
+      <div className="ml-[2.25rem]">
+        {a.answer ? (
+          <p className={`text-xs rounded-lg px-3 py-2 border ${
+            isPending ? "bg-muted/20 border-border text-foreground" :
+            (pts ?? 0) === a.max_points ? "bg-success/5 border-success/20 text-success" :
+            (pts ?? 0) === 0 ? "bg-destructive/5 border-destructive/20 text-destructive" :
+            "bg-warning/5 border-warning/20 text-warning"
+          }`}>
+            {a.answer}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">No answer submitted</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: number }) {
   const { t } = useI18n();
   const [page, setPage] = useState(0);
-  const [answerStats, setAnswerStats] = useState<
-    Record<string, { correct: number; wrong: number; attempted: number }>
-  >({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadingAnswers, setLoadingAnswers] = useState<string | null>(null);
+  const [attemptAnswers, setAttemptAnswers] = useState<Record<string, AttemptAnswer[]>>({});
   const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
 
-  useEffect(() => {
-    setPage(0);
-  }, [rows]);
+  useEffect(() => { setPage(0); }, [rows]);
 
-  useEffect(() => {
-    const attemptIds = visibleRows.map((row) => row.id);
-    if (attemptIds.length === 0) return;
-    const loadStats = async () => {
-      const { data, error } = await supabase
-        .from("quiz_answers")
-        .select("attempt_id, is_correct")
-        .in("attempt_id", attemptIds);
-      if (error) return;
-      const next: Record<string, { correct: number; wrong: number; attempted: number }> = {};
-      for (const id of attemptIds) next[id] = { correct: 0, wrong: 0, attempted: 0 };
-      for (const row of data ?? []) {
-        const bucket = next[row.attempt_id];
-        if (!bucket) continue;
-        bucket.attempted += 1;
-        if (row.is_correct === true) bucket.correct += 1;
-        if (row.is_correct === false) bucket.wrong += 1;
-      }
-      setAnswerStats(next);
-    };
-    void loadStats();
-  }, [visibleRows]);
+  const toggleExpand = async (attemptId: string) => {
+    if (expandedId === attemptId) { setExpandedId(null); return; }
+    setExpandedId(attemptId);
+    if (attemptAnswers[attemptId]) return;
+    setLoadingAnswers(attemptId);
+    const { data: ansData, error: ansErr } = await (supabase as any)
+      .from("quiz_answers")
+      .select("id, question_id, answer, points_awarded, is_correct, graded_at")
+      .eq("attempt_id", attemptId);
+    setLoadingAnswers(null);
+    if (ansErr || !ansData || ansData.length === 0) {
+      setAttemptAnswers((prev) => ({ ...prev, [attemptId]: [] }));
+      return;
+    }
+    const qIds = (ansData as any[]).map((r) => r.question_id);
+    const { data: qData } = await supabase
+      .from("questions")
+      .select("id, text, type, max_points")
+      .in("id", qIds);
+    const qMap = Object.fromEntries((qData ?? []).map((q: any) => [q.id, q]));
+    setAttemptAnswers((prev) => ({
+      ...prev,
+      [attemptId]: (ansData as any[]).map((r: any, idx: number) => ({
+        id: r.id,
+        attempt_id: attemptId,
+        question_id: r.question_id,
+        question_text: qMap[r.question_id]?.text ?? `Q${idx + 1}`,
+        question_type: qMap[r.question_id]?.type ?? "mcq",
+        answer: r.answer,
+        points_awarded: r.points_awarded,
+        max_points: qMap[r.question_id]?.max_points ?? 1,
+        is_correct: r.is_correct,
+        graded_at: r.graded_at,
+        model_answer: null,
+        rubric: null,
+      })),
+    }));
+  };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
+    <div className="rounded-2xl border border-border bg-card/40 overflow-hidden">
       {rows.length === 0 ? (
         <div className="p-10 text-center">
           <Users className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
@@ -848,63 +981,64 @@ function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: nu
           <p className="text-xs text-muted-foreground mt-1">{t("rep.tryChangingFilters")}</p>
         </div>
       ) : (
-        <table className="w-full text-sm min-w-[860px]">
-          <thead>
-            <tr className="border-b border-border bg-muted/30">
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colHash")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colParticipant")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colRollSeat")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colScorePts")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colScorePct")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colResult")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-success/80">{t("rep.colCorrect")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-destructive/80">{t("rep.colWrong")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colSkipped")}</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">{t("rep.colTimeTaken")}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
-            {visibleRows.map((row) => {
-              const stats = answerStats[row.id];
-              const correct = stats?.correct ?? row.correctAnswers;
-              const wrong = stats?.wrong ?? row.wrongAnswers;
-              const attempted = stats?.attempted ?? row.attemptedQuestions;
-              const skipped = Math.max(0, row.totalQuestions - attempted);
-              return (
-              <tr key={row.id} className="hover:bg-muted/10 transition-colors">
-                <td className="px-4 py-3 font-bold text-muted-foreground">{row.rank}</td>
-                <td className="px-4 py-3">
-                  <div className="font-semibold">{row.name}</div>
-                  <div className="text-xs text-muted-foreground">{row.email || t("rep.noEmail")}</div>
-                </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">
-                  {row.rollNumber ? <span>Roll: {row.rollNumber}</span> : null}
-                  {row.rollNumber && row.seatNumber ? " · " : null}
-                  {row.seatNumber ? <span>Seat: {row.seatNumber}</span> : null}
-                  {!row.rollNumber && !row.seatNumber ? "-" : null}
-                </td>
-                <td className="px-4 py-3 font-bold text-success">{row.score}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{row.percent}%</span>
-                    <div className="w-16 h-1.5 rounded-full bg-muted/30 hidden sm:block">
-                      <div className={`pct-bar h-full rounded-full transition-all ${row.percent >= passMark ? "bg-success" : "bg-destructive"}`}
-                        style={{ "--pct": `${row.percent}%` } as React.CSSProperties} />
-                    </div>
+        <div className="divide-y divide-border/40">
+          {visibleRows.map((row) => {
+            const isExpanded = expandedId === row.id;
+            const answers = attemptAnswers[row.id] ?? [];
+            return (
+              <div key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => void toggleExpand(row.id)}
+                  className="w-full text-left px-4 py-3 hover:bg-muted/10 transition-colors flex items-center gap-3"
+                >
+                  <span className={`shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </span>
+                  <span className="w-6 shrink-0 text-xs font-bold text-muted-foreground">{row.rank}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="font-semibold text-sm block truncate">{row.name}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {row.email || t("rep.noEmail")}
+                      {row.rollNumber ? ` · Roll: ${row.rollNumber}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-4 shrink-0 text-sm">
+                    <span className="font-bold text-success">
+                      {row.score}
+                      <span className="text-xs text-muted-foreground font-normal">/{row.totalMaxPoints ?? row.totalQuestions}</span>
+                      <span className="text-xs text-muted-foreground font-normal ml-1">pts</span>
+                    </span>
+                    <span className="text-xs font-mono text-muted-foreground">{row.percent}%</span>
+                    <ResultBadge row={row} passMark={passMark} />
+                    <span className="text-xs text-muted-foreground hidden sm:block">{formatDuration(row.durationSeconds ?? null)}</span>
+                  </span>
+                </button>
+
+                {isExpanded && (
+                  <div className="bg-muted/5 border-t border-border/40 px-4 py-3">
+                    {loadingAnswers === row.id ? (
+                      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading answers…
+                      </div>
+                    ) : answers.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">No answers found for this attempt.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {answers.map((a, idx) => (
+                          <AnswerCard key={a.id} a={a} i={idx} />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </td>
-                <td className="px-4 py-3"><ResultBadge row={row} passMark={passMark} /></td>
-                <td className="px-4 py-3 font-semibold text-success">{correct}</td>
-                <td className="px-4 py-3 font-semibold text-destructive">{wrong}</td>
-                <td className="px-4 py-3 text-muted-foreground">{skipped}</td>
-                <td className="px-4 py-3 text-xs text-muted-foreground">{formatDuration(row.durationSeconds ?? null)}</td>
-              </tr>
-            )})}
-          </tbody>
-        </table>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
       <div className="px-4 py-2 border-t border-border/40 text-xs text-muted-foreground">
-        {rows.length} {rows.length !== 1 ? t("rep.participantsMatched") : t("rep.participantMatched")}
+        {rows.length} {rows.length !== 1 ? t("rep.participantsMatched") : t("rep.participantMatched")} · Click a row to see per-question answers
       </div>
       <PaginationControls
         page={page}
@@ -947,11 +1081,11 @@ function DistributionBar({
   buckets: { top: number; pass: number; fail: number; left: number };
   passMark: number;
 }) {
+  const { t } = useI18n();
   const total = buckets.top + buckets.pass + buckets.fail + buckets.left;
   if (total === 0) return null;
   const pct = (n: number) => (n / total) * 100;
   const topThreshold = Math.min(100, passMark + 25);
-  const { t } = useI18n();
 
   const bands = [
     { dot: "bg-success", label: `${t("rep.excellent")} (≥ ${topThreshold}%)`, desc: t("rep.scoredTopBand"), value: buckets.top },
@@ -969,7 +1103,7 @@ function DistributionBar({
             <div
               key={b.label}
               className={`pct-bar h-full ${b.dot} first:rounded-l-full last:rounded-r-full transition-all`}
-              style={{ "--pct": `${pct(b.value)}%` } as React.CSSProperties}
+              style={{ width: `${pct(b.value)}%` }}
               title={`${b.label}: ${b.value}`}
             />
           ) : null
@@ -1235,8 +1369,6 @@ function StudentAttemptsTable({
                   t("rep.colPoints"),
                   "%",
                   t("rep.colResult"),
-                  t("rep.colCorrect"),
-                  t("rep.colWrong"),
                   t("rep.colTime"),
                 ].map((h) => (
                   <th
@@ -1261,13 +1393,14 @@ function StudentAttemptsTable({
                   </td>
                   <td className="px-3 py-2">{row.rollNumber || "-"}</td>
                   <td className="px-3 py-2">{row.seatNumber || "-"}</td>
-                  <td className="px-3 py-2 font-bold text-success">{row.score}</td>
+                  <td className="px-3 py-2 font-bold text-success">
+                    {row.score}
+                    <span className="text-xs text-muted-foreground font-normal">/{row.totalMaxPoints ?? row.totalQuestions}</span>
+                  </td>
                   <td className="px-3 py-2 font-mono">{row.percent}%</td>
                   <td className="px-3 py-2">
                     <ResultBadge row={row} passMark={passMark} />
                   </td>
-                  <td className="px-3 py-2 text-success font-semibold">{row.correctAnswers}</td>
-                  <td className="px-3 py-2 text-destructive font-semibold">{row.wrongAnswers}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {formatDuration(row.durationSeconds ?? null)}
                   </td>
@@ -1346,15 +1479,12 @@ function subjectLabel(s: Pick<ReportSession, "subject" | "categoryName" | "subca
   return s.subject || categoryLabel(s) || "Not specified";
 }
 
-function toReportAttempt(a: AttemptRow): QuizReportAttempt {
+function toReportAttempt(a: AttemptRow, totalMaxPoints?: number | null): QuizReportAttempt {
   const meta =
     a.participants?.metadata && typeof a.participants.metadata === "object"
       ? (a.participants.metadata as Record<string, unknown>)
       : {};
-  const assumedCorrect = Math.max(0, Math.min(a.score, a.total_questions));
   const attemptedQuestions = a.completed ? a.total_questions : 0;
-  const correctAnswers = a.completed ? assumedCorrect : 0;
-  const wrongAnswers = a.completed ? Math.max(0, a.total_questions - assumedCorrect) : 0;
   const unattemptedQuestions = a.completed ? 0 : a.total_questions;
   const startedAt = a.started_at ?? null;
   const completedAt = a.completed_at ?? null;
@@ -1370,9 +1500,10 @@ function toReportAttempt(a: AttemptRow): QuizReportAttempt {
     seatNumber: stringMeta(meta.seat_number),
     score: a.score,
     totalQuestions: a.total_questions,
+    totalMaxPoints: totalMaxPoints ?? null,
     attemptedQuestions,
-    correctAnswers,
-    wrongAnswers,
+    correctAnswers: 0,
+    wrongAnswers: 0,
     unattemptedQuestions,
     completed: a.completed,
     startedAt,

@@ -79,35 +79,6 @@ function NewSessionPage() {
   const { t } = useI18n();
   const { isLocked, remaining, plan, loading: planLoading } = usePlan();
 
-  // Show locked screen when daily quiz limit is exhausted
-  if (!planLoading && isLocked("quizzes_per_day")) {
-    return (
-      <div className="max-w-md mx-auto mt-20 text-center space-y-5">
-        <div className="mx-auto h-16 w-16 rounded-2xl bg-destructive/15 flex items-center justify-center">
-          <Lock className="h-8 w-8 text-destructive" />
-        </div>
-        <div>
-          <h2 className="font-display text-2xl font-bold">{t("newSess.limitTitle")}</h2>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span>{" "}
-            {t("newSess.limitDesc").replace("{n}", String(plan?.quizzes_per_day ?? 3))}
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Link
-            to="/settings"
-            search={{ tab: "plan" } as Record<string, string>}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-primary text-primary-foreground shadow-glow px-4 py-2 font-semibold text-sm hover:opacity-90"
-          >
-            <Zap className="h-4 w-4" /> {t("newSess.upgradePlan")}
-          </Link>
-          <Button variant="ghost" onClick={() => void navigate({ to: "/sessions" })}>
-            {t("newSess.backToSessions")}
-          </Button>
-        </div>
-      </div>
-    );
-  }
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [subcategories, setSubcategories] = useState<SubcategoryRow[]>([]);
   const [types, setTypes] = useState<TypeRow[]>([]);
@@ -220,9 +191,7 @@ function NewSessionPage() {
     else if (t.length > 200) errs.title = "Title must be ≤ 200 characters";
     if (!subcategoryId) errs.category = "Pick a category - quiz questions come from the chosen sub-category";
     if (!quizType) errs.quizType = "Select a quiz type";
-    const timeNum = Number(timeText);
-    if (!Number.isFinite(timeNum) || timeNum < 5 || timeNum > 3600)
-      errs.time = "Time per question must be between 5 and 3600 seconds";
+    const timeNum = 30; // each question uses its own time_seconds; this is just a fallback
     if (mode === "schedule") {
       if (!scheduledAtLocal) errs.schedule = "Pick a date and time to schedule";
       else {
@@ -383,7 +352,7 @@ function NewSessionPage() {
       session_id: sessionId,
       question_id: qid,
       position: i,
-      time_seconds: timeNum,
+      time_seconds: null,
     }));
     const { error: qsErr } = await supabase
       .from("quiz_session_questions")
@@ -466,6 +435,36 @@ function NewSessionPage() {
   };
 
   const noSubcategories = subcategories.length === 0;
+
+  // Show locked screen when daily quiz limit is exhausted
+  if (!planLoading && isLocked("quizzes_per_day")) {
+    return (
+      <div className="max-w-md mx-auto mt-20 text-center space-y-5">
+        <div className="mx-auto h-16 w-16 rounded-2xl bg-destructive/15 flex items-center justify-center">
+          <Lock className="h-8 w-8 text-destructive" />
+        </div>
+        <div>
+          <h2 className="font-display text-2xl font-bold">{t("newSess.limitTitle")}</h2>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Your <span className="font-semibold text-foreground">{plan?.name ?? "Free"}</span>{" "}
+            {t("newSess.limitDesc").replace("{n}", String(plan?.quizzes_per_day ?? 3))}
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Link
+            to="/settings"
+            search={{ tab: "plan" } as Record<string, string>}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-primary text-primary-foreground shadow-glow px-4 py-2 font-semibold text-sm hover:opacity-90"
+          >
+            <Zap className="h-4 w-4" /> {t("newSess.upgradePlan")}
+          </Link>
+          <Button variant="ghost" onClick={() => void navigate({ to: "/sessions" })}>
+            {t("newSess.backToSessions")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -725,15 +724,6 @@ function NewSessionPage() {
               {errors.quizType && <p className="mt-1 text-xs text-destructive">{errors.quizType}</p>}
             </div>
 
-            {/* Time per question */}
-            <div className="sm:max-w-[240px]">
-              <Label className="mb-1">{t("newSess.timePerQ")}</Label>
-              <p className="text-[11px] text-muted-foreground mb-1.5">{t("newSess.timePerQHint")}</p>
-              <Input type="number" min={5} max={3600} value={timeText}
-                onChange={(e) => { setTimeText(e.target.value); setErrors((p) => ({ ...p, time: undefined })); }}
-                className={errors.time ? "border-destructive" : ""} />
-              {errors.time && <p className="mt-1 text-xs text-destructive">{errors.time}</p>}
-            </div>
 
             {/* Difficulty customization */}
             <div className="rounded-xl border border-border bg-card/40 p-3 space-y-3">

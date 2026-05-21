@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { logClientActivity } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,6 +63,15 @@ function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword(data);
     setLoading(false);
     if (error) { toast.error(error.message); return; }
+    void logClientActivity({
+      actionType: "signed_in",
+      module: "auth",
+      entityType: "session",
+      entityLabel: data.email,
+      message: "Signed in with email",
+      details: { method: "password" },
+      riskScore: 5,
+    });
     navigate({ to: "/dashboard" });
   };
 
@@ -110,8 +120,10 @@ function LoginPage() {
         onClick={onGoogle}
         disabled={loading}
       >
-        <GoogleIcon />
-        {t("auth.continueGoogle")}
+        {loading ? (
+          <span className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 border-t-foreground animate-spin" />
+        ) : <GoogleIcon />}
+        {loading ? "Redirecting…" : t("auth.continueGoogle")}
       </Button>
 
       <div className="flex items-center gap-3 mb-5">
@@ -185,12 +197,15 @@ function LoginPage() {
         <Button
           type="submit"
           disabled={loading}
-          className="w-full h-12 bg-gradient-primary text-primary-foreground font-semibold shadow-glow hover:opacity-90 text-base mt-2"
+          className="w-full h-12 bg-gradient-primary text-primary-foreground font-semibold shadow-glow hover:opacity-90 text-base mt-2 transition-all"
         >
           {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="h-4 w-4 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
-              {t("common.loading")}
+            <span className="flex items-center gap-2.5">
+              <span className="relative h-4 w-4 shrink-0">
+                <span className="absolute inset-0 rounded-full border-2 border-primary-foreground/20" />
+                <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary-foreground animate-spin" />
+              </span>
+              Signing you in…
             </span>
           ) : t("auth.login")}
         </Button>

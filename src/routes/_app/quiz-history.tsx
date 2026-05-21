@@ -1,15 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Archive,
   ChevronDown,
   ChevronRight,
+  Clock,
   Crown,
   Download,
   FileSpreadsheet,
   FileText,
   Filter,
+  PenLine,
   Printer,
   X,
 } from "lucide-react";
@@ -34,6 +36,7 @@ const LazyHistoryTrendCharts = lazy(() => import("@/components/history/HistoryTr
 type SessionRow = {
   id: string;
   title: string;
+  status: string;
   created_at: string;
   category_id: string | null;
   subcategory_id: string | null;
@@ -61,6 +64,7 @@ type SessionWithStats = SessionRow & {
   subcategoryName: string;
   attempts: AttemptRow[];
   avgPercent: number;
+  avgScore: number;
 };
 
 type ProfileRow = {
@@ -82,6 +86,7 @@ function QuizHistoryPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const { plan } = usePlan();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<SessionWithStats[]>([]);
   const [sessionTotal, setSessionTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -102,6 +107,7 @@ function QuizHistoryPage() {
   const [attemptAnswerStats, setAttemptAnswerStats] = useState<
     Record<string, Record<string, { correct: number; wrong: number; attempted: number }>>
   >({});
+  const [sessionMaxPts, setSessionMaxPts] = useState<Record<string, number>>({});
 
   // Download dropdown per session
   const [downloadOpenId, setDownloadOpenId] = useState<string | null>(null);
@@ -124,7 +130,7 @@ function QuizHistoryPage() {
     let sessionQuery = supabase
       .from("quiz_sessions")
       .select(
-        "id, title, created_at, category_id, subcategory_id, default_time_per_question, subject, topic, description",
+        "id, title, status, created_at, category_id, subcategory_id, default_time_per_question, subject, topic, description",
         { count: "exact" },
       )
       .eq("owner_id", user.id)
@@ -164,7 +170,7 @@ function QuizHistoryPage() {
       new Set(rows.map((r) => r.category_id).filter((v): v is string => !!v)),
     );
 
-    const [attemptsRes, subRes, catRes, profileRes] = await Promise.all([
+    const [attemptsRes, subRes, catRes, profileRes, maxPtsRes] = await Promise.all([
       supabase
         .from("quiz_attempts")
         // No participants join here - lightweight for stats only.
@@ -185,9 +191,38 @@ function QuizHistoryPage() {
         .select("full_name, first_name, last_name, organization")
         .eq("id", user.id)
         .maybeSingle(),
+      supabase
+        .from("quiz_session_questions")
+        .select("session_id, questions(max_points)")
+        .in("session_id", sessionIds),
     ]);
-    setLoading(false);
     if (attemptsRes.error) toast.error(attemptsRes.error.message);
+
+    // Recompute live scores from quiz_answers
+    const attemptIds = (attemptsRes.data ?? []).map((a) => a.id);
+    const liveScores: Record<string, number> = {};
+    if (attemptIds.length > 0) {
+      const { data: ansData } = await (supabase as any)
+        .from("quiz_answers")
+        .select("attempt_id, points_awarded")
+        .in("attempt_id", attemptIds);
+      for (const r of (ansData ?? []) as { attempt_id: string; points_awarded: number | null }[]) {
+        liveScores[r.attempt_id] = (liveScores[r.attempt_id] ?? 0) + (r.points_awarded ?? 0);
+      }
+    }
+    if (attemptsRes.data) {
+      for (const a of attemptsRes.data as AttemptRow[]) {
+        if (liveScores[a.id] !== undefined) a.score = liveScores[a.id];
+      }
+    }
+
+    setLoading(false);
+    const newSessionMaxPts: Record<string, number> = {};
+    for (const r of maxPtsRes.data ?? []) {
+      const sid = r.session_id as string;
+      newSessionMaxPts[sid] = (newSessionMaxPts[sid] ?? 0) + ((r.questions as { max_points?: number } | null)?.max_points ?? 1);
+    }
+    setSessionMaxPts(newSessionMaxPts);
     if (profileRes.data) setProfile(profileRes.data as ProfileRow);
 
     const subNames = new Map<string, string>();
@@ -206,21 +241,19 @@ function QuizHistoryPage() {
       rows.map((r) => {
         const attempts = attemptsBySession.get(r.id) ?? [];
         const submitted = attempts.filter((a) => a.completed);
-        const avgPercent =
+        const avgScore =
           submitted.length === 0
             ? 0
-            : Math.round(
-                submitted.reduce(
-                  (acc, a) => acc + (a.score / Math.max(1, a.total_questions)) * 100,
-                  0,
-                ) / submitted.length,
-              );
+            : Math.round(submitted.reduce((acc, a) => acc + a.score, 0) / submitted.length);
+        const maxScore = submitted.length > 0 ? Math.max(...submitted.map((a) => a.score), 1) : 1;
+        const avgPercent = maxScore > 0 ? Math.min(100, Math.round((avgScore / maxScore) * 100)) : 0;
         return {
           ...r,
           categoryName: r.category_id ? catNames.get(r.category_id) ?? "" : "",
           subcategoryName: r.subcategory_id ? subNames.get(r.subcategory_id) ?? "" : "",
           attempts,
           avgPercent,
+          avgScore,
         };
       }),
     );
@@ -294,7 +327,7 @@ function QuizHistoryPage() {
       topicLabel: QUIZ_TYPE_LABELS[s.topic ?? ""] ?? s.topic ?? "",
       createdAt: s.created_at,
       questionCount: attempts[0]?.total_questions ?? 0,
-      attempts: attempts.map(toReportAttempt),
+      attempts: attempts.map((a) => toReportAttempt(a, sessionMaxPts[s.id])),
     });
   };
 
@@ -308,7 +341,7 @@ function QuizHistoryPage() {
 
     const sessionBlocks = sessions.map((s) => {
       const fullAttempts = expandedAttempts[s.id] ?? s.attempts;
-      const reportRows = getQuizReportRows(fullAttempts.map(toReportAttempt)).filter((a) => a.completed);
+      const reportRows = getQuizReportRows(fullAttempts.map((a) => toReportAttempt(a, sessionMaxPts[s.id]))).filter((a) => a.completed);
       const tableRows = reportRows.map((r, i) => `
         <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
           <td style="text-align:center;font-weight:700;">${r.rank}</td>
@@ -316,8 +349,7 @@ function QuizHistoryPage() {
           <td>${esc(r.rollNumber) || "-"}</td>
           <td>${esc(r.email) || "-"}</td>
           <td style="text-align:center;">${r.attemptedQuestions}</td>
-          <td style="text-align:center;color:#16a34a;font-weight:700;">${r.correctAnswers}</td>
-          <td style="text-align:center;color:#dc2626;font-weight:700;">${r.wrongAnswers}</td>
+          <td style="text-align:center;color:#16a34a;font-weight:700;">${r.score}</td>
           <td style="text-align:center;">${formatDuration(r.durationSeconds ?? null)}</td>
           <td style="text-align:center;">${r.unattemptedQuestions}</td>
         </tr>`).join("");
@@ -345,7 +377,7 @@ function QuizHistoryPage() {
           <table>
             <thead><tr>
               <th class="center">Rank</th><th>Participant Name</th><th>Roll Number</th><th>Email</th>
-              <th class="center">Attempted</th><th class="center">Correct</th><th class="center">Wrong</th>
+              <th class="center">Attempted</th><th class="center">Points</th>
               <th class="center">Total Time</th><th class="center">Unattempted</th>
             </tr></thead>
             <tbody>${tableRows || '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:12px;">No submissions</td></tr>'}</tbody>
@@ -433,7 +465,7 @@ function QuizHistoryPage() {
     const openSessionRows = sessions.filter((session) => openIds.has(session.id));
     for (const session of openSessionRows) {
       const attempts = expandedAttempts[session.id] ?? session.attempts;
-      const reportRows = getQuizReportRows(attempts.map(toReportAttempt));
+      const reportRows = getQuizReportRows(attempts.map((a) => toReportAttempt(a, sessionMaxPts[session.id])));
       const submitted = reportRows.filter((row) => row.completed);
       const attemptPage = attemptPages[session.id] ?? 0;
       const visibleSubmitted = paginate(submitted, attemptPage, HISTORY_PAGE_SIZE);
@@ -444,7 +476,7 @@ function QuizHistoryPage() {
         void loadVisibleAnswerStats(session.id, visibleIds);
       }
     }
-  }, [sessions, openIds, attemptPages, attemptAnswerStats, loadVisibleAnswerStats, expandedAttempts]);
+  }, [sessions, openIds, attemptPages, attemptAnswerStats, loadVisibleAnswerStats, expandedAttempts, sessionMaxPts]);
 
   const totalParticipants = useMemo(
     () => sessions.reduce((s, sess) => s + sess.attempts.filter((a) => a.completed).length, 0),
@@ -598,7 +630,7 @@ function QuizHistoryPage() {
           {sessions.map((s) => {
             const isOpen = openIds.has(s.id);
             const fullAttempts = expandedAttempts[s.id] ?? s.attempts;
-            const reportRows = getQuizReportRows(fullAttempts.map(toReportAttempt));
+            const reportRows = getQuizReportRows(fullAttempts.map((a) => toReportAttempt(a, sessionMaxPts[s.id])));
             const submitted = reportRows.filter((a) => a.completed);
             const attemptPage = attemptPages[s.id] ?? 0;
             const visibleSubmitted = paginate(submitted, attemptPage, HISTORY_PAGE_SIZE);
@@ -628,7 +660,14 @@ function QuizHistoryPage() {
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="font-display text-base font-bold truncate">{s.title}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-display text-base font-bold truncate">{s.title}</span>
+                          {s.status === "grading" && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 text-warning border border-warning/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                              <Clock className="h-3 w-3" /> Needs Grading
+                            </span>
+                          )}
+                        </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                           <span>{[s.categoryName, s.subcategoryName].filter(Boolean).join(" → ") || t("hist.uncategorised")}</span>
                           {s.topic && <><span>·</span><span className="text-primary/80">{quizTypeLabel}</span></>}
@@ -640,15 +679,19 @@ function QuizHistoryPage() {
                         {submitted.length > 0 && (
                           <div className="mt-2.5 flex items-center gap-2">
                             <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden max-w-[160px]">
-                              <div className={`h-full rounded-full transition-all ${avgBarColor} ${
+                              <div className={`h-full rounded-full transition-all ${s.status === "grading" ? "bg-warning/50" : avgBarColor} ${
                                 avgPct <= 10 ? "w-[10%]" : avgPct <= 20 ? "w-1/5"
                                 : avgPct <= 25 ? "w-1/4" : avgPct <= 33 ? "w-1/3"
                                 : avgPct <= 50 ? "w-1/2" : avgPct <= 66 ? "w-2/3"
                                 : avgPct <= 75 ? "w-3/4" : avgPct <= 90 ? "w-[90%]" : "w-full"
                               }`} />
                             </div>
-                            <span className={`text-xs font-bold ${avgColor}`}>{avgPct}%</span>
-                            <span className="text-xs text-muted-foreground">avg</span>
+                            <span className={`text-xs font-bold ${s.status === "grading" ? "text-warning" : avgColor}`}>
+                              {s.avgScore} pts
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {s.status === "grading" ? "avg (partial)" : "avg"}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -666,14 +709,20 @@ function QuizHistoryPage() {
                           </span>
                         )}
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${
-                        avgPct >= 70 ? "bg-success/10 text-success border-success/25" :
-                        avgPct >= 40 ? "bg-warning/10 text-warning border-warning/25" :
-                        submitted.length === 0 ? "bg-muted/20 text-muted-foreground border-border" :
-                        "bg-destructive/10 text-destructive border-destructive/25"
-                      }`}>
-                        {submitted.length === 0 ? "No data" : avgPct >= 70 ? "Good" : avgPct >= 40 ? "Fair" : "Low"}
-                      </span>
+                      {s.status === "grading" ? (
+                        <span className="rounded-full px-2.5 py-1 text-xs font-bold border bg-warning/10 text-warning border-warning/25">
+                          Pending
+                        </span>
+                      ) : (
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold border ${
+                          avgPct >= 70 ? "bg-success/10 text-success border-success/25" :
+                          avgPct >= 40 ? "bg-warning/10 text-warning border-warning/25" :
+                          submitted.length === 0 ? "bg-muted/20 text-muted-foreground border-border" :
+                          "bg-destructive/10 text-destructive border-destructive/25"
+                        }`}>
+                          {submitted.length === 0 ? "No data" : avgPct >= 70 ? "Good" : avgPct >= 40 ? "Fair" : "Low"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </button>
@@ -696,7 +745,13 @@ function QuizHistoryPage() {
                           <span>{t("hist.subject")}: <span className="text-foreground font-medium">{subjectLabel(s)}</span></span>
                         </div>
                       </div>
-                      <div className="flex gap-2 shrink-0" ref={downloadRef}>
+                      <div className="flex gap-2 shrink-0 flex-wrap" ref={downloadRef}>
+                        {s.status === "grading" && (
+                          <Button size="sm" onClick={() => void navigate({ to: "/sessions/$sessionId/grade", params: { sessionId: s.id } })}
+                            className="gap-1.5 bg-warning/15 text-warning border border-warning/30 hover:bg-warning/25">
+                            <PenLine className="h-3.5 w-3.5" /> Grade Now
+                          </Button>
+                        )}
                         <Button variant="outline" size="sm" onClick={() => printQuiz(s, fullAttempts)} className="gap-1.5">
                           <Printer className="h-3.5 w-3.5" /> {t("hist.print")}
                         </Button>
@@ -708,7 +763,7 @@ function QuizHistoryPage() {
                           {downloadOpenId === s.id && (
                             <div className="absolute right-0 mt-1 w-40 rounded-xl border border-border bg-card shadow-card z-10 overflow-hidden">
                               <button type="button" className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
-                                onClick={() => { setDownloadOpenId(null); downloadQuizReportCsv({ title: s.title, categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> "), teacherName, schoolName, subjectLabel: subjectLabel(s), topicLabel: quizTypeLabel, createdAt: s.created_at, questionCount: fullAttempts[0]?.total_questions ?? 0, attempts: fullAttempts.map(toReportAttempt) }, { watermark: plan?.file_export_watermark !== false }); }}>
+                                onClick={() => { setDownloadOpenId(null); downloadQuizReportCsv({ title: s.title, categoryLabel: [s.categoryName, s.subcategoryName].filter(Boolean).join(" -> "), teacherName, schoolName, subjectLabel: subjectLabel(s), topicLabel: quizTypeLabel, createdAt: s.created_at, questionCount: fullAttempts[0]?.total_questions ?? 0, attempts: fullAttempts.map((a) => toReportAttempt(a, sessionMaxPts[s.id])) }, { watermark: plan?.file_export_watermark !== false }); }}>
                                 <FileSpreadsheet className="h-3.5 w-3.5 text-success" /> Excel (CSV)
                               </button>
                               <button type="button" className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-sidebar-accent transition-colors"
@@ -739,8 +794,11 @@ function QuizHistoryPage() {
                                 <div key={a.id} className={`rounded-xl border p-3 text-center ${m.bg}`}>
                                   <div className={`text-[10px] font-bold uppercase tracking-wider ${m.text}`}>{m.label}</div>
                                   <div className="mt-1 text-sm font-bold truncate">{a.name}</div>
-                                  <div className={`text-lg font-bold ${m.text}`}>{a.score}</div>
-                                  <div className="text-[10px] text-muted-foreground">of {a.totalQuestions} pts</div>
+                                  <div className={`text-lg font-bold ${m.text}`}>
+                                  {a.score}
+                                  <span className="text-xs font-normal text-muted-foreground">/{a.totalMaxPoints ?? a.totalQuestions}</span>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">{a.percent}% · {a.totalMaxPoints ?? a.totalQuestions} pts total</div>
                                 </div>
                               );
                             })}
@@ -751,8 +809,6 @@ function QuizHistoryPage() {
                         <ol className="space-y-1.5">
                           {visibleSubmitted.map((a) => {
                             const stats = attemptAnswerStats[s.id]?.[a.id];
-                            const correct = stats?.correct ?? a.correctAnswers;
-                            const wrong = stats?.wrong ?? a.wrongAnswers;
                             const attempted = stats?.attempted ?? a.attemptedQuestions;
                             const skipped = Math.max(0, a.totalQuestions - attempted);
                             const scorePct = Math.round((a.score / Math.max(1, maxScore)) * 100);
@@ -772,7 +828,19 @@ function QuizHistoryPage() {
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between gap-2">
                                       <div className="font-semibold text-sm truncate">{a.name}</div>
-                                      <div className="text-sm font-bold text-success shrink-0">{a.score}<span className="text-[10px] text-muted-foreground font-normal ml-0.5">pts</span></div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <div className={`text-sm font-bold ${s.status === "grading" ? "text-warning" : "text-success"}`}>
+                                          {a.score}
+                                          <span className="text-[10px] text-muted-foreground font-normal">/{a.totalMaxPoints ?? a.totalQuestions}</span>
+                                          <span className="text-[10px] text-muted-foreground font-normal ml-0.5">pts</span>
+                                          {s.status === "grading" && (
+                                            <span className="text-[10px] text-warning font-medium ml-1">(partial)</span>
+                                          )}
+                                        </div>
+                                        <div className={`text-[10px] font-mono ${s.status === "grading" ? "text-warning/70" : "text-muted-foreground"}`}>
+                                          {a.percent}%
+                                        </div>
+                                      </div>
                                     </div>
                                     {/* Score bar */}
                                     <div className="mt-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
@@ -785,9 +853,11 @@ function QuizHistoryPage() {
                                     </div>
                                     {/* Pills row */}
                                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-success/10 text-success px-2 py-0.5 text-[10px] font-semibold">✓ {correct}</span>
-                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[10px] font-semibold">✗ {wrong}</span>
-                                      {skipped > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/40 text-muted-foreground px-2 py-0.5 text-[10px] font-semibold">— {skipped}</span>}
+                                      <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${s.status === "grading" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>
+                                        {a.score}/{a.totalMaxPoints ?? a.totalQuestions} pts · {a.percent}%{s.status === "grading" ? " (partial)" : ""}
+                                      </span>
+                                      <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/40 text-muted-foreground px-2 py-0.5 text-[10px] font-semibold">{attempted}/{a.totalQuestions} attempted</span>
+                                      {skipped > 0 && <span className="inline-flex items-center gap-0.5 rounded-full bg-muted/40 text-muted-foreground px-2 py-0.5 text-[10px] font-semibold">— {skipped} skipped</span>}
                                       {a.email && <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{a.email}</span>}
                                       {a.rollNumber && <span className="text-[10px] text-muted-foreground">{t("hist.rollN")} {a.rollNumber}</span>}
                                     </div>
@@ -880,15 +950,12 @@ function getWeekOfYear(date: Date) {
   return Math.ceil((diffDays + start.getDay() + 1) / 7);
 }
 
-function toReportAttempt(a: AttemptRow): QuizReportAttempt {
+function toReportAttempt(a: AttemptRow, totalMaxPoints?: number | null): QuizReportAttempt {
   const meta =
     a.participants?.metadata && typeof a.participants.metadata === "object"
       ? (a.participants.metadata as Record<string, unknown>)
       : {};
-  const assumedCorrect = Math.max(0, Math.min(a.score, a.total_questions));
   const attemptedQuestions = a.completed ? a.total_questions : 0;
-  const correctAnswers = a.completed ? assumedCorrect : 0;
-  const wrongAnswers = a.completed ? Math.max(0, a.total_questions - assumedCorrect) : 0;
   const unattemptedQuestions = a.completed ? 0 : a.total_questions;
   return {
     id: a.id,
@@ -898,9 +965,10 @@ function toReportAttempt(a: AttemptRow): QuizReportAttempt {
     seatNumber: stringMeta(meta.seat_number),
     score: a.score,
     totalQuestions: a.total_questions,
+    totalMaxPoints: totalMaxPoints ?? null,
     attemptedQuestions,
-    correctAnswers,
-    wrongAnswers,
+    correctAnswers: 0,
+    wrongAnswers: 0,
     unattemptedQuestions,
     completed: a.completed,
     completedAt: a.completed_at,

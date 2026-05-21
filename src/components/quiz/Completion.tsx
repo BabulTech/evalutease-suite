@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Trophy, Sparkles, Star, Send, CheckCircle } from "lucide-react";
+import { Trophy, Sparkles, Star, Send, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,12 +14,14 @@ type Props = {
   score: number;
   total: number;
   speedBonus: number;
+  hasPendingGrading?: boolean;
   participantName?: string;
   participantEmail?: string;
 };
 
-export function Completion({ session, score, total, speedBonus, participantName, participantEmail }: Props) {
-  const showResults = session.show_results_after_quiz !== false; // default true if missing
+export function Completion({ session, score, total, speedBonus, hasPendingGrading = false, participantName, participantEmail }: Props) {
+  // Hide score when answers still need grading — nothing meaningful to show yet
+  const showResults = session.show_results_after_quiz !== false && !hasPendingGrading;
   const pct = total === 0 ? 0 : Math.round((score / Math.max(total, 1)) * 100);
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
@@ -55,17 +57,40 @@ export function Completion({ session, score, total, speedBonus, participantName,
         </p>
 
         {showResults ? (
-          <div className="mt-5 rounded-2xl border border-border bg-card/40 p-5">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your score</div>
-            <div className="mt-1 font-display text-5xl font-bold text-primary">
-              {score}
-              <span className="text-2xl text-muted-foreground"> / {total}</span>
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">{pct}% correct</div>
-            {speedBonus > 0 && (
-              <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-                <Sparkles className="h-3 w-3" /> +{speedBonus} speed bonus
-              </div>
+          <div className="mt-5 rounded-2xl border border-border bg-card/40 p-5 space-y-3">
+            {hasPendingGrading ? (
+              <>
+                <div className="flex items-center justify-center gap-2 text-warning">
+                  <Clock className="h-5 w-5" />
+                  <span className="font-semibold text-sm">Score pending grading</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your written answers will be reviewed by the teacher. Your final score will be updated once grading is complete.
+                </p>
+                {score > 0 && (
+                  <div className="pt-1 border-t border-border/50">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Auto-graded so far</div>
+                    <div className="mt-0.5 font-display text-3xl font-bold text-primary">
+                      {score}
+                      <span className="text-lg text-muted-foreground"> / {total}</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your score</div>
+                <div className="font-display text-5xl font-bold text-primary">
+                  {score}
+                  <span className="text-2xl text-muted-foreground"> / {total}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">{pct}% correct</div>
+                {speedBonus > 0 && (
+                  <div className="inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                    <Sparkles className="h-3 w-3" /> +{speedBonus} speed bonus
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -112,6 +137,8 @@ export function Completion({ session, score, total, speedBonus, participantName,
                 <button
                   key={n}
                   type="button"
+                  title={["", "Poor", "Fair", "Good", "Great", "Excellent"][n]}
+                  aria-label={["", "Poor", "Fair", "Good", "Great", "Excellent"][n]}
                   onClick={() => setRating(n)}
                   onMouseEnter={() => setHoverRating(n)}
                   onMouseLeave={() => setHoverRating(0)}

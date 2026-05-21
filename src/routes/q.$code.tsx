@@ -66,9 +66,15 @@ function PublicQuizPage() {
   const [localQuestionStartedAt, setLocalQuestionStartedAt] = useState(() => Date.now());
   const pendingAnswersRef = useRef<PendingAnswer[]>([]);
   const flushInFlightRef = useRef<Promise<void> | null>(null);
+  // Tracks typed text for long/short answer so timer-expiry auto-submits it
+  const typedAnswerRef = useRef<string>("");
 
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const localQuestionIndexRef = useRef(localQuestionIndex);
+  localQuestionIndexRef.current = localQuestionIndex;
+  const submitAnswerRef = useRef<((qId: string, answer: string | null, timeTaken: number) => Promise<void>) | null>(null);
+  const completeAttemptRef = useRef<(() => Promise<void>) | null>(null);
 
   const normalizeSessionPayload = useCallback((payload: RpcResponse<SessionPayload>): SessionForJoin | null => {
     if ("error" in payload) {
@@ -85,16 +91,18 @@ function PublicQuizPage() {
       session: payload.session,
       registration_fields: normalizeRegistrationFields(payload.registration_fields),
       registration_fields_by_type: normalizeRegistrationFieldsByType(payload.registration_fields_by_type),
-      // Default missing/unknown type to "mcq" so old sessions keep working
-      // until the player payload migration is run.
-      questions: (payload.questions ?? []).map((q) => ({
-        ...q,
-        type:
+      questions: (payload.questions ?? []).map((q) => {
+        // Prefer the DB-supplied type; fall back to inference for old rows where type is NULL
+        let type: import("@/components/quiz/types").QuizQuestionType =
           q.type === "mcq" || q.type === "true_false"
-              || q.type === "short_answer" || q.type === "long_answer"
-            ? q.type
-            : "mcq",
-      })),
+          || q.type === "short_answer" || q.type === "long_answer"
+            ? q.type : "mcq";
+        if (type === "mcq" && (!q.options || q.options.length === 0)) {
+          // No options → can't be MCQ; best guess is long_answer
+          type = "long_answer";
+        }
+        return { ...q, type };
+      }),
     };
   }, []);
 
@@ -169,8 +177,30 @@ function PublicQuizPage() {
         "broadcast",
         { event: "status" },
         async (payload) => {
-          const newRow = payload.payload as SessionUpdate;
+          const newRow = payload.payload as SessionUpdate & { force_end?: boolean };
           if (newRow?.access_code && newRow.access_code !== code) return;
+          if (newRow?.force_end) {
+            const cur = phaseRef.current;
+            if (cur.kind === "quiz") {
+              const clock = computeClock(
+                cur.data.session.started_at,
+                cur.data.questions,
+                cur.data.session.default_time_per_question,
+                Date.now(),
+                cur.data.session.paused_at,
+                cur.data.session.pause_offset_seconds,
+              );
+              const question = cur.data.questions[clock.index];
+              if (question && submitAnswerRef.current) {
+                const isTyped = question.type === "long_answer" || question.type === "short_answer";
+                const autoAnswer = isTyped && typedAnswerRef.current.trim() ? typedAnswerRef.current.trim() : null;
+                typedAnswerRef.current = "";
+                await submitAnswerRef.current(question.id, autoAnswer, question.time_seconds - clock.secondsLeft);
+              }
+              if (completeAttemptRef.current) await completeAttemptRef.current();
+            }
+            return;
+          }
           await handleSessionUpdate(newRow);
         },
       )
@@ -186,6 +216,29 @@ function PublicQuizPage() {
       void supabase.removeChannel(channel);
     };
   }, [code, fetchPlaySession]);
+
+  // Watch for score updates after grading — only when participant is waiting for grading
+  const pendingAttemptId =
+    phase.kind === "completed" && phase.hasPendingGrading ? phase.attemptId : null;
+
+  useEffect(() => {
+    if (!pendingAttemptId) return () => {};
+    const channel = supabase
+      .channel(`attempt-score-${pendingAttemptId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "quiz_attempts", filter: `id=eq.${pendingAttemptId}` },
+        (payload) => {
+          const updated = payload.new as { score: number };
+          setPhase((prev) => {
+            if (prev.kind !== "completed") return prev;
+            return { ...prev, score: updated.score, hasPendingGrading: false };
+          });
+        },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [pendingAttemptId]);
 
   const flushAnswers = useCallback(async () => {
     if (flushInFlightRef.current) {
@@ -265,9 +318,12 @@ function PublicQuizPage() {
       phase.data.session.pause_offset_seconds,
     );
     setLocalQuestionIndex((current) => {
-      const next = current === null ? clock.index : Math.max(current, clock.index);
-      if (next !== current) setLocalQuestionStartedAt(Date.now());
-      return next;
+      // Initialize at Q1 (index 0) for everyone — local timer handles advancing
+      if (current === null) {
+        setLocalQuestionStartedAt(Date.now());
+        return 0;
+      }
+      return current;
     });
   }, [phase, now]);
 
@@ -366,7 +422,7 @@ function PublicQuizPage() {
       p_attempt_id: ph.attemptId,
     });
     const payload = data as
-      | { score: number; total: number; speed_bonus: number; show_results_after_quiz?: boolean }
+      | { score: number; total: number; speed_bonus: number; show_results_after_quiz?: boolean; has_pending_grading?: boolean }
       | { error: string };
     if (payload && "score" in payload) {
       forgetAttempt(ph.data.session.id);
@@ -381,6 +437,7 @@ function PublicQuizPage() {
         score: payload.score,
         total: payload.total,
         speedBonus: payload.speed_bonus ?? 0,
+        hasPendingGrading: payload.has_pending_grading ?? false,
       });
     }
   }, []);
@@ -399,6 +456,10 @@ function PublicQuizPage() {
     });
   }, [completeAttempt]);
 
+  // Keep refs in sync so the force_end handler can call them
+  submitAnswerRef.current = submitAnswer;
+  completeAttemptRef.current = completeAttempt;
+
   const lastSubmittedIndex = useRef<number>(-1);
 
   useEffect(() => {
@@ -414,12 +475,22 @@ function PublicQuizPage() {
     );
 
     if (clock.done) {
-      void completeAttempt();
+      // Only complete if the participant has also finished all their local questions.
+      // This prevents clock.done from immediately ending a late joiner who just started Q1.
+      const localIdx = localQuestionIndexRef.current;
+      const allLocalDone = localIdx === null || localIdx >= data.questions.length;
+      if (allLocalDone) {
+        void completeAttempt();
+      }
       return;
     }
 
     const previous = clock.index - 1;
-    if (previous >= 0 && previous > lastSubmittedIndex.current) {
+    // Only auto-null-submit questions the participant has already passed locally.
+    // Without this guard, a late joiner on Q1 would have Q1 marked as answered the
+    // moment the global clock advances to Q2, disabling all inputs and freezing the UI.
+    const localIdx = localQuestionIndexRef.current ?? 0;
+    if (previous >= 0 && previous > lastSubmittedIndex.current && previous < localIdx) {
       const prevQuestion = data.questions[previous];
       if (prevQuestion && !answeredQuestionIds.has(prevQuestion.id)) {
         const elapsed = prevQuestion.time_seconds || data.session.default_time_per_question;
@@ -429,6 +500,19 @@ function PublicQuizPage() {
     }
   }, [phase, now, completeAttempt, submitAnswer, answeredQuestionIds]);
 
+  // Complete attempt when total quiz wall-clock time runs out, even if the
+  // participant (a late joiner) is still mid-question locally.
+  useEffect(() => {
+    if (phase.kind !== "quiz") return;
+    if (phase.data.session.paused_at) return;
+    const { started_at, total_duration_seconds, pause_offset_seconds } = phase.data.session;
+    if (!started_at || !total_duration_seconds) return;
+    const elapsed = Math.floor((now - new Date(started_at).getTime()) / 1000) - (pause_offset_seconds ?? 0);
+    if (elapsed >= total_duration_seconds) {
+      void completeAttempt();
+    }
+  }, [phase, now, completeAttempt]);
+
   useEffect(() => {
     if (phase.kind !== "quiz" || localQuestionIndex === null) return;
     if (phase.data.session.paused_at) return;
@@ -437,7 +521,13 @@ function PublicQuizPage() {
     const totalSeconds = question.time_seconds || phase.data.session.default_time_per_question;
     const elapsed = Math.floor((now - localQuestionStartedAt) / 1000);
     if (elapsed < totalSeconds) return;
-    void submitAnswer(question.id, null, totalSeconds);
+    // For typed-answer types, auto-submit whatever the participant has typed
+    const isTyped = question.type === "long_answer" || question.type === "short_answer";
+    const autoAnswer = isTyped && typedAnswerRef.current.trim()
+      ? typedAnswerRef.current.trim()
+      : null;
+    typedAnswerRef.current = "";
+    void submitAnswer(question.id, autoAnswer, totalSeconds);
     advanceAfterAnswer();
   }, [
     phase,
@@ -491,7 +581,7 @@ function PublicQuizPage() {
       phase.data.session.default_time_per_question,
       now,
     );
-    const currentIndex = Math.max(localQuestionIndex ?? sessionClock.index, sessionClock.index);
+    const currentIndex = localQuestionIndex ?? sessionClock.index;
     const question = phase.data.questions[currentIndex];
     if (!question) {
       return (
@@ -511,6 +601,9 @@ function PublicQuizPage() {
     const elapsed = Math.max(0, Math.floor((now - localQuestionStartedAt) / 1000));
     const secondsLeft = Math.max(0, totalSeconds - elapsed);
     const timeTaken = totalSeconds - secondsLeft;
+    const quizSecondsLeft = phase.data.session.total_duration_seconds && phase.data.session.started_at
+      ? Math.max(0, phase.data.session.total_duration_seconds - Math.floor((now - new Date(phase.data.session.started_at).getTime()) / 1000) + (phase.data.session.pause_offset_seconds ?? 0))
+      : null;
     return (
       <Wrapper>
         <QuestionView
@@ -519,9 +612,12 @@ function PublicQuizPage() {
           index={currentIndex}
           secondsLeft={secondsLeft}
           totalSeconds={totalSeconds}
+          quizSecondsLeft={quizSecondsLeft}
           isAnswered={answeredQuestionIds.has(question.id)}
           paused={isPaused}
+          onTyping={(v) => { typedAnswerRef.current = v; }}
           onLockAnswer={async (option) => {
+            typedAnswerRef.current = "";
             await submitAnswer(question.id, option, Math.max(0, timeTaken));
             advanceAfterAnswer();
           }}
@@ -538,6 +634,7 @@ function PublicQuizPage() {
             score={phase.score}
             total={phase.total}
             speedBonus={phase.speedBonus}
+            hasPendingGrading={phase.hasPendingGrading}
           />
         </Suspense>
       </Wrapper>
@@ -582,6 +679,15 @@ function routeForData(
       };
     }
     return { kind: "error", message: "This quiz session has already ended." };
+  }
+
+  // Block late joiners — if total quiz time has elapsed, show ended message
+  if (session.status === "active" && session.started_at && session.total_duration_seconds) {
+    const pauseOffset = session.pause_offset_seconds ?? 0;
+    const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000) - pauseOffset;
+    if (elapsed >= session.total_duration_seconds) {
+      return { kind: "error", message: "This quiz has already ended. You joined too late." };
+    }
   }
 
   if (!existingAttemptId) {

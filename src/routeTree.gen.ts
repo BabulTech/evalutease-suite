@@ -35,7 +35,7 @@ import { Route as AppParticipantTypesAddRouteImport } from './routes/_app/partic
 import { Route as AppParticipantTypesTypeIdRouteImport } from './routes/_app/participant-types.$typeId'
 import { Route as AppCategoriesAddRouteImport } from './routes/_app/categories.add'
 import { Route as AppCategoriesCategoryIdRouteImport } from './routes/_app/categories.$categoryId'
-import { Route as AppSessionsSessionIdGradeRouteImport } from './routes/_app/sessions.$sessionId.grade'
+import { Route as AppSessionsSessionIdGradeRouteImport } from './routes/_app/sessions.$sessionId_.grade'
 import { Route as AppParticipantTypesTypeIdSubIdRouteImport } from './routes/_app/participant-types.$typeId.$subId'
 import { Route as AppCategoriesCategoryIdSubIdRouteImport } from './routes/_app/categories.$categoryId.$subId'
 
@@ -171,9 +171,9 @@ const AppCategoriesCategoryIdRoute = AppCategoriesCategoryIdRouteImport.update({
 } as any)
 const AppSessionsSessionIdGradeRoute =
   AppSessionsSessionIdGradeRouteImport.update({
-    id: '/grade',
-    path: '/grade',
-    getParentRoute: () => AppSessionsSessionIdRoute,
+    id: '/$sessionId_/grade',
+    path: '/$sessionId/grade',
+    getParentRoute: () => AppSessionsRoute,
   } as any)
 const AppParticipantTypesTypeIdSubIdRoute =
   AppParticipantTypesTypeIdSubIdRouteImport.update({
@@ -212,7 +212,7 @@ export interface FileRoutesByFullPath {
   '/categories/add': typeof AppCategoriesAddRoute
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
   '/participant-types/add': typeof AppParticipantTypesAddRoute
-  '/sessions/$sessionId': typeof AppSessionsSessionIdRouteWithChildren
+  '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
@@ -242,7 +242,7 @@ export interface FileRoutesByTo {
   '/categories/add': typeof AppCategoriesAddRoute
   '/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
   '/participant-types/add': typeof AppParticipantTypesAddRoute
-  '/sessions/$sessionId': typeof AppSessionsSessionIdRouteWithChildren
+  '/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/sessions/new': typeof AppSessionsNewRoute
   '/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
@@ -274,11 +274,11 @@ export interface FileRoutesById {
   '/_app/categories/add': typeof AppCategoriesAddRoute
   '/_app/participant-types/$typeId': typeof AppParticipantTypesTypeIdRouteWithChildren
   '/_app/participant-types/add': typeof AppParticipantTypesAddRoute
-  '/_app/sessions/$sessionId': typeof AppSessionsSessionIdRouteWithChildren
+  '/_app/sessions/$sessionId': typeof AppSessionsSessionIdRoute
   '/_app/sessions/new': typeof AppSessionsNewRoute
   '/_app/categories/$categoryId/$subId': typeof AppCategoriesCategoryIdSubIdRoute
   '/_app/participant-types/$typeId/$subId': typeof AppParticipantTypesTypeIdSubIdRoute
-  '/_app/sessions/$sessionId/grade': typeof AppSessionsSessionIdGradeRoute
+  '/_app/sessions/$sessionId_/grade': typeof AppSessionsSessionIdGradeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -371,7 +371,7 @@ export interface FileRouteTypes {
     | '/_app/sessions/new'
     | '/_app/categories/$categoryId/$subId'
     | '/_app/participant-types/$typeId/$subId'
-    | '/_app/sessions/$sessionId/grade'
+    | '/_app/sessions/$sessionId_/grade'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -571,12 +571,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCategoriesCategoryIdRouteImport
       parentRoute: typeof AppCategoriesRoute
     }
-    '/_app/sessions/$sessionId/grade': {
-      id: '/_app/sessions/$sessionId/grade'
-      path: '/grade'
+    '/_app/sessions/$sessionId_/grade': {
+      id: '/_app/sessions/$sessionId_/grade'
+      path: '/$sessionId/grade'
       fullPath: '/sessions/$sessionId/grade'
       preLoaderRoute: typeof AppSessionsSessionIdGradeRouteImport
-      parentRoute: typeof AppSessionsSessionIdRoute
+      parentRoute: typeof AppSessionsRoute
     }
     '/_app/participant-types/$typeId/$subId': {
       id: '/_app/participant-types/$typeId/$subId'
@@ -650,25 +650,16 @@ const AppParticipantTypesRouteChildren: AppParticipantTypesRouteChildren = {
 const AppParticipantTypesRouteWithChildren =
   AppParticipantTypesRoute._addFileChildren(AppParticipantTypesRouteChildren)
 
-interface AppSessionsSessionIdRouteChildren {
+interface AppSessionsRouteChildren {
+  AppSessionsSessionIdRoute: typeof AppSessionsSessionIdRoute
+  AppSessionsNewRoute: typeof AppSessionsNewRoute
   AppSessionsSessionIdGradeRoute: typeof AppSessionsSessionIdGradeRoute
 }
 
-const AppSessionsSessionIdRouteChildren: AppSessionsSessionIdRouteChildren = {
-  AppSessionsSessionIdGradeRoute: AppSessionsSessionIdGradeRoute,
-}
-
-const AppSessionsSessionIdRouteWithChildren =
-  AppSessionsSessionIdRoute._addFileChildren(AppSessionsSessionIdRouteChildren)
-
-interface AppSessionsRouteChildren {
-  AppSessionsSessionIdRoute: typeof AppSessionsSessionIdRouteWithChildren
-  AppSessionsNewRoute: typeof AppSessionsNewRoute
-}
-
 const AppSessionsRouteChildren: AppSessionsRouteChildren = {
-  AppSessionsSessionIdRoute: AppSessionsSessionIdRouteWithChildren,
+  AppSessionsSessionIdRoute: AppSessionsSessionIdRoute,
   AppSessionsNewRoute: AppSessionsNewRoute,
+  AppSessionsSessionIdGradeRoute: AppSessionsSessionIdGradeRoute,
 }
 
 const AppSessionsRouteWithChildren = AppSessionsRoute._addFileChildren(

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { validationError } from "@/components/ui/validation-toast";
+import { logClientActivity } from "@/lib/audit";
 import { Building2, Eye, EyeOff, CheckCircle2, LogOut, ArrowRight } from "lucide-react";
 
 export const Route = createFileRoute("/accept-invite")({
@@ -98,6 +99,14 @@ function AcceptInvitePage() {
     const ok = await linkMember(currentUser.id);
     setLoading(false);
     if (ok) {
+      void logClientActivity({
+        actionType: "invite_accepted",
+        module: "auth",
+        entityType: "company_member",
+        entityLabel: invitePreview?.company_name ?? null,
+        message: `Accepted host invite to ${invitePreview?.company_name ?? "organization"}`,
+        riskScore: 15,
+      });
       toast.success(`Joined ${invitePreview?.company_name ?? "organization"}!`);
       goToDashboardFresh();
     }

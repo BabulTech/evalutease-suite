@@ -48,6 +48,10 @@ export type PlanInfo = {
   trial_ai_calls: number;
   // Credit costs
   credit_cost_ai_10q: number;
+  credit_cost_ai_tf_10q: number;
+  credit_cost_ai_short_10q: number;
+  credit_cost_ai_long_10q: number;
+  credit_cost_ai_mix_10q: number;
   credit_cost_ai_scan: number;
   credit_cost_ai_interview: number;
   credit_cost_ai_coding: number;
@@ -128,6 +132,10 @@ const FREE_PLAN: PlanInfo = {
   trial_days: 0,
   trial_ai_calls: 0,
   credit_cost_ai_10q: 3,
+  credit_cost_ai_tf_10q: 3,
+  credit_cost_ai_short_10q: 5,
+  credit_cost_ai_long_10q: 10,
+  credit_cost_ai_mix_10q: 6,
   credit_cost_ai_scan: 2,
   credit_cost_ai_interview: 5,
   credit_cost_ai_coding: 5,
@@ -184,6 +192,10 @@ function rowToPlan(raw: Record<string, unknown>): PlanInfo {
     trial_days: (raw.trial_days as number) ?? 0,
     trial_ai_calls: (raw.trial_ai_calls as number) ?? 0,
     credit_cost_ai_10q: (raw.credit_cost_ai_10q as number) ?? 3,
+    credit_cost_ai_tf_10q: (raw.credit_cost_ai_tf_10q as number) ?? 3,
+    credit_cost_ai_short_10q: (raw.credit_cost_ai_short_10q as number) ?? 5,
+    credit_cost_ai_long_10q: (raw.credit_cost_ai_long_10q as number) ?? 10,
+    credit_cost_ai_mix_10q: (raw.credit_cost_ai_mix_10q as number) ?? 6,
     credit_cost_ai_scan: (raw.credit_cost_ai_scan as number) ?? 2,
     credit_cost_ai_interview: (raw.credit_cost_ai_interview as number) ?? 5,
     credit_cost_ai_coding: (raw.credit_cost_ai_coding as number) ?? 5,

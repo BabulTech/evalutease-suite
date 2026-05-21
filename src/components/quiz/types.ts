@@ -14,6 +14,7 @@ export type SessionPublic = {
   is_open: boolean;
   total_questions: number;
   show_results_after_quiz: boolean;
+  total_duration_seconds?: number;
 };
 
 export type QuizQuestionType = "mcq" | "true_false" | "short_answer" | "long_answer";
@@ -49,6 +50,7 @@ export type QuizPhase =
       score: number;
       total: number;
       speedBonus: number;
+      hasPendingGrading: boolean;
     };
 
 export type QuizClock = {

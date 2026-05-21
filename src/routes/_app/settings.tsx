@@ -280,18 +280,20 @@ function PlanSection({ userId }: { userId: string }) {
               )}
             </p>
           </div>
-          {/* Credits balance */}
-          <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5 text-center sm:min-w-[120px]">
-            <div className="font-display text-2xl font-bold text-warning">{credits.balance}</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Credits</div>
-            <Link
-              to="/billing"
-              search={{ plan: "" }}
-              className="text-[10px] text-primary hover:underline mt-0.5 block"
-            >
-              Buy more →
-            </Link>
-          </div>
+          {/* Credits balance — hidden for free/trial plans */}
+          {ctxPlan && !["individual_starter", "enterprise_starter", "enterprise_free"].includes(ctxPlan.slug) && (
+            <div className="rounded-xl border border-warning/30 bg-warning/5 px-4 py-2.5 text-center sm:min-w-[120px]">
+              <div className="font-display text-2xl font-bold text-warning">{credits.balance}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Credits</div>
+              <Link
+                to="/billing"
+                search={{ plan: "" }}
+                className="text-[10px] text-primary hover:underline mt-0.5 block"
+              >
+                Buy more →
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Credit costs info */}

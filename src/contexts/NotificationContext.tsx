@@ -47,7 +47,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) return () => {};
     void load();
 
     const channel = supabase

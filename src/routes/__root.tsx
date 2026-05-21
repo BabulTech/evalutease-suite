@@ -73,7 +73,7 @@ function RootComponent() {
         <ProfileProvider>
           <NotificationProvider>
             <Outlet />
-            <Toaster position="top-right" />
+            <Toaster />
           </NotificationProvider>
         </ProfileProvider>
       </AuthProvider>

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useState, useRef, useEffect, useCallback, type FormEvent } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -12,6 +12,7 @@ import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
 import { Logo } from "@/components/Logo";
 import { ensureSelectedPlan } from "@/lib/plan.server";
+import { logClientActivity } from "@/lib/audit";
 import { Check, User, Building2, ChevronRight, ChevronLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/signup")({
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/signup")({
 const USER_TYPES = [
   {
     slug: "individual_starter",
-    label: "Personal / Teaching",
+    label: "Personal",
     desc: "I'm an individual teacher, trainer, or student",
     icon: User,
     color: "text-primary",
@@ -31,7 +32,7 @@ const USER_TYPES = [
   },
   {
     slug: "enterprise_starter",
-    label: "School / Organization",
+    label: "Enterprise",
     desc: "We're a school, company, or team",
     icon: Building2,
     color: "text-yellow-400",
@@ -41,12 +42,49 @@ const USER_TYPES = [
   },
 ] as const;
 
+const passwordSchema = z.string()
+  .min(8, "Password must be at least 8 characters")
+  .max(100)
+  .refine(v => /[A-Z]/.test(v), "Must contain an uppercase letter")
+  .refine(v => /[a-z]/.test(v), "Must contain a lowercase letter")
+  .refine(v => /[0-9]/.test(v), "Must contain a number")
+  .refine(v => /[^A-Za-z0-9]/.test(v), "Must contain a special character");
+
+function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[a-z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (score <= 1) return { score, label: "Very weak", color: "bg-red-500" };
+  if (score === 2) return { score, label: "Weak", color: "bg-orange-500" };
+  if (score === 3) return { score, label: "Fair", color: "bg-yellow-500" };
+  if (score === 4) return { score, label: "Good", color: "bg-blue-500" };
+  return { score, label: "Strong", color: "bg-green-500" };
+}
+
+const PW_RULES = [
+  { test: (v: string) => v.length >= 8,         label: "At least 8 characters" },
+  { test: (v: string) => /[A-Z]/.test(v),       label: "One uppercase letter" },
+  { test: (v: string) => /[a-z]/.test(v),       label: "One lowercase letter" },
+  { test: (v: string) => /[0-9]/.test(v),       label: "One number" },
+  { test: (v: string) => /[^A-Za-z0-9]/.test(v), label: "One special character (!@#$…)" },
+];
+
+const SIGNUP_STEPS = [
+  "Creating your account…",
+  "Setting up your workspace…",
+  "Configuring your plan…",
+  "Almost ready…",
+];
+
 const schema = z.object({
   firstName: z.string().trim().min(1, "First name required").max(60),
   lastName:  z.string().trim().min(1, "Last name required").max(60),
   mobile:    z.string().trim().max(30).optional(),
   email:     z.string().trim().email("Invalid email").max(255),
-  password:  z.string().min(6, "Password must be at least 6 characters").max(100),
+  password:  passwordSchema,
   role:      z.string().min(1, "Please select your role"),
   useCases:  z.array(z.string()).min(1, "Select at least one use case"),
   referral:  z.string().min(1, "Please select how you heard about us"),
@@ -133,9 +171,20 @@ function SignupPage() {
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [pwFocused, setPwFocused] = useState(false);
+  const [emailCheckState, setEmailCheckState] = useState<"idle" | "checking" | "taken" | "available">("idle");
+  const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const firstNameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) navigate({ to: "/dashboard" });
+    });
+  }, [navigate]);
+
   useEffect(() => {
     if (step === 2) firstNameRef.current?.focus();
   }, [step]);
@@ -145,6 +194,20 @@ function SignupPage() {
       setForm({ ...form, [k]: e.target.value });
       if (errors[k]) setErrors(prev => ({ ...prev, [k]: undefined }));
     };
+
+  const checkEmailExists = useCallback((email: string) => {
+    if (emailCheckTimer.current) clearTimeout(emailCheckTimer.current);
+    const trimmed = email.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailCheckState("idle");
+      return;
+    }
+    setEmailCheckState("checking");
+    emailCheckTimer.current = setTimeout(async () => {
+      const { data } = await supabase.rpc("check_email_exists", { p_email: trimmed });
+      setEmailCheckState(data ? "taken" : "available");
+    }, 600);
+  }, []);
 
   const toggleUseCase = (val: string) =>
     setForm(f => ({
@@ -156,6 +219,7 @@ function SignupPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (emailCheckState === "taken") { validationError("This email is already registered. Please sign in instead."); return; }
     const parsed = schema.safeParse(form);
     if (!parsed.success) {
       const fe: FieldErrors = {};
@@ -169,6 +233,8 @@ function SignupPage() {
       return;
     }
     setLoading(true);
+    setLoadingStep(0);
+    const stepTimer = setInterval(() => setLoadingStep(s => Math.min(s + 1, SIGNUP_STEPS.length - 1)), 1200);
     window.localStorage.setItem("pending_signup_plan", selectedPlan);
     const { error } = await supabase.auth.signUp({
       email: parsed.data.email,
@@ -197,7 +263,17 @@ function SignupPage() {
         },
       },
     });
-    if (error) { setLoading(false); validationError(error.message); return; }
+    if (error) { clearInterval(stepTimer); setLoading(false); validationError(error.message); return; }
+
+    void logClientActivity({
+      actionType: "signed_up",
+      module: "auth",
+      entityType: "account",
+      entityLabel: parsed.data.email,
+      message: `New account: ${parsed.data.firstName} ${parsed.data.lastName}`,
+      details: { plan: selectedPlan, role: parsed.data.role },
+      riskScore: 10,
+    });
 
     // Ensure correct plan is assigned (in case trigger missed it)
     try {
@@ -226,6 +302,7 @@ function SignupPage() {
       });
     } catch (e) { console.warn("Welcome email failed:", e); }
 
+    clearInterval(stepTimer);
     setLoading(false);
     toast.success("Account created! Welcome.");
     navigate({ to: "/dashboard" });
@@ -241,8 +318,32 @@ function SignupPage() {
     navigate({ to: "/dashboard" });
   };
 
+  const pwStrength = getPasswordStrength(form.password);
+
   return (
     <AuthShell>
+      {/* Full-screen loading overlay */}
+      {loading && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-5 p-8 rounded-3xl border border-border bg-card/90 shadow-2xl min-w-[280px]">
+            <div className="relative h-16 w-16">
+              <div className="absolute inset-0 rounded-full border-4 border-primary/20" />
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-primary animate-spin" />
+              <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-primary/50 animate-spin [animation-duration:0.7s] [animation-direction:reverse]" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-foreground">{SIGNUP_STEPS[loadingStep]}</p>
+              <p className="text-xs text-muted-foreground mt-1">Please don't close this window</p>
+            </div>
+            <div className="flex gap-1.5">
+              {SIGNUP_STEPS.map((_, i) => (
+                <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i <= loadingStep ? "w-6 bg-primary" : "w-1.5 bg-border"}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Logo */}
       <div className="flex justify-center mb-5">
         <Logo size="sm" />
@@ -256,7 +357,7 @@ function SignupPage() {
         >
           {t("auth.signin")}
         </Link>
-        <button className="rounded-xl py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-glow">
+        <button type="button" className="rounded-xl py-3 text-sm font-semibold bg-primary text-primary-foreground shadow-glow">
           {t("auth.signup")}
         </button>
       </div>
@@ -524,21 +625,36 @@ function SignupPage() {
           {/* Email */}
           <div>
             <Label htmlFor="email" className="mb-1.5 text-xs">{t("auth.email")}</Label>
-            <Input
-              id="email"
-              value={form.email}
-              onChange={set("email")}
-              type="email"
-              inputMode="email"
-              placeholder="you@example.com"
-              className={`h-12 text-base ${errors.email ? "border-destructive" : ""}`}
-              autoComplete="email"
-              aria-invalid={!!errors.email}
-            />
+            <div className="relative">
+              <Input
+                id="email"
+                value={form.email}
+                onChange={(e) => { set("email")(e); checkEmailExists(e.target.value); }}
+                type="email"
+                inputMode="email"
+                placeholder="you@example.com"
+                className={`h-12 text-base pr-10 ${errors.email || emailCheckState === "taken" ? "border-destructive" : emailCheckState === "available" ? "border-green-500" : ""}`}
+                autoComplete="email"
+                aria-invalid={!!errors.email || emailCheckState === "taken"}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                {emailCheckState === "checking" && <Loader2 size={15} className="animate-spin text-muted-foreground" />}
+                {emailCheckState === "available" && <Check size={15} className="text-green-500" />}
+                {emailCheckState === "taken" && <span className="text-destructive text-lg font-bold">✕</span>}
+              </div>
+            </div>
+            {emailCheckState === "taken" && (
+              <p className="mt-1 text-xs text-destructive flex items-center gap-1">
+                An account with this email already exists. <Link to="/login" className="underline font-semibold">Sign in instead?</Link>
+              </p>
+            )}
+            {emailCheckState === "available" && (
+              <p className="mt-1 text-xs text-green-500">Email is available ✓</p>
+            )}
             <FieldError msg={errors.email} />
           </div>
 
-          {/* Password with show/hide */}
+          {/* Password with show/hide + strength meter */}
           <div>
             <Label htmlFor="password" className="mb-1.5 text-xs">{t("auth.password")}</Label>
             <div className="relative">
@@ -546,8 +662,10 @@ function SignupPage() {
                 id="password"
                 value={form.password}
                 onChange={set("password")}
+                onFocus={() => setPwFocused(true)}
+                onBlur={() => setPwFocused(false)}
                 type={showPassword ? "text" : "password"}
-                placeholder="Min. 6 characters"
+                placeholder="Min. 8 characters"
                 className={`h-12 text-base pr-12 ${errors.password ? "border-destructive" : ""}`}
                 autoComplete="new-password"
                 aria-invalid={!!errors.password}
@@ -561,6 +679,33 @@ function SignupPage() {
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            {/* Strength bar */}
+            {form.password.length > 0 && (
+              <div className="mt-2">
+                <div className="flex gap-1 mb-1">
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= pwStrength.score ? pwStrength.color : "bg-border"}`} />
+                  ))}
+                </div>
+                <p className={`text-xs font-medium ${pwStrength.score <= 2 ? "text-red-400" : pwStrength.score === 3 ? "text-yellow-400" : pwStrength.score === 4 ? "text-blue-400" : "text-green-400"}`}>
+                  {pwStrength.label}
+                </p>
+              </div>
+            )}
+            {/* Rules checklist — shown while focused or on error */}
+            {(pwFocused || errors.password) && form.password.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {PW_RULES.map(rule => {
+                  const passed = rule.test(form.password);
+                  return (
+                    <li key={rule.label} className={`flex items-center gap-1.5 text-xs transition-colors ${passed ? "text-green-400" : "text-muted-foreground"}`}>
+                      <Check size={10} className={passed ? "opacity-100" : "opacity-0"} />
+                      <span className={passed ? "" : "pl-3.5"}>{rule.label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <FieldError msg={errors.password} />
           </div>
 
@@ -627,9 +772,7 @@ function SignupPage() {
               disabled={loading}
               className="flex-1 h-12 bg-gradient-primary font-semibold shadow-glow hover:opacity-90 text-base"
             >
-              {loading ? (
-                <><Loader2 size={18} className="animate-spin mr-2" />Creating…</>
-              ) : t("signup.createAccount")}
+              {t("signup.createAccount")}
             </Button>
           </div>
 

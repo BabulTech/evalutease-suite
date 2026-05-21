@@ -107,6 +107,13 @@ function CompanyPage() {
   const isEnterprise = plan?.tier === "enterprise";
   const maxHosts = plan?.max_hosts ?? 3;
 
+  useEffect(() => {
+    if (!plan) return;
+    if (!isEnterprise) {
+      void navigate({ to: "/dashboard" });
+    }
+  }, [plan, isEnterprise, navigate]);
+
   const loadMembers = useCallback(async (cId: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase.from("company_members") as any).select("*").eq("company_id", cId);
@@ -400,6 +407,20 @@ function HostsStep({ companyId, members, maxHosts, plan, companyName, onMembersC
   const add = async () => {
     if (!draft.full_name.trim() || !draft.invited_email.trim()) { validationError("Name and email required"); return; }
     if (members.length >= maxHosts) { validationError(`Max ${maxHosts} hosts on ${plan?.name}`); return; }
+    const emailLower = draft.invited_email.trim().toLowerCase();
+    // Check duplicate in company_members
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existingMember } = await (supabase.from("company_members") as any)
+      .select("id").eq("company_id", companyId).eq("invited_email", emailLower).maybeSingle();
+    if (existingMember) { validationError("This email is already invited or a member of your organization."); return; }
+    // Check if already a registered user in another org
+    const { data: existingProfile } = await supabase.from("profiles").select("id").eq("email", emailLower).maybeSingle();
+    if (existingProfile) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: otherMember } = await (supabase.from("company_members") as any)
+        .select("id").eq("user_id", existingProfile.id).maybeSingle();
+      if (otherMember) { validationError("This user already belongs to another organization."); return; }
+    }
     const initialCredits = Math.max(0, parseInt(draft.initial_credits) || 0);
     setSaving(true);
     const token = crypto.randomUUID();
@@ -473,7 +494,11 @@ function HostsStep({ companyId, members, maxHosts, plan, companyName, onMembersC
               <div className="space-y-1.5"><Label className="text-xs">Full Name *</Label>
                 <Input value={draft.full_name} onChange={(e) => setDraft({ ...draft, full_name: e.target.value })} placeholder="e.g. Ayesha Khan" className="h-8 text-sm" /></div>
               <div className="space-y-1.5"><Label className="text-xs">Email *</Label>
-                <Input type="email" value={draft.invited_email} onChange={(e) => setDraft({ ...draft, invited_email: e.target.value })} placeholder="teacher@school.edu.pk" className="h-8 text-sm" /></div>
+                <Input type="email" value={draft.invited_email} onChange={(e) => setDraft({ ...draft, invited_email: e.target.value })} placeholder="teacher@school.edu.pk" className={`h-8 text-sm ${members.some(m => m.invited_email === draft.invited_email.trim().toLowerCase()) ? "border-destructive" : ""}`} />
+                {draft.invited_email.trim() && members.some(m => m.invited_email === draft.invited_email.trim().toLowerCase()) && (
+                  <p className="text-xs text-destructive mt-1">This email is already added.</p>
+                )}
+              </div>
               <div className="space-y-1.5"><Label className="text-xs">Department</Label>
                 <Select value={draft.department} onValueChange={(v) => setDraft({ ...draft, department: v })}>
                   <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select" /></SelectTrigger>
@@ -761,14 +786,16 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
   };
 
   const showCredits = !!plan?.can_buy_credits;
+  // "Requests" tab intentionally hidden for company admins — handled in admin panel.
   const TABS: { id: DashTab; label: string; icon: React.ElementType; badge?: number }[] = [
     { id: "overview",  label: "Overview", icon: LayoutDashboard },
     { id: "team",      label: "Team",     icon: Users },
     ...(showCredits ? [
       { id: "credits"  as DashTab, label: "Credits",  icon: Coins },
-      { id: "requests" as DashTab, label: "Requests", icon: SendHorizonal, badge: pendingCount },
     ] : []),
   ];
+  // Display helper: plan limits use -1 to mean "unlimited"
+  const maxHostsDisplay = maxHosts === -1 ? "Unlimited" : maxHosts;
 
   return (
     <div className="max-w-5xl mx-auto pb-10 space-y-5">
@@ -807,7 +834,7 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
           { label: "Credit Pool", value: credits.balance, color: "text-warning", icon: Coins, border: "border-warning/30 bg-warning/5" },
           { label: "With Active Hosts", value: activeBalanceTotal, color: "text-success", icon: SendHorizonal, border: "border-success/20 bg-success/5" },
           { label: "Pending (pre-allocated)", value: pendingPreAllocated, color: "text-primary", icon: Clock, border: "border-primary/20 bg-primary/5" },
-          { label: "Team Size", value: `${members.length}/${maxHosts}`, color: "text-foreground", icon: Users, border: "border-border bg-card/60" },
+          { label: "Team Size", value: `${members.length} / ${maxHostsDisplay}`, color: "text-foreground", icon: Users, border: "border-border bg-card/60" },
         ].map(({ label, value, color, icon: Icon, border }) => (
           <div key={label} className={`rounded-xl md:rounded-2xl border p-3 sm:p-4 min-h-[92px] ${border}`}>
             <div className="flex items-center justify-between mb-1">
@@ -817,6 +844,28 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
             <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── Quick actions (visible on all tabs; lifted above the tab bar) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <button type="button" onClick={() => { setTab("team"); setShowAddHost(true); }}
+          className="min-h-20 rounded-xl border border-border bg-card/40 hover:border-primary/40 hover:bg-primary/5 p-4 flex items-center gap-3 transition-all group text-left">
+          <div className="rounded-xl bg-primary/10 p-2.5 shrink-0"><UserPlus className="h-4 w-4 text-primary" /></div>
+          <div><div className="font-semibold text-sm group-hover:text-primary transition-colors">Add a Host</div><div className="text-xs text-muted-foreground">Invite a teacher or trainer</div></div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+        </button>
+        <button type="button" onClick={() => setTab("credits")}
+          className="min-h-20 rounded-xl border border-border bg-card/40 hover:border-primary/40 hover:bg-primary/5 p-4 flex items-center gap-3 transition-all group text-left">
+          <div className="rounded-xl bg-warning/10 p-2.5 shrink-0"><Coins className="h-4 w-4 text-warning" /></div>
+          <div><div className="font-semibold text-sm group-hover:text-primary transition-colors">Credit Overview</div><div className="text-xs text-muted-foreground">View balances & transactions</div></div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+        </button>
+        <Link to="/billing" search={{ plan: "" }}
+          className="min-h-20 rounded-xl border border-border bg-card/40 hover:border-primary/40 hover:bg-primary/5 p-4 flex items-center gap-3 transition-all group">
+          <div className="rounded-xl bg-primary/10 p-2.5 shrink-0"><CreditCard className="h-4 w-4 text-primary" /></div>
+          <div><div className="font-semibold text-sm group-hover:text-primary transition-colors">Buy More Credits</div><div className="text-xs text-muted-foreground">Top up your credit pool</div></div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+        </Link>
       </div>
 
       {/* ── Tabs ── */}
@@ -882,7 +931,7 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
             <div className="flex-1">
               <div className="font-semibold">{plan?.name}</div>
               <div className="text-xs text-muted-foreground mt-1 space-y-1">
-                <div>Up to <strong>{maxHosts} hosts</strong> · {plan?.participants_per_session === -1 ? "Unlimited" : plan?.participants_per_session} students/session</div>
+                <div>Up to <strong>{maxHostsDisplay} hosts</strong> · {plan?.participants_per_session === -1 ? "Unlimited" : plan?.participants_per_session} students/session</div>
                 <div><strong>{plan?.credits_per_month}</strong> credits/month included</div>
               </div>
             </div>
@@ -891,27 +940,6 @@ function Dashboard({ company, setCompany, members, companyId, plan, maxHosts, re
             </Link>
           </div>
 
-          {/* Quick actions */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <button type="button" onClick={() => { setTab("team"); setShowAddHost(true); }}
-              className="min-h-20 rounded-xl border border-border bg-card/40 hover:border-primary/40 hover:bg-primary/5 p-4 flex items-center gap-3 transition-all group text-left">
-              <div className="rounded-xl bg-primary/10 p-2.5 shrink-0"><UserPlus className="h-4 w-4 text-primary" /></div>
-              <div><div className="font-semibold text-sm group-hover:text-primary transition-colors">Add a Host</div><div className="text-xs text-muted-foreground">Invite a teacher or trainer</div></div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
-            </button>
-            <button type="button" onClick={() => setTab("credits")}
-              className="min-h-20 rounded-xl border border-border bg-card/40 hover:border-primary/40 hover:bg-primary/5 p-4 flex items-center gap-3 transition-all group text-left">
-              <div className="rounded-xl bg-warning/10 p-2.5 shrink-0"><Coins className="h-4 w-4 text-warning" /></div>
-              <div><div className="font-semibold text-sm group-hover:text-primary transition-colors">Credit Overview</div><div className="text-xs text-muted-foreground">View balances & transactions</div></div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
-            </button>
-            <Link to="/billing" search={{ plan: "" }}
-              className="min-h-20 rounded-xl border border-border bg-card/40 hover:border-primary/40 hover:bg-primary/5 p-4 flex items-center gap-3 transition-all group">
-              <div className="rounded-xl bg-primary/10 p-2.5 shrink-0"><CreditCard className="h-4 w-4 text-primary" /></div>
-              <div><div className="font-semibold text-sm group-hover:text-primary transition-colors">Buy More Credits</div><div className="text-xs text-muted-foreground">Top up your credit pool</div></div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
-            </Link>
-          </div>
         </div>
       )}
 

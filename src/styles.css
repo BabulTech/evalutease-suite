@@ -160,3 +160,10 @@
 
 .chart-label { font-size: 10px; fill: rgba(128,128,128,0.9); font-weight: 600; }
 .pct-bar { width: var(--pct, 0%); }
+
+
+@keyframes shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+.animate-shimmer { animation: shimmer 2s linear infinite; }

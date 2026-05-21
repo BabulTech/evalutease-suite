@@ -76,9 +76,11 @@ export function AppSidebar({ open, onToggle }: Props) {
     { to: "/quiz-history", icon: Archive, label: t("nav.quizHistory") },
     { to: "/reports", icon: BarChart3, label: t("nav.reports") },
     { to: "/reviews", icon: Star, label: "Reviews" },
-    { to: "/billing", icon: Coins, label: isHost ? "My Credits" : "Credits & Billing" },
+    ...(!["individual_starter", "enterprise_starter", "enterprise_free"].includes(plan?.slug ?? "") || isHost
+      ? [{ to: "/billing", icon: Coins, label: isHost ? "Credits" : "Billing" }]
+      : []),
     ...(isEnterpriseAdmin
-      ? [{ to: "/company", icon: Building2, label: "My Organization", badge: pendingReqCount }]
+      ? [{ to: "/company", icon: Building2, label: "Org", badge: pendingReqCount }]
       : []),
     ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin", special: true }] : []),
   ];

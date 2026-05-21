@@ -73,16 +73,20 @@ export type TrueFalseDraft = BaseDraft & {
   correctValue: boolean;
 };
 
+export type GradingMode = "auto" | "ai" | "manual";
+
 export type ShortAnswerDraft = BaseDraft & {
   type: "short_answer";
-  acceptableAnswers: string[];      // case-insensitive auto-grade
-  requiresManualGrading: boolean;   // host wants to review even if accepted answers exist
+  acceptableAnswers: string[];
+  requiresManualGrading: boolean;   // kept for backward compat — derived from gradingMode
+  gradingMode: GradingMode;
 };
 
 export type LongAnswerDraft = BaseDraft & {
   type: "long_answer";
   modelAnswer: string;
   rubric: string;
+  gradingMode: "ai" | "manual";     // long answer can't be auto-graded
 };
 
 export type DraftQuestion = McqDraft | TrueFalseDraft | ShortAnswerDraft | LongAnswerDraft;
@@ -125,6 +129,7 @@ export function emptyDraft(
         text: "",
         acceptableAnswers: [""],
         requiresManualGrading: false,
+        gradingMode: "auto",
         difficulty,
         explanation: "",
         timeSeconds: 30,
@@ -136,6 +141,7 @@ export function emptyDraft(
         text: "",
         modelAnswer: "",
         rubric: "",
+        gradingMode: "manual",
         difficulty,
         explanation: "",
         timeSeconds: 300,
@@ -172,10 +178,10 @@ export function validateDraft(d: DraftQuestion): DraftValidation {
       return { ok: true };
     }
     case "short_answer": {
-      if (!d.requiresManualGrading) {
+      if (d.gradingMode === "auto") {
         const valid = d.acceptableAnswers.map((a) => a.trim()).filter(Boolean);
         if (valid.length === 0)
-          return { ok: false, reason: "Add at least one accepted answer, or enable manual grading" };
+          return { ok: false, reason: "Add at least one accepted answer, or choose AI / Manual grading" };
       }
       return { ok: true };
     }

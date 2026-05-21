@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Armchair, BarChart3, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp,
-  ClipboardList, Hash, Mail, Pencil, Phone, Plus, ScanLine, Search, Send, Target, Trash2, TrendingUp,
-  Trophy, UploadCloud, UserPlus, Users, UsersRound, X, XCircle, FolderPlus,
+  Hash, Lock, Mail, Pencil, Phone, Plus, Search, Target, Trash2, TrendingUp,
+  Trophy, UserPlus, Users, UsersRound, X, XCircle, FolderPlus, Layers,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { LoadingOverlay, type Step } from "@/components/ui/LoadingOverlay";
 import { ParticipantDialog } from "@/components/participants/ParticipantDialog";
 import { InviteDialog, type InviteRow } from "@/components/participants/InviteDialog";
 import { UploadParticipantsDialog } from "@/components/participants/UploadParticipantsDialog";
@@ -275,6 +276,18 @@ function ParticipantsIndex() {
   const [participantTotal, setParticipantTotal] = useState(0);
   const [createTypeOpen, setCreateTypeOpen] = useState(false);
   const [createSubOpen, setCreateSubOpen]   = useState(false);
+  // Tab state: 1 = Type, 2 = Group, 3 = Roster. Auto-advances on selection.
+  const [activeTab, setActiveTab] = useState<1 | 2 | 3>(1);
+
+  // Step-driven loading overlay state (for CSV upload and other long-running ops)
+  const [overlay, setOverlay] = useState<{ visible: boolean; title: string; steps: Step[]; step: number; hint?: string }>({
+    visible: false, title: "", steps: [], step: 0,
+  });
+  const showOverlay = (title: string, steps: Step[], hint?: string) =>
+    setOverlay({ visible: true, title, steps, step: 0, hint });
+  const advanceOverlay = (step: number) => setOverlay((prev) => ({ ...prev, step }));
+  const finishOverlay = () => setOverlay((prev) => ({ ...prev, step: prev.steps.length }));
+  const hideOverlay = () => setOverlay((prev) => ({ ...prev, visible: false }));
 
   // Per-type participant counts (for chip badges)
   const [typeCounts, setTypeCounts] = useState<Map<string, number>>(new Map());
@@ -411,10 +424,23 @@ function ParticipantsIndex() {
   const createMany = async (drafts: ParticipantDraft[]) => {
     if (!user || drafts.length === 0) return;
     const subtypeId = selectedSubId !== "__all__" ? selectedSubId : null;
+
+    showOverlay(
+      "Importing participants",
+      [
+        { label: "Preparing rows",          detail: `Mapping ${drafts.length} record${drafts.length === 1 ? "" : "s"} to your database schema…` },
+        { label: "Saving to database",      detail: "Inserting all participants in a single transaction…" },
+        { label: "Refreshing your roster",  detail: "Reloading the participant list so the new entries appear…" },
+      ],
+      `${drafts.length} participant${drafts.length === 1 ? "" : "s"} · usually 1–5 seconds`,
+    );
+
+    advanceOverlay(1);
     const rows = drafts.map((d) => ({ ...draftToRow(d, user.id), subtype_id: subtypeId }));
     const { data, error } = await supabase.from("participants").insert(rows).select("id, name, email, mobile, metadata, subtype_id, created_at");
-    if (error) { toast.error(error.message); throw error; }
+    if (error) { hideOverlay(); toast.error(error.message); throw error; }
     const inserted = (data ?? []) as ParticipantRow[];
+    advanceOverlay(2);
     void logClientActivity({
       actionType: "created",
       module: "participants",
@@ -431,6 +457,8 @@ function ParticipantsIndex() {
     });
     toast.success(`${t("pt.added")} ${inserted.length} ${inserted.length === 1 ? t("pt.participant") : t("pt.participants")}`);
     setPage(0); await loadWithRaw();
+    finishOverlay();
+    setTimeout(hideOverlay, 400);
   };
 
   const updateParticipant = async (id: string, draft: ParticipantDraft) => {
@@ -502,234 +530,276 @@ function ParticipantsIndex() {
   const selectedGroupName = subs.find((s) => s.id === selectedSubId)?.name ?? "";
   const canAddToGroup = selectedTypeId !== "__all__" && selectedSubId !== "__all__";
 
+  // Pick a type — clears group, advances to Group tab (or directly Roster if "All Types")
+  const handlePickType = (id: string) => {
+    setSelectedTypeId(id);
+    setSelectedSubId("__all__");
+    setSelectedId(null);
+    setActiveTab(id === "__all__" ? 3 : 2);
+  };
+
+  // Pick a group — advances to Roster tab
+  const handlePickSub = (id: string) => {
+    setSelectedSubId(id);
+    setSelectedId(null);
+    setActiveTab(3);
+  };
+
+  const tabDefs = [
+    { n: 1 as const, label: t("pt.type"),  value: selectedTypeId === "__all__" ? t("pt.allTypes")  : selectedTypeName, icon: Users,       locked: false,                          done: selectedTypeId !== "__all__" || activeTab > 1 },
+    { n: 2 as const, label: t("pt.group"), value: selectedSubId  === "__all__" ? (selectedTypeId === "__all__" ? "—" : t("pt.allGroups")) : selectedGroupName, icon: Layers, locked: selectedTypeId === "__all__",  done: selectedSubId !== "__all__" },
+    // Short label for the tab strip; page header keeps the full t("pt.manageTitle")
+    { n: 3 as const, label: "People", value: participantTotal > 0 ? `${participantTotal}` : "", icon: UserPlus, locked: false, done: participantTotal > 0 },
+  ];
+
   return (
     <div className="space-y-4">
-
-      <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/12 via-card/70 to-card/40 p-4 sm:p-5 shadow-glow/30">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
-              <ClipboardList className="h-3.5 w-3.5" /> Roster builder
-            </div>
-            <h1 className="mt-3 font-display text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Users className="h-6 w-6 text-primary" /> {t("pt.manageTitle")}
-            </h1>
-            <p className="text-muted-foreground mt-1 text-sm max-w-2xl">
-              First choose who they are, then where they belong. After that, add one participant, upload a list, scan a roster, or generate invite links.
-            </p>
-          </div>
-          <Button
-            className="h-12 gap-2 bg-gradient-primary text-primary-foreground shadow-glow lg:min-w-[190px]"
-            onClick={() => navigate({ to: "/participant-types/add" })}
-          >
-            <UserPlus className="h-4 w-4" /> {canAddToGroup ? "Add to selected group" : t("pt.addParticipant")}
+      {/* Title row */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="font-display text-2xl font-bold tracking-tight flex items-center gap-2">
+          <Users className="h-6 w-6 text-primary" /> {t("pt.manageTitle")}
+        </h1>
+        {canAddToGroup && (
+          <Button onClick={() => navigate({ to: "/participant-types/add" })} className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
+            <UserPlus className="h-4 w-4" /> Add to {selectedGroupName}
           </Button>
-        </div>
+        )}
+      </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {[
-            { label: "1. Pick type", value: selectedTypeName || "Student, teacher, employee", icon: Users, done: selectedTypeId !== "__all__" },
-            { label: "2. Pick group", value: selectedGroupName || "Class, batch, team", icon: FolderPlus, done: selectedSubId !== "__all__" },
-            { label: "3. Add roster", value: "Single, upload, scan, invite", icon: Send, done: canAddToGroup },
-          ].map((step) => {
-            const Icon = step.icon;
-            return (
-              <div key={step.label} className={`rounded-xl border px-3 py-3 ${step.done ? "border-primary/35 bg-primary/10" : "border-border bg-card/45"}`}>
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Icon className={`h-3.5 w-3.5 ${step.done ? "text-primary" : ""}`} /> {step.label}
+      {/* Tab bar */}
+      <div className="rounded-2xl border border-border bg-card/50 p-1.5 flex gap-1.5">
+        {tabDefs.map((tab) => {
+          const isActive = activeTab === tab.n;
+          return (
+            <button
+              key={tab.n}
+              type="button"
+              onClick={() => { if (!tab.locked) setActiveTab(tab.n); }}
+              disabled={tab.locked}
+              className={`flex-1 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all min-h-[56px] ${
+                isActive
+                  ? "bg-gradient-primary text-primary-foreground shadow-glow"
+                  : tab.locked
+                    ? "opacity-40 cursor-not-allowed"
+                    : "hover:bg-muted/40 cursor-pointer"
+              }`}
+            >
+              <span className={`h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${
+                isActive ? "bg-primary-foreground/20" : tab.done ? "bg-success/20 text-success" : "bg-muted/60 text-muted-foreground"
+              }`}>
+                {tab.locked ? <Lock className="h-3 w-3" /> : tab.done && !isActive ? <Check className="h-3.5 w-3.5" /> : tab.n}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm font-semibold leading-tight ${isActive ? "" : "text-foreground"}`}>{tab.label}</div>
+                <div className={`text-[11px] truncate leading-tight mt-0.5 ${isActive ? "opacity-80" : "text-muted-foreground"}`}>
+                  {tab.value || (tab.locked ? "Locked" : "Tap to choose")}
                 </div>
-                <div className={`mt-1 text-sm font-semibold ${step.done ? "text-foreground" : "text-muted-foreground"}`}>{step.value}</div>
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Section */}
-      <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("pt.type")}</div>
-          <button type="button" onClick={() => setCreateTypeOpen(true)}
-            className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all">
-            <FolderPlus size={12} /> New Type
-          </button>
-        </div>
-        {types.length === 0 ? (
-          <div className="text-center py-4 space-y-2">
-            <p className="text-xs text-muted-foreground">No participant types yet.</p>
-            <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setCreateTypeOpen(true)}>
-              <Plus size={13} /> Create first type
-            </Button>
-          </div>
-        ) : (
-          <ChipSelector
-            items={types.map((t) => ({ id: t.id, label: t.name, count: typeCounts.get(t.id) ?? 0 }))}
-            selected={selectedTypeId}
-            onSelect={handleTypeChange}
-            allLabel={t("pt.allTypes")}
-          />
-        )}
-
-        {/* Step 2: Group chips - progressive disclosure */}
-        {selectedTypeId !== "__all__" && (
-          <div className="pt-3 border-t border-border/50 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("pt.group")}</div>
-              <button type="button" onClick={() => setCreateSubOpen(true)} disabled={!canAddSub}
-                className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all disabled:opacity-40">
-                <Plus size={12} /> New Group
-              </button>
-            </div>
-            {visibleSubs.length === 0 ? (
-              <div className="text-center py-3 space-y-2">
-                <p className="text-xs text-muted-foreground">No groups in this type yet.</p>
-                <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => setCreateSubOpen(true)}>
-                  <Plus size={13} /> Add first group
-                </Button>
-              </div>
-            ) : (
-              <ChipSelector
-                items={visibleSubs.map((s) => ({ id: s.id, label: s.name, count: subCounts.get(s.id) ?? 0 }))}
-                selected={selectedSubId}
-                onSelect={(v) => { setSelectedSubId(v); setSelectedId(null); }}
-                allLabel={t("pt.allGroups")}
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Section */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("pt.searchPlaceholder")} className="pl-9 h-11" />
-          {search && (
-            <button type="button" onClick={() => setSearch("")} aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X size={14} />
             </button>
+          );
+        })}
+      </div>
+
+      {/* ── Tab 1: Type ────────────────────────────────────────────── */}
+      {activeTab === 1 && (
+        <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold text-foreground">
+              {types.length === 0 ? "Start by creating a type" : "Choose a participant type"}
+            </div>
+            <button type="button" onClick={() => setCreateTypeOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all">
+              <FolderPlus size={13} /> New Type
+            </button>
+          </div>
+          {types.length === 0 ? (
+            <div className="text-center py-8 space-y-3">
+              <Users className="mx-auto h-10 w-10 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Types are roles you'll quiz (e.g. Students, Employees)</p>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCreateTypeOpen(true)}>
+                <Plus size={14} /> Create first type
+              </Button>
+            </div>
+          ) : (
+            <ChipSelector
+              items={types.map((tt) => ({ id: tt.id, label: tt.name, count: typeCounts.get(tt.id) ?? 0 }))}
+              selected={selectedTypeId}
+              onSelect={handlePickType}
+              allLabel={t("pt.allTypes")}
+            />
           )}
         </div>
-        {/* Quick-add actions */}
-        <div className="flex items-center gap-2 shrink-0">
-          <UploadParticipantsDialog onImport={createMany}
-            trigger={<Button variant="outline" size="sm" className="h-11 gap-1.5 hidden sm:flex">Upload CSV</Button>} />
-          <ScanParticipantsDialog onImport={createMany}
-            trigger={<Button variant="outline" size="sm" className="h-11 gap-1.5 hidden sm:flex">Scan</Button>} />
-          <InviteDialog onGenerate={generateInvites}
-            trigger={<Button variant="outline" size="sm" className="h-11 gap-1.5">Invite</Button>} />
-          <ParticipantDialog title={t("pt.addTitle")} submitLabel={t("pt.addBtn")} onSubmit={createParticipant}
-            trigger={<Button size="sm" className="h-11 gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"><Plus size={14} /> Add</Button>} />
-        </div>
-      </div>
+      )}
 
-      {/* Section */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.totalParticipants")}</div>
-          <div className="font-display text-2xl font-bold mt-1">{totalAll}</div>
+      {/* ── Tab 2: Group ───────────────────────────────────────────── */}
+      {activeTab === 2 && selectedTypeId !== "__all__" && (
+        <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm">
+              <span className="text-muted-foreground">{selectedTypeName} · </span>
+              <span className="font-semibold">Choose a group</span>
+            </div>
+            <button type="button" onClick={() => setCreateSubOpen(true)} disabled={!canAddSub}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all disabled:opacity-40">
+              <Plus size={13} /> New Group
+            </button>
+          </div>
+          {visibleSubs.length === 0 ? (
+            <div className="text-center py-8 space-y-3">
+              <p className="text-sm text-muted-foreground">No groups in <span className="font-medium text-foreground">{selectedTypeName}</span> yet</p>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCreateSubOpen(true)}>
+                <Plus size={14} /> Add first group
+              </Button>
+            </div>
+          ) : (
+            <ChipSelector
+              items={visibleSubs.map((s) => ({ id: s.id, label: s.name, count: subCounts.get(s.id) ?? 0 }))}
+              selected={selectedSubId}
+              onSelect={handlePickSub}
+              allLabel={t("pt.allGroups")}
+            />
+          )}
         </div>
-        <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.showing")}</div>
-          <div className="font-display text-2xl font-bold mt-1 text-primary">{participantTotal}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.types")}</div>
-          <div className="font-display text-2xl font-bold mt-1">{types.length}</div>
-        </div>
-      </div>
+      )}
 
-      {/* Section */}
-      <div className={`flex gap-4 items-start ${selectedParticipant ? "lg:flex-row flex-col" : ""}`}>
-        <div className={`min-w-0 ${selectedParticipant ? "lg:flex-1" : "w-full"}`}>
-          {loading ? (
-            <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">{t("pt.loading")}</div>
-          ) : filteredParticipants.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/5 p-5 sm:p-8 space-y-5">
-              <div className="grid gap-5 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-                <div>
-                  <UsersRound className="h-10 w-10 text-primary/70 mb-3" />
+      {/* ── Tab 3: Roster ──────────────────────────────────────────── */}
+      {activeTab === 3 && (
+        <div className="space-y-4">
+          {/* Breadcrumb */}
+          <div className="text-xs text-muted-foreground">
+            {selectedTypeId === "__all__"
+              ? <span className="text-foreground font-semibold">{t("pt.allTypes")}</span>
+              : <>
+                  <span>{selectedTypeName}</span>
+                  <span className="px-1">›</span>
+                  <span className="text-foreground font-semibold">
+                    {selectedSubId === "__all__" ? t("pt.allGroups") : selectedGroupName}
+                  </span>
+                </>
+            }
+          </div>
+
+          {/* Search + Add actions */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("pt.searchPlaceholder")} className="pl-9 h-11" />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <UploadParticipantsDialog onImport={createMany}
+                trigger={<Button variant="outline" size="sm" className="h-11 gap-1.5 hidden sm:flex">Upload CSV</Button>} />
+              <ScanParticipantsDialog onImport={createMany}
+                trigger={<Button variant="outline" size="sm" className="h-11 gap-1.5 hidden sm:flex">Scan</Button>} />
+              <InviteDialog onGenerate={generateInvites}
+                trigger={<Button variant="outline" size="sm" className="h-11 gap-1.5">Invite</Button>} />
+              <ParticipantDialog title={t("pt.addTitle")} submitLabel={t("pt.addBtn")} onSubmit={createParticipant}
+                trigger={<Button size="sm" className="h-11 gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"><Plus size={14} /> Add</Button>} />
+            </div>
+          </div>
+
+          {/* Stats strip */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.totalParticipants")}</div>
+              <div className="font-display text-2xl font-bold mt-1">{totalAll}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.showing")}</div>
+              <div className="font-display text-2xl font-bold mt-1 text-primary">{participantTotal}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t("pt.types")}</div>
+              <div className="font-display text-2xl font-bold mt-1">{types.length}</div>
+            </div>
+          </div>
+
+          {/* Roster table + stats panel */}
+          <div className={`flex gap-4 items-start ${selectedParticipant ? "lg:flex-row flex-col" : ""}`}>
+            <div className={`min-w-0 ${selectedParticipant ? "lg:flex-1" : "w-full"}`}>
+              {loading ? (
+                <div className="rounded-2xl border border-border bg-card/40 p-6 text-sm text-muted-foreground animate-pulse">{t("pt.loading")}</div>
+              ) : filteredParticipants.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-primary/25 bg-primary/5 p-6 text-center space-y-3">
+                  <UsersRound className="mx-auto h-10 w-10 text-primary/60" />
                   {totalAll === 0 ? (
                     <>
-                      <p className="text-base font-semibold">Build your first roster in order</p>
-                      <p className="text-sm text-muted-foreground mt-1">Create a type, create a group inside it, then add participants by the method that matches your data.</p>
+                      <p className="font-semibold">No participants yet</p>
+                      <p className="text-sm text-muted-foreground">Add one manually, upload a CSV, scan a roster, or generate invite links.</p>
                     </>
                   ) : (
                     <>
-                      <p className="text-base font-semibold">{t("pt.noMatches")}</p>
-                      <p className="text-sm text-muted-foreground mt-1">{t("pt.noMatchesHint")}</p>
+                      <p className="font-semibold">{t("pt.noMatches")}</p>
+                      <p className="text-sm text-muted-foreground">{t("pt.noMatchesHint")}</p>
                     </>
                   )}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {[
-                    { label: "Add one", desc: "Best for a quick manual entry", icon: UserPlus, action: () => navigate({ to: "/participant-types/add" }) },
-                    { label: "Upload CSV", desc: "Fastest for Excel rosters", icon: UploadCloud, action: () => navigate({ to: "/participant-types/add" }) },
-                    { label: "Scan list", desc: "Use an image or printed sheet", icon: ScanLine, action: () => navigate({ to: "/participant-types/add" }) },
-                    { label: "Invite link", desc: "Let people fill their own details", icon: Mail, action: () => navigate({ to: "/participant-types/add" }) },
-                  ].map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button key={item.label} type="button" onClick={item.action} className="rounded-xl border border-border bg-card/70 p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/10">
-                        <div className="flex items-center gap-2 font-semibold text-sm"><Icon className="h-4 w-4 text-primary" /> {item.label}</div>
-                        <p className="mt-1 text-xs text-muted-foreground">{item.desc}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("pt.colName")}</TableHead>
-                    <TableHead>{t("pt.colContact")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("pt.colDetails")}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t("pt.colOrg")}</TableHead>
-                    <TableHead className="w-[100px] text-right">{t("pt.colActions")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredParticipants.map((p) => (
-                    <ParticipantTableRow
-                      key={p.id} p={p}
-                      selected={selectedId === p.id}
-                      onSelect={() => setSelectedId((prev) => (prev === p.id ? null : p.id))}
-                      onUpdate={updateParticipant}
-                      onDelete={removeParticipant}
+              ) : (
+                <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t("pt.colName")}</TableHead>
+                        <TableHead>{t("pt.colContact")}</TableHead>
+                        <TableHead className="hidden md:table-cell">{t("pt.colDetails")}</TableHead>
+                        <TableHead className="hidden lg:table-cell">{t("pt.colOrg")}</TableHead>
+                        <TableHead className="w-[100px] text-right">{t("pt.colActions")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredParticipants.map((p) => (
+                        <ParticipantTableRow
+                          key={p.id} p={p}
+                          selected={selectedId === p.id}
+                          onSelect={() => setSelectedId((prev) => (prev === p.id ? null : p.id))}
+                          onUpdate={updateParticipant}
+                          onDelete={removeParticipant}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <div className="px-4 py-3 border-t border-border">
+                    <PaginationControls
+                      page={page}
+                      pageSize={PARTICIPANT_PAGE_SIZE}
+                      total={participantTotal}
+                      label="participants"
+                      onPageChange={(p) => { setPage(p); }}
                     />
-                  ))}
-                </TableBody>
-              </Table>
-              <div className="px-4 py-3 border-t border-border">
-                <PaginationControls
-                  page={page}
-                  pageSize={PARTICIPANT_PAGE_SIZE}
-                  total={participantTotal}
-                  label="participants"
-                  onPageChange={(p) => { setPage(p); }}
-                />
-              </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {selectedParticipant && (
-          <div className="lg:w-80 w-full shrink-0">
-            <ParticipantStatsPanel participant={selectedParticipant} onClose={() => setSelectedId(null)} />
+            {selectedParticipant && (
+              <div className="lg:w-80 w-full shrink-0">
+                <ParticipantStatsPanel participant={selectedParticipant} onClose={() => setSelectedId(null)} />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Quick-create dialogs */}
       <QuickCreateDialog open={createTypeOpen} onClose={() => setCreateTypeOpen(false)}
         title={t("pt.newType")} placeholder={t("pt.newTypePlaceholder")} onConfirm={createType} />
       <QuickCreateDialog open={createSubOpen} onClose={() => setCreateSubOpen(false)}
         title={t("pt.newGroup")} placeholder={t("pt.newGroupPlaceholder")} onConfirm={createSub} />
+
+      <LoadingOverlay
+        visible={overlay.visible}
+        variant="driven"
+        title={overlay.title}
+        steps={overlay.steps}
+        currentStep={overlay.step}
+        hint={overlay.hint}
+      />
     </div>
   );
 }

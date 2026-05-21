@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -290,6 +290,7 @@ function EditQuestionDialog({ q, onSave }: { q: Question; onSave: Props["onUpdat
       >
         <DialogHeader className="shrink-0">
           <DialogTitle>Edit question</DialogTitle>
+          <DialogDescription className="sr-only">Edit question content, answer key, and settings.</DialogDescription>
         </DialogHeader>
         {/* Scrollable editor area — prevents dialog overflow */}
         <div className="flex-1 overflow-y-auto min-h-0 pr-1">
@@ -348,17 +349,61 @@ function DeleteQuestionButton({ q, onConfirm }: { q: Question; onConfirm: Props[
 }
 
 function questionToDraft(q: Question): DraftQuestion {
-  const options = [...q.options];
-  while (options.length < 4) options.push("");
-  const correctIndex = Math.max(0, options.findIndex((o) => o === q.correct_answer));
-  return {
-    type: "mcq",
+  const base = {
     text: q.text,
-    options: options.slice(0, 4),
-    correctIndex: correctIndex === -1 ? 0 : correctIndex,
     difficulty: q.difficulty,
     explanation: q.explanation ?? "",
     timeSeconds: q.time_seconds,
     maxPoints: q.max_points ?? 1,
+  };
+
+  // Infer type if missing (older rows may not have q.type set)
+  const inferredType: NonNullable<Question["type"]> =
+    q.type
+    ?? (q.model_answer || q.rubric ? "long_answer"
+      : (q.acceptable_answers && q.acceptable_answers.length > 0) ? "short_answer"
+      : (q.options.length === 0 && (q.correct_answer === "true" || q.correct_answer === "false")) ? "true_false"
+      : q.options.length === 0 ? "long_answer"
+      : "mcq");
+
+  if (inferredType === "true_false") {
+    return {
+      ...base,
+      type: "true_false",
+      correctValue: q.correct_answer === "true",
+    };
+  }
+
+  if (inferredType === "short_answer") {
+    return {
+      ...base,
+      type: "short_answer",
+      acceptableAnswers: q.acceptable_answers?.length
+        ? q.acceptable_answers
+        : q.correct_answer ? [q.correct_answer] : [""],
+      requiresManualGrading: q.requires_manual_grading ?? false,
+      gradingMode: (q as any).grading_mode ?? "auto",
+    };
+  }
+
+  if (inferredType === "long_answer") {
+    return {
+      ...base,
+      type: "long_answer",
+      modelAnswer: q.model_answer ?? "",
+      rubric: q.rubric ?? "",
+      gradingMode: ((q as any).grading_mode ?? "manual") as "ai" | "manual",
+    };
+  }
+
+  // MCQ (default)
+  const options = [...q.options];
+  while (options.length < 4) options.push("");
+  const correctIndex = options.findIndex((o) => o === q.correct_answer);
+  return {
+    ...base,
+    type: "mcq",
+    options: options.slice(0, 4),
+    correctIndex: correctIndex === -1 ? 0 : correctIndex,
   };
 }

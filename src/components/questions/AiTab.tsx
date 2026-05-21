@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Sparkles, Wand2, Globe, Coins, Zap } from "lucide-react";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,8 +58,13 @@ export function AiTab({ disabled, onSave, saving }: Props) {
   }, [isTrial]);
   const trialRemaining = trialLimit - (trialUsed ?? 0);
 
-  // Credits cost: 1 credit per 10 questions (rounded up)
-  const creditCost = plan?.credit_cost_ai_10q ?? 3;
+  // Credits cost: varies by question type
+  const creditCost =
+    kind === "true_false"   ? (plan?.credit_cost_ai_tf_10q    ?? 2) :
+    kind === "short_answer" ? (plan?.credit_cost_ai_short_10q ?? 3) :
+    kind === "long_answer"  ? (plan?.credit_cost_ai_long_10q  ?? 5) :
+    kind === "mix"          ? (plan?.credit_cost_ai_mix_10q   ?? 4) :
+    (plan?.credit_cost_ai_10q ?? 3);
   const ratePerQuestion = creditCost / 10;
   const totalCost = Math.max(1, Math.ceil(count * ratePerQuestion));
   const hasEnoughCredits = isTrial ? trialRemaining > 0 : credits.balance >= totalCost;
@@ -143,6 +149,8 @@ export function AiTab({ disabled, onSave, saving }: Props) {
   }
 
   return (
+    <>
+    <LoadingOverlay visible={generating} variant="ai" />
     <div className="space-y-5">
       {/* Header */}
       <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
@@ -328,5 +336,6 @@ export function AiTab({ disabled, onSave, saving }: Props) {
         onClear={() => setDrafts([])}
       />
     </div>
+    </>
   );
 }

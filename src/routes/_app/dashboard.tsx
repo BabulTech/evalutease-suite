@@ -30,6 +30,7 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { usePlan } from "@/contexts/PlanContext";
 import { useHost, type HostInfo } from "@/contexts/HostContext";
+import { DashboardActivityCard } from "@/components/dashboard/DashboardActivityCard";
 import { toast } from "sonner";
 import { validationError } from "@/components/ui/validation-toast";
 
@@ -196,6 +197,29 @@ const STATUS_STYLES: Record<string, string> = {
   draft:     "bg-muted/40 text-muted-foreground",
 };
 
+function LimitBar({ used, limit }: { used: number; limit: number }) {
+  if (limit === -1) return <span className="text-[10px] text-muted-foreground">Unlimited</span>;
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const left = Math.max(0, limit - used);
+  const danger = pct >= 80;
+  return (
+    <div className="space-y-1 mt-2">
+      <div className={`text-[10px] font-medium ${danger ? "text-destructive" : "text-muted-foreground"}`}>
+        {left} left of {limit}
+      </div>
+      <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${danger ? "bg-destructive" : "bg-primary/60"} ${
+            pct <= 10 ? "w-[10%]" : pct <= 20 ? "w-1/5" : pct <= 25 ? "w-1/4" : pct <= 33 ? "w-1/3"
+            : pct <= 40 ? "w-2/5" : pct <= 50 ? "w-1/2" : pct <= 60 ? "w-3/5" : pct <= 66 ? "w-2/3"
+            : pct <= 75 ? "w-3/4" : pct <= 80 ? "w-4/5" : pct <= 90 ? "w-[90%]" : "w-full"
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 function DashboardPage() {
   const { user } = useAuth();
@@ -231,15 +255,19 @@ function DashboardPage() {
         questions: qs.count ?? 0,
       });
       setRecent(recentSessions.data ?? []);
-      const creditsRow = await supabase.from("user_credits").select("balance, total_earned, total_spent").eq("user_id", user.id).maybeSingle();
-      if (creditsRow.data) setCredits(creditsRow.data);
+      if (plan && !["individual_starter", "enterprise_starter", "enterprise_free"].includes(plan.slug)) {
+        const creditsRow = await supabase.from("user_credits").select("balance, total_earned, total_spent").eq("user_id", user.id).maybeSingle();
+        if (creditsRow.data) setCredits(creditsRow.data);
+      }
     })();
   }, [user, hostLoading, hostInfo]);
 
   const sessionLimit     = plan?.sessions_total ?? 20;
   const questionLimit    = plan?.question_bank ?? 100;
   const participantLimit = plan?.participants_per_session ?? 30;
+  const FREE_SLUGS = ["individual_starter", "enterprise_starter", "enterprise_free"];
   const isFreeTier = !planLoading && (!plan || plan.slug === "individual_starter");
+  const showCredits = !planLoading && plan && !FREE_SLUGS.includes(plan.slug);
 
   if (hostLoading) return null;
   if (hostInfo) return <HostDashboard host={hostInfo} userId={user!.id} />;
@@ -247,29 +275,6 @@ function DashboardPage() {
   // ── Limit helpers ──────────────────────────────────────────────────────────
   const limitPct = (used: number, limit: number) =>
     limit === -1 ? 0 : Math.min(100, Math.round((used / limit) * 100));
-
-  const LimitBar = ({ used, limit }: { used: number; limit: number }) => {
-    if (limit === -1) return <span className="text-[10px] text-muted-foreground">Unlimited</span>;
-    const pct = limitPct(used, limit);
-    const left = Math.max(0, limit - used);
-    const danger = pct >= 80;
-    return (
-      <div className="space-y-1 mt-2">
-        <div className={`text-[10px] font-medium ${danger ? "text-destructive" : "text-muted-foreground"}`}>
-          {left} left of {limit}
-        </div>
-        <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${danger ? "bg-destructive" : "bg-primary/60"} ${
-              pct <= 10 ? "w-[10%]" : pct <= 20 ? "w-1/5" : pct <= 25 ? "w-1/4" : pct <= 33 ? "w-1/3"
-              : pct <= 40 ? "w-2/5" : pct <= 50 ? "w-1/2" : pct <= 60 ? "w-3/5" : pct <= 66 ? "w-2/3"
-              : pct <= 75 ? "w-3/4" : pct <= 80 ? "w-4/5" : pct <= 90 ? "w-[90%]" : "w-full"
-            }`}
-          />
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-5 md:space-y-6">
@@ -297,14 +302,16 @@ function DashboardPage() {
                 {plan.name}
               </Link>
             )}
-            <Link
-              to="/billing"
-              search={{ plan: "" }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-semibold text-warning hover:bg-warning/10 transition-all"
-            >
-              <Coins className="h-3 w-3" />
-              {credits?.balance ?? 0} credits
-            </Link>
+            {showCredits && (
+              <Link
+                to="/billing"
+                search={{ plan: "" }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-semibold text-warning hover:bg-warning/10 transition-all"
+              >
+                <Coins className="h-3 w-3" />
+                {credits?.balance ?? 0} credits
+              </Link>
+            )}
           </div>
         </div>
         {/* PRIMARY CTA — large, always visible (Fitts' Law) */}
@@ -404,6 +411,9 @@ function DashboardPage() {
           </ul>
         )}
       </div>
+
+      {/* ── 3b. RECENT ACTIVITY — auto-updates as things happen across the app ── */}
+      <DashboardActivityCard limit={20} />
 
       {/* ── 4. SECONDARY ACTIONS — 4 tiles, 44px+ touch targets ── */}
       <div>

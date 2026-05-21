@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  ChevronLeft, FileEdit, FolderOpen, ScanLine, Sparkles, Upload,
+  ChevronLeft, FileEdit, FolderOpen, ScanLine, Sparkles,
   Plus, ChevronDown, ChevronUp, HelpCircle, BookOpen,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,9 +34,6 @@ const ScanTab = lazy(() =>
 const AiTab = lazy(() =>
   import("@/components/questions/AiTab").then((m) => ({ default: m.AiTab })),
 );
-const UploadTab = lazy(() =>
-  import("@/components/questions/UploadTab").then((m) => ({ default: m.UploadTab })),
-);
 
 type SubRow = { id: string; category_id: string; name: string; description: string | null };
 type CatRow = { id: string; name: string };
@@ -67,7 +64,7 @@ function SubCategoryQuestionsPage() {
       supabase.from("question_categories").select("id, name").eq("id", categoryId).eq("owner_id", user.id).maybeSingle(),
       supabase.from("question_subcategories").select("id, category_id, name, description").eq("id", subId).eq("owner_id", user.id).maybeSingle(),
       supabase.from("questions")
-        .select("id, category_id, subcategory_id, text, options, correct_answer, difficulty, explanation, source, time_seconds, created_at", { count: "exact" })
+        .select("id, category_id, subcategory_id, type, text, options, correct_answer, acceptable_answers, model_answer, rubric, max_points, requires_manual_grading, difficulty, explanation, source, time_seconds, created_at", { count: "exact" })
         .eq("owner_id", user.id)
         .eq("subcategory_id", subId)
         .order("created_at", { ascending: false })
@@ -86,8 +83,14 @@ function SubCategoryQuestionsPage() {
     setQuestions(
       (qs.data ?? []).map((row) => ({
         id: row.id, category_id: row.category_id, subcategory_id: row.subcategory_id,
+        type: row.type as Question["type"],
         text: row.text, options: Array.isArray(row.options) ? (row.options as string[]) : [],
         correct_answer: row.correct_answer ?? "", difficulty: row.difficulty,
+        acceptable_answers: row.acceptable_answers as string[] | null,
+        model_answer: row.model_answer as string | null,
+        rubric: row.rubric as string | null,
+        max_points: row.max_points ?? 1,
+        requires_manual_grading: row.requires_manual_grading ?? false,
         explanation: row.explanation, source: row.source,
         time_seconds: row.time_seconds ?? DEFAULT_TIME_SECONDS, created_at: row.created_at,
       })),
@@ -105,13 +108,19 @@ function SubCategoryQuestionsPage() {
     const { data, error } = await supabase.from("questions")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .insert(rows as any)
-      .select("id, category_id, subcategory_id, text, options, correct_answer, difficulty, explanation, source, time_seconds, created_at");
+      .select("id, category_id, subcategory_id, type, text, options, correct_answer, acceptable_answers, model_answer, rubric, max_points, requires_manual_grading, difficulty, explanation, source, time_seconds, created_at");
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     const inserted = (data ?? []).map((row): Question => ({
       id: row.id, category_id: row.category_id, subcategory_id: row.subcategory_id,
+      type: row.type as Question["type"],
       text: row.text, options: Array.isArray(row.options) ? (row.options as string[]) : [],
       correct_answer: row.correct_answer ?? "", difficulty: row.difficulty,
+      acceptable_answers: row.acceptable_answers as string[] | null,
+      model_answer: row.model_answer as string | null,
+      rubric: row.rubric as string | null,
+      max_points: row.max_points ?? 1,
+      requires_manual_grading: row.requires_manual_grading ?? false,
       explanation: row.explanation, source: row.source,
       time_seconds: row.time_seconds ?? DEFAULT_TIME_SECONDS, created_at: row.created_at,
     }));
@@ -144,16 +153,59 @@ function SubCategoryQuestionsPage() {
   };
 
   const updateQuestion = async (id: string, draft: DraftQuestion) => {
-    if (draft.type !== "mcq") { toast.error("Editing non-MCQ questions is not supported yet"); return; }
-    const update = {
-      text: draft.text.trim(), difficulty: draft.difficulty,
-      options: draft.options.map((o) => o.trim()),
-      correct_answer: draft.options[draft.correctIndex]?.trim() ?? "",
-      explanation: draft.explanation.trim() || null, time_seconds: draft.timeSeconds,
+    let update: Record<string, unknown> = {
+      text: draft.text.trim(),
+      difficulty: draft.difficulty,
+      explanation: draft.explanation.trim() || null,
+      time_seconds: draft.timeSeconds,
+      max_points: draft.maxPoints,
+      type: draft.type,
     };
-    const { error } = await supabase.from("questions").update(update).eq("id", id);
+
+    if (draft.type === "mcq") {
+      update = {
+        ...update,
+        options: draft.options.map((o) => o.trim()),
+        correct_answer: draft.options[draft.correctIndex]?.trim() ?? "",
+        acceptable_answers: null,
+        model_answer: null,
+        rubric: null,
+      };
+    } else if (draft.type === "true_false") {
+      update = {
+        ...update,
+        options: ["true", "false"],
+        correct_answer: draft.correctValue ? "true" : "false",
+        acceptable_answers: null,
+        model_answer: null,
+        rubric: null,
+      };
+    } else if (draft.type === "short_answer") {
+      const answers = draft.acceptableAnswers.filter((a) => a.trim());
+      update = {
+        ...update,
+        options: [],
+        correct_answer: answers[0] ?? "",
+        acceptable_answers: answers,
+        requires_manual_grading: draft.requiresManualGrading,
+        model_answer: null,
+        rubric: null,
+      };
+    } else if (draft.type === "long_answer") {
+      update = {
+        ...update,
+        options: [],
+        correct_answer: draft.modelAnswer.trim(),
+        acceptable_answers: null,
+        model_answer: draft.modelAnswer.trim() || null,
+        rubric: draft.rubric.trim() || null,
+        requires_manual_grading: true,
+      };
+    }
+
+    const { error } = await supabase.from("questions").update(update as any).eq("id", id);
     if (error) { toast.error(error.message); return; }
-    setQuestions((prev) => prev.map((q) => q.id === id ? { ...q, ...update } : q));
+    setQuestions((prev) => prev.map((q) => q.id === id ? { ...q, ...(update as any) } : q));
     void logClientActivity({
       actionType: "updated",
       module: "questions",
@@ -269,9 +321,6 @@ function SubCategoryQuestionsPage() {
                 <TabsTrigger value="scan" className="gap-1.5 py-2.5 text-xs sm:text-sm rounded-lg">
                   <ScanLine className="h-4 w-4" /> {t("q.tabScan")}
                 </TabsTrigger>
-                <TabsTrigger value="upload" className="gap-1.5 py-2.5 text-xs sm:text-sm rounded-lg">
-                  <Upload className="h-4 w-4" /> {t("q.tabUpload")}
-                </TabsTrigger>
               </TabsList>
             </div>
             <div className="p-4">
@@ -286,11 +335,6 @@ function SubCategoryQuestionsPage() {
               <TabsContent value="scan" className="mt-0">
                 <Suspense fallback={<TabLoading />}>
                   <ScanTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "ocr")} />
-                </Suspense>
-              </TabsContent>
-              <TabsContent value="upload" className="mt-0">
-                <Suspense fallback={<TabLoading />}>
-                  <UploadTab disabled={saving} saving={saving} onSave={(d) => saveDrafts(d, "import")} />
                 </Suspense>
               </TabsContent>
             </div>
