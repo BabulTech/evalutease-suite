@@ -412,9 +412,17 @@ export function UsersSection() {
       )
       .maybeSingle();
     if (!plan) return;
-    await supabase
-      .from("user_subscriptions")
-      .upsert({ user_id: userId, plan_id: plan.id, status: "active" }, { onConflict: "user_id" });
+    await Promise.all([
+      supabase
+        .from("user_subscriptions")
+        .upsert({ user_id: userId, plan_id: plan.id, status: "active", expires_at: null }, { onConflict: "user_id" }),
+      // Keep profiles.selected_plan in sync so the client repair logic
+      // doesn't auto-downgrade the user back to free on next page load.
+      supabase
+        .from("profiles")
+        .update({ selected_plan: slug, updated_at: new Date().toISOString() })
+        .eq("id", userId),
+    ]);
     toast.success("Plan updated");
     void load();
   };

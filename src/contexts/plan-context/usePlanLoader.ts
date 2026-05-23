@@ -107,7 +107,11 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
           slug === "individual_starter" || slug === "enterprise_starter",
       );
       const current = (planRaw as { slug?: string } | null)?.slug ?? null;
-      if (wanted && wanted !== current) {
+      // Only repair if the user has no plan or is already on a free/starter plan.
+      // Never auto-downgrade a paid plan subscription via this path.
+      const paidSlugs = new Set(["individual_pro", "enterprise_pro", "enterprise_elite", "individual_pro_plus"]);
+      const currentIsPaid = current !== null && paidSlugs.has(current);
+      if (wanted && wanted !== current && !currentIsPaid) {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData.session?.access_token;
