@@ -10,10 +10,12 @@ import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
 import { logClientActivity } from "@/lib/audit";
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
 });
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 function ResetPasswordPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -30,11 +32,17 @@ function ResetPasswordPage() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (password.length < 6) { validationError("Min 6 characters"); return; }
+    if (password.length < 6) {
+      validationError("Min 6 characters");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     void logClientActivity({
       actionType: "password_reset_completed",
       module: "auth",
@@ -48,16 +56,22 @@ function ResetPasswordPage() {
 
   return (
     <AuthShell>
-      <h1 className="font-display text-3xl font-bold mb-6">{t("auth.reset")}</h1>
+      <h1 className="font-display text-3xl font-semibold mb-6">{t("auth.reset")}</h1>
       {!ready ? (
-        <p className="text-muted-foreground text-sm">Open this page from the email link to reset your password.</p>
+        <p className="text-muted-foreground text-sm">
+          Open this page from the email link to reset your password.
+        </p>
       ) : (
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <Label className="mb-1.5">New password</Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
-          <Button type="submit" disabled={loading} className="w-full h-12 bg-gradient-primary text-primary-foreground font-semibold shadow-glow">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 bg-gradient-primary text-primary-foreground font-semibold shadow-glow"
+          >
             {loading ? t("common.loading") : t("auth.reset")}
           </Button>
         </form>

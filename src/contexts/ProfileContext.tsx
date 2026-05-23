@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, use, useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -40,7 +40,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase
         .from("profiles")
         .select(
-          "id, full_name, avatar_url, logo_url, first_name, last_name, organization, mobile, country"
+          "id, full_name, avatar_url, logo_url, first_name, last_name, organization, mobile, country",
         )
         .eq("id", user.id)
         .maybeSingle();
@@ -52,7 +52,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Row may be null for newly-signed-up users before the trigger
-      // populates profiles. That's not an error — just leave profile null.
+      // populates profiles. That's not an error, just leave profile null.
       setProfile((data as UserProfile | null) ?? null);
     } catch (err) {
       console.error("Profile fetch error:", err);
@@ -70,15 +70,17 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     await fetchProfile();
   }, [fetchProfile]);
 
-  return (
-    <ProfileContext.Provider value={{ profile, loading, refetchProfile }}>
-      {children}
-    </ProfileContext.Provider>
+  const ctxValue = useMemo(
+    () => ({ profile, loading, refetchProfile }),
+    [profile, loading, refetchProfile],
   );
+
+  return <ProfileContext.Provider value={ctxValue}>{children}</ProfileContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- standard context+hook co-location
 export function useProfile() {
-  const context = useContext(ProfileContext);
+  const context = use(ProfileContext);
   if (context === undefined) {
     throw new Error("useProfile must be used within a ProfileProvider");
   }

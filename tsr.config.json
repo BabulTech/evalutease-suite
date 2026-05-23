@@ -1,0 +1,3 @@
+{
+  "routeFileIgnorePattern": "^[A-Z]|^(types|helpers|constants|printAll|use[A-Z]|nav|shared|components)"
+}

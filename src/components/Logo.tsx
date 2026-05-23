@@ -1,8 +1,15 @@
 import { useI18n } from "@/lib/i18n";
 
-export function Logo({ size = "md", customLogoUrl }: { size?: "sm" | "md" | "lg"; customLogoUrl?: string | null }) {
+export function Logo({
+  size = "md",
+  customLogoUrl,
+}: {
+  size?: "sm" | "md" | "lg";
+  customLogoUrl?: string | null;
+}) {
   const { t } = useI18n();
-  const dim = size === "lg" ? "h-14 w-14 text-xl" : size === "sm" ? "h-9 w-9 text-sm" : "h-11 w-11 text-base";
+  const dim =
+    size === "lg" ? "size-14 text-xl" : size === "sm" ? "size-9 text-sm" : "size-11 text-base";
 
   if (customLogoUrl) {
     return (
@@ -28,7 +35,9 @@ export function Logo({ size = "md", customLogoUrl }: { size?: "sm" | "md" | "lg"
 
   return (
     <div className="flex items-center gap-3">
-      <div className={`${dim} rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center font-display font-bold text-primary shadow-glow`}>
+      <div
+        className={`${dim} rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center font-display font-bold text-primary shadow-glow`}
+      >
         BQ
       </div>
       {size !== "sm" && (

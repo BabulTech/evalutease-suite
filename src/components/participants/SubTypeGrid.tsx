@@ -1,23 +1,8 @@
+/* eslint-disable sonarjs/cognitive-complexity -- grid card renders have many conditional branches by design */
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, MoreHorizontal, Pencil, Trash2, UsersRound } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { SubTypeDialog, type SubTypeDraft } from "./SubTypeDialog";
+import { ArrowRight, UsersRound } from "lucide-react";
+import type { SubTypeDraft } from "./SubTypeDialog";
+import { SubTypeRowMenu } from "./sub-type-grid/SubTypeRowMenu";
 import type { ReactNode } from "react";
 
 export type SubTypeCard = {
@@ -59,13 +44,15 @@ export function SubTypeGrid({ subtypes, onEdit, onDelete, emptyState }: Props) {
               className="block p-5 pr-10"
             >
               <div className="flex items-start gap-3">
-                <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                  <UsersRound className="h-5 w-5" />
+                <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                  <UsersRound className="size-5" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-display text-base font-semibold truncate">{s.name}</div>
                   {s.description && (
-                    <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{s.description}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                      {s.description}
+                    </div>
                   )}
                 </div>
               </div>
@@ -76,16 +63,29 @@ export function SubTypeGrid({ subtypes, onEdit, onDelete, emptyState }: Props) {
                     {s.participantCount} {s.participantCount === 1 ? "participant" : "participants"}
                   </span>
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary group-hover:gap-2 transition-all">
-                    Open <ArrowRight className="h-3.5 w-3.5" />
+                    Open <ArrowRight className="size-3.5" />
                   </span>
                 </div>
                 <div className="h-1 rounded-full bg-muted/40 overflow-hidden">
                   <div
                     className={`h-full rounded-full bg-primary/50 transition-all ${
-                      fillPct <= 10 ? "w-[10%]" : fillPct <= 20 ? "w-1/5"
-                      : fillPct <= 25 ? "w-1/4" : fillPct <= 33 ? "w-1/3"
-                      : fillPct <= 50 ? "w-1/2" : fillPct <= 66 ? "w-2/3"
-                      : fillPct <= 75 ? "w-3/4" : fillPct <= 90 ? "w-[90%]" : "w-full"
+                      fillPct <= 10
+                        ? "w-[10%]"
+                        : fillPct <= 20
+                          ? "w-1/5"
+                          : fillPct <= 25
+                            ? "w-1/4"
+                            : fillPct <= 33
+                              ? "w-1/3"
+                              : fillPct <= 50
+                                ? "w-1/2"
+                                : fillPct <= 66
+                                  ? "w-2/3"
+                                  : fillPct <= 75
+                                    ? "w-3/4"
+                                    : fillPct <= 90
+                                      ? "w-[90%]"
+                                      : "w-full"
                     }`}
                   />
                 </div>
@@ -95,69 +95,5 @@ export function SubTypeGrid({ subtypes, onEdit, onDelete, emptyState }: Props) {
         );
       })}
     </div>
-  );
-}
-
-function SubTypeRowMenu({
-  sub,
-  onEdit,
-  onDelete,
-}: {
-  sub: SubTypeCard;
-  onEdit: (id: string, draft: SubTypeDraft) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-          aria-label="Open menu"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <SubTypeDialog
-          title="Edit group"
-          submitLabel="Save changes"
-          initial={{ name: sub.name, description: sub.description ?? "" }}
-          onSubmit={(draft) => onEdit(sub.id, draft)}
-          trigger={
-            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2">
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </DropdownMenuItem>
-          }
-        />
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <DropdownMenuItem
-              onSelect={(e) => e.preventDefault()}
-              className="gap-2 text-destructive focus:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" /> Delete
-            </DropdownMenuItem>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete "{sub.name}"?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Participants in this group are kept but lose this assignment.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => void onDelete(sub.id)}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }

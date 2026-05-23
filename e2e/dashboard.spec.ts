@@ -1,60 +1,68 @@
 /**
- * Teacher dashboard flows.
+ * Teacher dashboard — navigation, widgets, sidebar, quick actions.
  *
- * Requires a logged-in teacher account:
- *   BASE_URL=https://evalutease-suite.vercel.app
- *   TEST_EMAIL=teacher@example.com
- *   TEST_PASSWORD=password
+ * Uses pre-authenticated storage state (set TEST_EMAIL + TEST_PASSWORD).
  */
-import { test, expect, Page } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
-const email    = process.env.TEST_EMAIL    || "";
-const password = process.env.TEST_PASSWORD || "";
-
-async function loginAsTeacher(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(password);
-  await page.getByRole("button", { name: "Log in" }).click();
-  await page.waitForURL(/dashboard/, { timeout: 12000 });
-}
-
-test.describe("Teacher dashboard", () => {
-  test.beforeEach(async ({ page }) => {
-    test.skip(!email, "TEST_EMAIL not set — skipping teacher dashboard tests");
-    await loginAsTeacher(page);
+test.describe("Dashboard", () => {
+  test("loads with key widgets", async ({ authedPage: page }) => {
+    await page.goto("/dashboard");
+    await expect(page.getByText(/session|quiz|question/i).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("dashboard loads with sessions list", async ({ page }) => {
-    await expect(page.getByText(/session|quiz/i)).toBeVisible({ timeout: 8000 });
+  test("sidebar navigation links are present", async ({ authedPage: page }) => {
+    await page.goto("/dashboard");
+    const links = ["Sessions", "Categories", "Participants", "History", "Settings"];
+    for (const name of links) {
+      await expect(
+        page.getByRole("link", { name: new RegExp(name, "i") }).first()
+      ).toBeVisible({ timeout: 6000 });
+    }
   });
 
-  test("navigate to Sessions page", async ({ page }) => {
-    await page.getByRole("link", { name: /sessions/i }).click();
+  test("Sessions page loads via sidebar", async ({ authedPage: page }) => {
+    await page.goto("/dashboard");
+    await page.getByRole("link", { name: /sessions/i }).first().click();
     await expect(page).toHaveURL(/sessions/);
-    await expect(page.getByRole("heading", { name: /sessions/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /sessions/i })).toBeVisible({ timeout: 8000 });
   });
 
-  test("create new session button is visible", async ({ page }) => {
-    await page.goto("/sessions");
-    await expect(
-      page.getByRole("button", { name: /new session|create session|add session/i })
-        .or(page.getByRole("link", { name: /new session|create/i }))
-    ).toBeVisible({ timeout: 8000 });
+  test("Categories page loads", async ({ authedPage: page }) => {
+    await page.goto("/categories");
+    await expect(page.getByText(/categor/i).first()).toBeVisible({ timeout: 8000 });
   });
 
-  test("quiz history page loads", async ({ page }) => {
+  test("Participants page loads", async ({ authedPage: page }) => {
+    await page.goto("/participant-types");
+    await expect(page.getByText(/participant|type/i).first()).toBeVisible({ timeout: 8000 });
+  });
+
+  test("Quiz history page loads", async ({ authedPage: page }) => {
     await page.goto("/quiz-history");
-    await expect(page.getByText(/history|past|attempt/i)).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/history|attempt|session/i).first()).toBeVisible({ timeout: 8000 });
   });
 
-  test("reports page loads", async ({ page }) => {
+  test("Reports page loads", async ({ authedPage: page }) => {
     await page.goto("/reports");
-    await expect(page.getByText(/report|analytic|score/i)).toBeVisible({ timeout: 8000 });
+    await expect(page.getByText(/report|analytic|score/i).first()).toBeVisible({ timeout: 8000 });
   });
 
-  test("settings page loads", async ({ page }) => {
-    await page.goto("/settings");
-    await expect(page.getByText(/setting|profile|account/i)).toBeVisible({ timeout: 8000 });
+  test("notification bell is visible", async ({ authedPage: page }) => {
+    await page.goto("/dashboard");
+    await expect(
+      page.locator('[data-testid="notification-bell"]').or(page.getByLabel(/notification/i))
+    ).toBeVisible({ timeout: 6000 });
+  });
+
+  test("New Session button navigates to session creator", async ({ authedPage: page }) => {
+    await page.goto("/sessions");
+    const btn = page
+      .getByRole("button", { name: /new session|create/i })
+      .or(page.getByRole("link", { name: /new session|create/i }))
+      .first();
+    await expect(btn).toBeVisible({ timeout: 8000 });
+    await btn.click();
+    await expect(page).toHaveURL(/sessions.*new|new.*session/, { timeout: 8000 });
   });
 });

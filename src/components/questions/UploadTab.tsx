@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,8 @@ import {
 import { DraftReview } from "./DraftReview";
 import { parseStructuredQuestions } from "./parser";
 import { type DraftQuestion, type Difficulty } from "./types";
+import { TextFileDropZone } from "./upload-tab/TextFileDropZone";
 
-const ACCEPTED = ".txt,.md,.csv,text/plain";
 const MAX_BYTES = 1024 * 1024;
 
 type Props = {
@@ -76,26 +76,7 @@ Q: ...`}</pre>
         Each question becomes an editable draft you can review before saving.
       </div>
 
-      <div
-        className="rounded-2xl border-2 border-dashed border-border hover:border-primary/40 bg-card/30 p-8 text-center transition-colors cursor-pointer"
-        onClick={() => fileRef.current?.click()}
-        role="button"
-      >
-        <FileText className="mx-auto h-10 w-10 text-muted-foreground/60" />
-        <div className="mt-3 text-sm font-medium">
-          {filename ? `Loaded: ${filename}` : "Click to choose a text file"}
-        </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          {filename ? "Click to replace, or edit the content below." : "Up to 1 MB"}
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept={ACCEPTED}
-          className="hidden"
-          onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-        />
-      </div>
+      <TextFileDropZone filename={filename} fileRef={fileRef} onFile={handleFile} />
 
       <div className="space-y-2">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -133,7 +114,7 @@ Q: ...`}</pre>
             onClick={() => fileRef.current?.click()}
             className="gap-2"
           >
-            <Upload className="h-4 w-4" /> File
+            <Upload className="size-4" /> File
           </Button>
           <Button
             type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -12,7 +12,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { PARTICIPANT_TYPE_ICONS, type IconKey } from "@/components/categories/icons";
+import type { IconKey } from "@/components/categories/icons";
+import { IconPicker } from "./type-dialog/IconPicker";
 
 export type TypeDraft = { name: string; icon: IconKey };
 
@@ -30,12 +31,13 @@ export function TypeDialog({ trigger, initial, title, submitLabel = "Save", onSu
   const [icon, setIcon] = useState<IconKey>(initial?.icon ?? "person");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (open) {
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
       setName(initial?.name ?? "");
       setIcon(initial?.icon ?? "person");
     }
-  }, [open, initial]);
+    setOpen(next);
+  };
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -59,7 +61,7 @@ export function TypeDialog({ trigger, initial, title, submitLabel = "Save", onSu
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -73,7 +75,6 @@ export function TypeDialog({ trigger, initial, title, submitLabel = "Save", onSu
           <div>
             <Label className="mb-1.5">Name</Label>
             <Input
-              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Student, Teacher, Colleague, Partner"
@@ -82,27 +83,7 @@ export function TypeDialog({ trigger, initial, title, submitLabel = "Save", onSu
           </div>
           <div>
             <Label className="mb-1.5">Icon</Label>
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-              {PARTICIPANT_TYPE_ICONS.map((ic) => {
-                const Icon = ic.icon;
-                const active = icon === ic.key;
-                return (
-                  <button
-                    key={ic.key}
-                    type="button"
-                    onClick={() => setIcon(ic.key)}
-                    title={ic.label}
-                    className={`aspect-square rounded-xl border flex items-center justify-center transition-all ${
-                      active
-                        ? "border-primary/60 bg-primary/15 shadow-glow text-primary"
-                        : "border-border bg-card/40 hover:border-primary/30 text-muted-foreground"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </button>
-                );
-              })}
-            </div>
+            <IconPicker value={icon} onChange={setIcon} />
           </div>
         </div>
 

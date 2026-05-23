@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -38,12 +38,13 @@ export function SubTypeDialog({
   const [desc, setDesc] = useState(initial?.description ?? "");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (open) {
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
       setName(initial?.name ?? "");
       setDesc(initial?.description ?? "");
     }
-  }, [open, initial]);
+    setOpen(next);
+  };
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -67,7 +68,7 @@ export function SubTypeDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -79,7 +80,6 @@ export function SubTypeDialog({
           <div>
             <Label className="mb-1.5">Name</Label>
             <Input
-              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Class 9, Engineering, Section A"

@@ -1,447 +1,73 @@
 import { createFileRoute } from "@tanstack/react-router";
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ArrowDownAZ,
-  BarChart3,
-  CalendarRange,
-  ChevronDown,
-  ChevronRight,
-  Download,
-  FileText,
-  Filter,
-  Flame,
-  ListFilter,
-  Loader2,
-  RotateCcw,
-  Search,
-  Target,
-  Timer,
-  Trophy,
-  UserRound,
-  Users,
-} from "lucide-react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { lazy, Suspense } from "react";
+import { BarChart3, Download, FileText, Filter, RotateCcw, Trophy } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { usePlan } from "@/contexts/PlanContext";
 import { useI18n } from "@/lib/i18n";
+import { downloadQuizReportCsv } from "@/lib/quiz-reports";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  downloadQuizReportCsv,
-  formatDuration,
-  getQuizReportRows,
-  type QuizReportAttempt,
-  type QuizReportRow,
-} from "@/lib/quiz-reports";
-import { PaginationControls } from "@/components/PaginationControls";
-import { paginate } from "@/lib/pagination";
+import { useReportsData } from "./reports/useReportsData";
+import { FilterSidebar } from "./reports/FilterSidebar";
+import { AttemptsTable } from "./reports/AttemptsTable";
+import { StudentReportsView } from "./reports/StudentReportsView";
+import { SectionLabel } from "./reports/ReportUi";
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/_app/reports")({ component: ReportsPage });
 
-const REPORT_PAGE_SIZE = 25;
+// react-doctor-disable-next-line react-doctor/only-export-components
 const LazyQuizReportVisualization = lazy(
   () => import("@/components/reports/QuizReportVisualization"),
 );
 
-type SessionRow = {
-  id: string;
-  title: string;
-  created_at: string;
-  category_id: string | null;
-  subcategory_id: string | null;
-  subject: string | null;
-  topic: string | null;
-  description: string | null;
-};
-
-type AttemptRow = {
-  id: string;
-  participant_name: string | null;
-  participant_email: string | null;
-  score: number;
-  total_questions: number;
-  completed: boolean;
-  started_at: string | null;
-  completed_at: string | null;
-  participants: { metadata: unknown } | null;
-};
-
-type ReportSession = SessionRow & {
-  categoryName: string;
-  subcategoryName: string;
-};
-
-type ProfileRow = {
-  full_name: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  organization: string | null;
-};
-
-type ReportMode = "quiz" | "student";
-type StudentMode = "attempts" | "students";
-type DateRange = "all" | "7d" | "30d" | "90d";
-type StatusFilter = "all" | "completed" | "pending";
-type SortOption = "rank" | "percentDesc" | "percentAsc" | "name" | "fastest" | "recent";
-
-const DATE_RANGE_KEYS: Record<DateRange, string> = {
-  all: "rep.allTime",
-  "7d": "rep.last7d",
-  "30d": "rep.last30d",
-  "90d": "rep.last90d",
-};
-
-const SORT_KEYS: Record<SortOption, string> = {
-  rank: "rep.positionBestFirst",
-  percentDesc: "rep.scoreHighLow",
-  percentAsc: "rep.scoreLowHigh",
-  name: "rep.nameAZ",
-  fastest: "rep.fastest",
-  recent: "rep.mostRecent",
-};
-
+// react-doctor-disable-next-line react-doctor/only-export-components
 function ReportsPage() {
   const { user } = useAuth();
   const { plan, credits, reload: reloadPlan } = usePlan();
   const { t } = useI18n();
-  const [sessions, setSessions] = useState<ReportSession[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<ProfileRow | null>(null);
 
-  const [reportMode, setReportMode] = useState<ReportMode>("quiz");
-  const [studentMode, setStudentMode] = useState<StudentMode>("attempts");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  const [query, setQuery] = useState("");
-  const [studentQuery, setStudentQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [dateRange, setDateRange] = useState<DateRange>("all");
-  const [subjectFilter, setSubjectFilter] = useState<string>("all");
-  const [passMark, setPassMark] = useState<number>(50);
-  const [sort, setSort] = useState<SortOption>("rank");
-  const [quizListPage, setQuizListPage] = useState(0);
-  const [sessionTotal, setSessionTotal] = useState(0);
-  const [selectedAttempts, setSelectedAttempts] = useState<QuizReportAttempt[]>([]);
-  const [attemptsLoading, setAttemptsLoading] = useState(false);
-  const [studentAttempts, setStudentAttempts] = useState<Record<string, QuizReportAttempt[]>>({});
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    const offset = quizListPage * REPORT_PAGE_SIZE;
-    let q = supabase
-      .from("quiz_sessions")
-      .select("id, title, created_at, category_id, subcategory_id, subject, topic, description", { count: "exact" })
-      .eq("owner_id", user.id)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false })
-      .range(offset, offset + REPORT_PAGE_SIZE - 1);
-    if (query.trim()) q = q.ilike("title", `%${query.trim()}%`);
-    if (dateRange !== "all") {
-      const days = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90;
-      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-      q = q.gte("created_at", cutoff);
-    }
-    const { data, error, count } = await q;
-    if (error) {
-      setLoading(false);
-      toast.error(error.message);
-      return;
-    }
-
-    const rows = (data ?? []) as SessionRow[];
-    setSessionTotal(count ?? 0);
-    if (rows.length === 0) {
-      setSessions([]);
-      setSelectedId(null);
-      setLoading(false);
-      return;
-    }
-
-    const subIds = Array.from(new Set(rows.map((r) => r.subcategory_id).filter(Boolean))) as string[];
-    const catIds = Array.from(new Set(rows.map((r) => r.category_id).filter(Boolean))) as string[];
-
-    const [subRes, catRes, profileRes] = await Promise.all([
-      subIds.length
-        ? supabase.from("question_subcategories").select("id, name").in("id", subIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
-      catIds.length
-        ? supabase.from("question_categories").select("id, name").in("id", catIds)
-        : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
-      supabase
-        .from("profiles")
-        .select("full_name, first_name, last_name, organization")
-        .eq("id", user.id)
-        .maybeSingle(),
-    ]);
-
-    setLoading(false);
-    if (profileRes.data) setProfile(profileRes.data as ProfileRow);
-
-    const subNames = new Map((subRes.data ?? []).map((s) => [s.id, s.name]));
-    const catNames = new Map((catRes.data ?? []).map((c) => [c.id, c.name]));
-
-    const next = rows.map((row) => ({
-      ...row,
-      categoryName: row.category_id ? catNames.get(row.category_id) ?? "" : "",
-      subcategoryName: row.subcategory_id ? subNames.get(row.subcategory_id) ?? "" : "",
-    }));
-    setSessions(next);
-    setSelectedId((current) => current ?? next[0]?.id ?? null);
-  }, [user, quizListPage, query, dateRange]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const subjectOptions = useMemo(() => {
-    const set = new Map<string, string>();
-    for (const s of sessions) {
-      const label = subjectLabel(s);
-      if (label && label !== "Not specified") set.set(label, label);
-    }
-    return Array.from(set.values()).sort((a, b) => a.localeCompare(b));
-  }, [sessions]);
-
-  // title + dateRange are filtered server-side in load(); only subjectFilter is client-side here
-  const filteredSessions = useMemo(() => {
-    if (subjectFilter === "all") return sessions;
-    return sessions.filter((s) => subjectLabel(s) === subjectFilter);
-  }, [sessions, subjectFilter]);
-
-  // sessions is already the current server-side page - no further slicing needed
-  const visibleSessions = filteredSessions;
-
-  useEffect(() => {
-    setQuizListPage(0);
-  }, [query, dateRange, subjectFilter, reportMode]);
-
-  const selected = useMemo(() => {
-    if (!selectedId) return filteredSessions[0] ?? null;
-    return (
-      filteredSessions.find((s) => s.id === selectedId) ??
-      sessions.find((s) => s.id === selectedId) ??
-      filteredSessions[0] ??
-      null
-    );
-  }, [selectedId, filteredSessions, sessions]);
-
-  useEffect(() => {
-    const loadSelectedAttempts = async () => {
-      if (!selectedId) {
-        setSelectedAttempts([]);
-        return;
-      }
-      setAttemptsLoading(true);
-      const [attemptsRes, maxPtsRes] = await Promise.all([
-        supabase
-          .from("quiz_attempts")
-          .select(
-            "id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, participants ( metadata )",
-          )
-          .eq("session_id", selectedId)
-          .order("score", { ascending: false }),
-        supabase
-          .from("quiz_session_questions")
-          .select("questions(max_points)")
-          .eq("session_id", selectedId),
-      ]);
-      if (attemptsRes.error) {
-        setAttemptsLoading(false);
-        toast.error(attemptsRes.error.message);
-        setSelectedAttempts([]);
-        return;
-      }
-      const totalMaxPoints = maxPtsRes.data
-        ? maxPtsRes.data.reduce(
-            (sum, r) => sum + ((r.questions as { max_points?: number } | null)?.max_points ?? 1),
-            0,
-          )
-        : null;
-
-      // Recompute live scores from quiz_answers (self-heals stale quiz_attempts.score)
-      const attemptIds = (attemptsRes.data ?? []).map((a) => a.id);
-      let liveScores: Record<string, number> = {};
-      if (attemptIds.length > 0) {
-        const { data: ansData } = await (supabase as any)
-          .from("quiz_answers")
-          .select("attempt_id, points_awarded")
-          .in("attempt_id", attemptIds);
-        for (const r of (ansData ?? []) as { attempt_id: string; points_awarded: number | null }[]) {
-          liveScores[r.attempt_id] = (liveScores[r.attempt_id] ?? 0) + (r.points_awarded ?? 0);
-        }
-      }
-      setAttemptsLoading(false);
-      setSelectedAttempts(
-        ((attemptsRes.data ?? []) as AttemptRow[]).map((a) =>
-          toReportAttempt({ ...a, score: liveScores[a.id] ?? a.score }, totalMaxPoints),
-        ),
-      );
-    };
-    void loadSelectedAttempts();
-  }, [selectedId]);
-
-  const baseRows: QuizReportRow[] = useMemo(
-    () => getQuizReportRows(selectedAttempts),
-    [selectedAttempts],
-  );
-
-  const filteredRows = useMemo(() => {
-    const q = studentQuery.trim().toLowerCase();
-    const filtered = baseRows.filter((row) => {
-      const statusOk =
-        statusFilter === "all" ||
-        (statusFilter === "completed" ? row.completed : !row.completed);
-      if (!statusOk) return false;
-      if (!q) return true;
-      return [row.name, row.email, row.rollNumber, row.seatNumber]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    });
-    return sortRows(filtered, sort);
-  }, [baseRows, statusFilter, studentQuery, sort]);
-
-  const studentAttemptRows = useMemo(() => {
-    const q = studentQuery.trim().toLowerCase();
-    const all = filteredSessions.flatMap((session) =>
-      getQuizReportRows(studentAttempts[session.id] ?? []).map((row) => ({
-        ...row,
-        sessionId: session.id,
-        sessionTitle: session.title,
-        sessionCategory: categoryLabel(session),
-        sessionCreatedAt: session.created_at,
-      })),
-    );
-    const filtered = all.filter((row) => {
-      const statusOk =
-        statusFilter === "all" ||
-        (statusFilter === "completed" ? row.completed : !row.completed);
-      if (!statusOk) return false;
-      if (!q) return true;
-      return [
-        row.name,
-        row.email,
-        row.rollNumber,
-        row.seatNumber,
-        row.sessionTitle,
-        row.sessionCategory,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
-    });
-    return sortRows(filtered, sort);
-  }, [filteredSessions, studentAttempts, statusFilter, studentQuery, sort]);
-
-  useEffect(() => {
-    const loadStudentModeAttempts = async () => {
-      if (reportMode !== "student") return;
-      const sessionIds = filteredSessions.map((session) => session.id);
-      if (sessionIds.length === 0) {
-        setStudentAttempts({});
-        return;
-      }
-      const { data, error } = await supabase
-        .from("quiz_attempts")
-        .select(
-          "id, session_id, participant_name, participant_email, score, total_questions, completed, started_at, completed_at, participants ( metadata )",
-        )
-        .in("session_id", sessionIds);
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      // Fetch total max points per session
-      const maxPtsRes = await supabase
-        .from("quiz_session_questions")
-        .select("session_id, questions(max_points)")
-        .in("session_id", sessionIds);
-      const sessionMaxPts: Record<string, number> = {};
-      for (const r of maxPtsRes.data ?? []) {
-        const sid = r.session_id as string;
-        sessionMaxPts[sid] = (sessionMaxPts[sid] ?? 0) + ((r.questions as { max_points?: number } | null)?.max_points ?? 1);
-      }
-      // Recompute live scores from quiz_answers
-      const attemptIds = (data ?? []).map((a) => a.id);
-      const liveScores: Record<string, number> = {};
-      if (attemptIds.length > 0) {
-        const { data: ansData } = await (supabase as any)
-          .from("quiz_answers")
-          .select("attempt_id, points_awarded")
-          .in("attempt_id", attemptIds);
-        for (const r of (ansData ?? []) as { attempt_id: string; points_awarded: number | null }[]) {
-          liveScores[r.attempt_id] = (liveScores[r.attempt_id] ?? 0) + (r.points_awarded ?? 0);
-        }
-      }
-      const grouped: Record<string, QuizReportAttempt[]> = {};
-      for (const sessionId of sessionIds) grouped[sessionId] = [];
-      for (const attempt of (data ?? []) as (AttemptRow & { session_id: string })[]) {
-        grouped[attempt.session_id].push(
-          toReportAttempt(
-            { ...attempt, score: liveScores[attempt.id] ?? attempt.score },
-            sessionMaxPts[attempt.session_id] ?? null,
-          ),
-        );
-      }
-      setStudentAttempts(grouped);
-    };
-    void loadStudentModeAttempts();
-  }, [reportMode, filteredSessions]);
-
-  const studentSummaryRows = useMemo(
-    () => aggregateByStudent(studentAttemptRows),
-    [studentAttemptRows],
-  );
-
-  const stats = useMemo(() => computeQuizStats(filteredRows, passMark), [filteredRows, passMark]);
-
-  const teacherName = getTeacherName(profile, user?.email);
-  const schoolName = profile?.organization ?? "";
-
-  const resetFilters = () => {
-    setQuery("");
-    setStudentQuery("");
-    setStatusFilter("all");
-    setDateRange("all");
-    setSubjectFilter("all");
-    setPassMark(50);
-    setSort("rank");
-  };
-
-  const filterSummary = buildFilterSummary({
-    dateRange,
-    subjectFilter,
-    statusFilter,
-    passMark,
+  const {
+    sessions,
+    loading,
+    reportMode,
+    setReportMode,
+    studentMode,
+    setStudentMode,
+    selectedId,
+    setSelectedId,
+    selected,
+    query,
+    setQuery,
     studentQuery,
+    setStudentQuery,
+    statusFilter,
+    setStatusFilter,
+    dateRange,
+    setDateRange,
+    subjectFilter,
+    setSubjectFilter,
+    subjectOptions,
+    passMark,
+    setPassMark,
     sort,
-  });
-
-  const deductExportCredit = async (): Promise<boolean> => {
-    const cost = plan?.credit_cost_export ?? 0;
-    if (!cost || !user) return true;
-    if (credits.balance < cost) {
-      toast.error(`Need ${cost} credits to export. You have ${credits.balance}. Buy more in Billing.`);
-      return false;
-    }
-    const { data: ok } = await supabase.rpc("deduct_credits", {
-      p_user_id: user.id, p_amount: cost, p_type: "extra_quiz",
-      p_description: `Report export: ${selected?.title ?? ""}`,
-    });
-    if (ok) reloadPlan();
-    return !!ok;
-  };
+    setSort,
+    quizListPage,
+    setQuizListPage,
+    sessionTotal,
+    attemptsLoading,
+    filteredSessions,
+    filteredRows,
+    baseRows,
+    studentAttemptRows,
+    studentSummaryRows,
+    stats,
+    teacherName,
+    schoolName,
+    resetFilters,
+    filterSummary,
+    deductExportCredit,
+    selectedAttempts,
+  } = useReportsData(user, plan, credits, reloadPlan);
 
   const exportCsv = async () => {
     if (!selected) return;
@@ -449,10 +75,15 @@ function ReportsPage() {
     downloadQuizReportCsv(
       {
         title: selected.title,
-        categoryLabel: categoryLabel(selected),
+        categoryLabel: [selected.categoryName, selected.subcategoryName]
+          .filter(Boolean)
+          .join(" → "),
         teacherName,
         schoolName,
-        subjectLabel: subjectLabel(selected),
+        subjectLabel:
+          selected.subject ||
+          [selected.categoryName, selected.subcategoryName].filter(Boolean).join(" -> ") ||
+          "Not specified",
         topicLabel: selected.topic ?? "",
         createdAt: selected.created_at,
         questionCount: selectedAttempts[0]?.totalQuestions ?? 0,
@@ -467,24 +98,34 @@ function ReportsPage() {
       {/* Hero header */}
       <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4 print:hidden">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
-            <BarChart3 className="h-6 w-6" />
+          <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <BarChart3 className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight">{t("rep.title")}</h1>
+            <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight">
+              {t("rep.title")}
+            </h1>
             <p className="text-sm text-muted-foreground mt-0.5">{t("rep.desc")}</p>
           </div>
         </div>
         {selected && reportMode === "quiz" && (
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" onClick={async () => { if (await deductExportCredit()) window.print(); }} className="gap-1.5 h-10">
-              <FileText className="h-4 w-4" /> PDF{plan?.credit_cost_export ? ` (${plan.credit_cost_export} cr)` : ""}
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (await deductExportCredit()) window.print();
+              }}
+              className="gap-1.5 h-10"
+            >
+              <FileText className="size-4" /> PDF
+              {plan?.credit_cost_export ? ` (${plan.credit_cost_export} cr)` : ""}
             </Button>
             <Button
               onClick={() => void exportCsv()}
               className="gap-1.5 h-10 bg-gradient-primary text-primary-foreground shadow-glow"
             >
-              <Download className="h-4 w-4" /> Excel ({filteredRows.length}){plan?.credit_cost_export ? ` · ${plan.credit_cost_export} cr` : ""}
+              <Download className="size-4" /> Excel ({filteredRows.length})
+              {plan?.credit_cost_export ? ` · ${plan.credit_cost_export} cr` : ""}
             </Button>
           </div>
         )}
@@ -496,241 +137,40 @@ function ReportsPage() {
         </div>
       ) : sessions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-          <Trophy className="mx-auto h-10 w-10 text-muted-foreground/60" />
+          <Trophy className="mx-auto size-10 text-muted-foreground/60" />
           <p className="mt-3 text-sm font-medium">{t("rep.empty")}</p>
           <p className="mt-1 text-xs text-muted-foreground">{t("rep.emptyHint")}</p>
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-[320px_1fr] min-w-0">
-          <aside className="space-y-3 print:hidden min-w-0">
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={reportMode === "quiz" ? "default" : "outline"}
-                onClick={() => setReportMode("quiz")}
-                className={
-                  reportMode === "quiz"
-                    ? "bg-gradient-primary text-primary-foreground shadow-glow"
-                    : ""
-                }
-              >
-                <BarChart3 className="mr-1.5 h-4 w-4" /> {t("rep.quiz")}
-              </Button>
-              <Button
-                type="button"
-                variant={reportMode === "student" ? "default" : "outline"}
-                onClick={() => setReportMode("student")}
-                className={
-                  reportMode === "student"
-                    ? "bg-gradient-primary text-primary-foreground shadow-glow"
-                    : ""
-                }
-              >
-                <UserRound className="mr-1.5 h-4 w-4" /> {t("rep.student")}
-              </Button>
-            </div>
-
-            <div className="rounded-2xl border border-border bg-card/40 p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Filter className="h-3.5 w-3.5" /> {t("rep.filters")}
-                </div>
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="text-[11px] inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-                >
-                  <RotateCcw className="h-3 w-3" /> {t("rep.reset")}
-                </button>
-              </div>
-
-              <FilterField icon={Search} label={t("rep.searchQuizzes")} hint={t("rep.searchQuizzesHint")}>
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={t("rep.searchQuizzesPlaceholder")}
-                  className="h-9"
-                />
-              </FilterField>
-
-              <FilterField icon={CalendarRange} label={t("rep.dateRange")} hint={t("rep.dateRangeHint")}>
-                <div className="flex flex-wrap gap-1.5">
-                  {(Object.keys(DATE_RANGE_KEYS) as DateRange[]).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setDateRange(value)}
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium min-h-[28px] transition-colors ${
-                        dateRange === value
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                      }`}
-                    >
-                      {t(DATE_RANGE_KEYS[value])}
-                    </button>
-                  ))}
-                </div>
-              </FilterField>
-
-              <FilterField icon={ListFilter} label={t("rep.subjectFilter")} hint={t("rep.subjectHint")}>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["all", ...subjectOptions.slice(0, 6)] as string[]).map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setSubjectFilter(opt)}
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium min-h-[28px] transition-colors max-w-[120px] truncate ${
-                        subjectFilter === opt
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                      }`}
-                    >
-                      {opt === "all" ? t("rep.allSubjects") : opt}
-                    </button>
-                  ))}
-                  {subjectOptions.length > 6 && (
-                    <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-                      <SelectTrigger className="h-7 w-auto px-2 text-xs rounded-full border-dashed">
-                        <SelectValue placeholder="More…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjectOptions.slice(6).map((opt) => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-              </FilterField>
-
-              <FilterField icon={Target} label={`${t("rep.passMark")} - ${passMark}%`} hint={t("rep.passMarkHint")}>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range" min={0} max={100} step={5} value={passMark}
-                    aria-label={`${t("rep.passMark")} ${passMark}%`}
-                    title={`${t("rep.passMark")} ${passMark}%`}
-                    onChange={(e) => setPassMark(Number(e.target.value))}
-                    className="flex-1 accent-primary"
-                  />
-                  <span className="text-xs font-bold text-primary w-9 text-right">{passMark}%</span>
-                </div>
-              </FilterField>
-
-              <FilterField icon={Search} label={reportMode === "quiz" ? t("rep.findParticipant") : t("rep.searchStudent")} hint={reportMode === "quiz" ? t("rep.findParticipantHint") : t("rep.searchStudentHint")}>
-                <Input
-                  value={studentQuery}
-                  onChange={(e) => setStudentQuery(e.target.value)}
-                  placeholder={reportMode === "quiz" ? t("rep.findParticipantPlaceholder") : t("rep.searchStudentPlaceholder")}
-                  className="h-9"
-                />
-              </FilterField>
-
-              <FilterField icon={Flame} label={t("rep.submissionStatus")} hint={t("rep.submissionStatusHint")}>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {([
-                    { val: "all", key: "rep.all" },
-                    { val: "completed", key: "rep.submittedStatus" },
-                    { val: "pending", key: "rep.leftEarly" },
-                  ] as const).map(({ val, key }) => (
-                    <Button key={val} type="button" size="sm"
-                      variant={statusFilter === val ? "default" : "outline"}
-                      onClick={() => setStatusFilter(val)}
-                      className={statusFilter === val ? "bg-primary text-primary-foreground text-xs" : "text-xs"}>
-                      {t(key)}
-                    </Button>
-                  ))}
-                </div>
-              </FilterField>
-
-              <FilterField icon={ArrowDownAZ} label={t("rep.sortBy")} hint={t("rep.sortByHint")}>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(Object.keys(SORT_KEYS) as SortOption[]).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setSort(value)}
-                      className={`inline-flex items-center justify-center rounded-lg border px-2 py-1.5 text-[11px] font-medium min-h-[30px] transition-colors text-center ${
-                        sort === value
-                          ? "border-primary bg-primary/15 text-primary"
-                          : "border-border bg-card/50 text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                      }`}
-                    >
-                      {t(SORT_KEYS[value])}
-                    </button>
-                  ))}
-                </div>
-              </FilterField>
-
-              {reportMode === "student" && (
-                <FilterField icon={UserRound} label={t("rep.studentView")}>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={studentMode === "attempts" ? "default" : "outline"}
-                      onClick={() => setStudentMode("attempts")}
-                      className={
-                        studentMode === "attempts" ? "bg-primary text-primary-foreground" : ""
-                      }
-                    >
-                      {t("rep.perAttempt")}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={studentMode === "students" ? "default" : "outline"}
-                      onClick={() => setStudentMode("students")}
-                      className={
-                        studentMode === "students" ? "bg-primary text-primary-foreground" : ""
-                      }
-                    >
-                      {t("rep.perStudent")}
-                    </Button>
-                  </div>
-                </FilterField>
-              )}
-            </div>
-
-            <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
-              <div className="px-4 py-2 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/50">
-                {filteredSessions.length} {filteredSessions.length === 1 ? t("rep.quizCount") : t("rep.quizzesCount")}
-              </div>
-              {filteredSessions.length === 0 ? (
-                <div className="px-4 py-6 text-xs text-muted-foreground text-center">
-                  {t("rep.noQuizzesMatch")}
-                </div>
-              ) : (
-                visibleSessions.map((s) => {
-                  const active = selected?.id === s.id;
-                  return (
-                    <button
-                      type="button"
-                      key={s.id}
-                      onClick={() => setSelectedId(s.id)}
-                      className={`block w-full px-4 py-3 text-left border-b border-border/60 last:border-b-0 hover:bg-muted/30 ${
-                        active ? "bg-primary/10" : ""
-                      }`}
-                    >
-                      <div className="font-semibold truncate">{s.title}</div>
-                      <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                        {categoryLabel(s) || t("hist.uncategorised")}
-                      </div>
-                      <div className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        {new Date(s.created_at).toLocaleDateString()}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-              <PaginationControls
-                page={quizListPage}
-                pageSize={REPORT_PAGE_SIZE}
-                total={subjectFilter !== "all" ? filteredSessions.length : sessionTotal}
-                label="quizzes"
-                onPageChange={setQuizListPage}
-              />
-            </div>
-          </aside>
+          <FilterSidebar
+            reportMode={reportMode}
+            setReportMode={setReportMode}
+            studentMode={studentMode}
+            setStudentMode={setStudentMode}
+            query={query}
+            setQuery={setQuery}
+            studentQuery={studentQuery}
+            setStudentQuery={setStudentQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            subjectFilter={subjectFilter}
+            setSubjectFilter={setSubjectFilter}
+            subjectOptions={subjectOptions}
+            passMark={passMark}
+            setPassMark={setPassMark}
+            sort={sort}
+            setSort={setSort}
+            quizListPage={quizListPage}
+            setQuizListPage={setQuizListPage}
+            sessionTotal={sessionTotal}
+            filteredSessions={filteredSessions}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+            resetFilters={resetFilters}
+          />
 
           {reportMode === "student" ? (
             <StudentReportsView
@@ -763,23 +203,16 @@ function ReportsPage() {
                   schoolName={schoolName}
                 />
               </Suspense>
-
-              {/* ── Section 6: Full results table ── */}
-              <SectionLabel
-                title={t("rep.fullResultsTable")}
-                desc={t("rep.fullResultsDesc")}
-              />
+              <SectionLabel title={t("rep.fullResultsTable")} desc={t("rep.fullResultsDesc")} />
               <AttemptsTable rows={filteredRows} passMark={passMark} />
             </main>
           ) : (
             <main className="rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
-              <Filter className="mx-auto h-10 w-10 text-muted-foreground/60" />
+              <Filter className="mx-auto size-10 text-muted-foreground/60" />
               <p className="mt-3 text-sm font-medium">{t("rep.noQuizzesMatch")}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t("rep.loosenFilters")}
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{t("rep.loosenFilters")}</p>
               <Button variant="outline" size="sm" className="mt-4" onClick={resetFilters}>
-                <RotateCcw className="h-3.5 w-3.5 mr-1" /> {t("rep.resetFilters")}
+                <RotateCcw className="size-3.5 mr-1" /> {t("rep.resetFilters")}
               </Button>
             </main>
           )}
@@ -787,889 +220,4 @@ function ReportsPage() {
       )}
     </div>
   );
-}
-
-function SectionLabel({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="flex items-start gap-3 pt-1">
-      <div className="h-6 w-1 rounded-full bg-primary mt-0.5 shrink-0" />
-      <div>
-        <div className="font-semibold text-sm">{title}</div>
-        <div className="text-xs text-muted-foreground mt-0.5">{desc}</div>
-      </div>
-    </div>
-  );
-}
-
-function FilterField({
-  icon: Icon,
-  label,
-  hint,
-  children,
-}: {
-  icon: typeof Users;
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/80">
-        <Icon className="h-3.5 w-3.5 text-primary/70" /> {label}
-      </div>
-      {hint && <p className="text-[10px] text-muted-foreground -mt-0.5 pl-5">{hint}</p>}
-      {children}
-    </div>
-  );
-}
-
-function QuizReportHeader({
-  session,
-  top,
-  teacherName,
-  schoolName,
-}: {
-  session: ReportSession;
-  top: QuizReportRow | undefined;
-  teacherName: string;
-  schoolName: string;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card/60 to-card/40 p-6 print:border-0 print:bg-transparent print:p-0">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1 flex-1 min-w-0">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-            <Trophy className="h-3 w-3" /> {t("rep.finalReport")}
-          </div>
-          <h2 className="font-display text-2xl font-bold leading-tight">{session.title}</h2>
-          <p className="text-xs text-muted-foreground">
-            {t("rep.heldOn")} {new Date(session.created_at).toLocaleString()} {categoryLabel(session) ? `· ${categoryLabel(session)}` : ""}
-          </p>
-          <div className="mt-3 grid gap-x-6 gap-y-2 text-xs sm:grid-cols-2 md:grid-cols-4">
-            <ReportDetail label={t("rep.teacherLabel")} value={teacherName} />
-            <ReportDetail label={t("rep.schoolOrg")} value={schoolName || t("rep.notSpecified")} />
-            <ReportDetail label={t("rep.subjectLabel")} value={subjectLabel(session)} />
-            <ReportDetail label={t("rep.topicLabel")} value={session.topic || t("rep.notSpecified")} />
-          </div>
-        </div>
-        {top && (
-          <div className="rounded-2xl border border-warning/30 bg-warning/5 px-5 py-4 text-center shrink-0">
-            <div className="text-2xl">🥇</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">{t("rep.topScorer")}</div>
-            <div className="font-display font-bold text-base mt-0.5 max-w-[140px] truncate">{top.name}</div>
-            <div className="text-success font-bold text-sm">{top.score} pts · {top.percent}%</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-type AttemptAnswer = {
-  id: string;
-  attempt_id: string;
-  question_id: string;
-  question_text: string;
-  question_type: string;
-  answer: string | null;
-  points_awarded: number | null;
-  max_points: number;
-  is_correct: boolean | null;
-  graded_at: string | null;
-  model_answer: string | null;
-  rubric: string | null;
-};
-
-function AnswerCard({ a, i }: { a: AttemptAnswer; i: number }) {
-  const isPending = !a.graded_at && (a.question_type === "short_answer" || a.question_type === "long_answer");
-  const typeLabel = a.question_type === "mcq" ? "MCQ" : a.question_type === "true_false" ? "T/F" : a.question_type === "short_answer" ? "Short" : "Long";
-  const pts = a.points_awarded;
-  const pointColor = isPending ? "text-warning" : pts === a.max_points ? "text-success" : pts === 0 ? "text-destructive" : "text-warning";
-
-  return (
-    <div className="rounded-xl border border-border/60 bg-card/60 px-4 py-3 space-y-1.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2 min-w-0 flex-1">
-          <span className="shrink-0 text-[10px] font-bold uppercase rounded bg-muted/60 px-1.5 py-0.5 text-muted-foreground mt-0.5">{typeLabel}</span>
-          <p className="text-sm font-medium text-foreground leading-snug">
-            <span className="text-muted-foreground mr-1">Q{i + 1}.</span>
-            {a.question_text}
-          </p>
-        </div>
-        <div className={`shrink-0 text-sm font-bold ${pointColor}`}>
-          {isPending ? (
-            <span className="text-warning text-xs font-medium">Pending</span>
-          ) : (
-            <>{pts ?? 0}<span className="text-xs text-muted-foreground font-normal">/{a.max_points}</span></>
-          )}
-        </div>
-      </div>
-      <div className="ml-[2.25rem]">
-        {a.answer ? (
-          <p className={`text-xs rounded-lg px-3 py-2 border ${
-            isPending ? "bg-muted/20 border-border text-foreground" :
-            (pts ?? 0) === a.max_points ? "bg-success/5 border-success/20 text-success" :
-            (pts ?? 0) === 0 ? "bg-destructive/5 border-destructive/20 text-destructive" :
-            "bg-warning/5 border-warning/20 text-warning"
-          }`}>
-            {a.answer}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">No answer submitted</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AttemptsTable({ rows, passMark }: { rows: QuizReportRow[]; passMark: number }) {
-  const { t } = useI18n();
-  const [page, setPage] = useState(0);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loadingAnswers, setLoadingAnswers] = useState<string | null>(null);
-  const [attemptAnswers, setAttemptAnswers] = useState<Record<string, AttemptAnswer[]>>({});
-  const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
-
-  useEffect(() => { setPage(0); }, [rows]);
-
-  const toggleExpand = async (attemptId: string) => {
-    if (expandedId === attemptId) { setExpandedId(null); return; }
-    setExpandedId(attemptId);
-    if (attemptAnswers[attemptId]) return;
-    setLoadingAnswers(attemptId);
-    const { data: ansData, error: ansErr } = await (supabase as any)
-      .from("quiz_answers")
-      .select("id, question_id, answer, points_awarded, is_correct, graded_at")
-      .eq("attempt_id", attemptId);
-    setLoadingAnswers(null);
-    if (ansErr || !ansData || ansData.length === 0) {
-      setAttemptAnswers((prev) => ({ ...prev, [attemptId]: [] }));
-      return;
-    }
-    const qIds = (ansData as any[]).map((r) => r.question_id);
-    const { data: qData } = await supabase
-      .from("questions")
-      .select("id, text, type, max_points")
-      .in("id", qIds);
-    const qMap = Object.fromEntries((qData ?? []).map((q: any) => [q.id, q]));
-    setAttemptAnswers((prev) => ({
-      ...prev,
-      [attemptId]: (ansData as any[]).map((r: any, idx: number) => ({
-        id: r.id,
-        attempt_id: attemptId,
-        question_id: r.question_id,
-        question_text: qMap[r.question_id]?.text ?? `Q${idx + 1}`,
-        question_type: qMap[r.question_id]?.type ?? "mcq",
-        answer: r.answer,
-        points_awarded: r.points_awarded,
-        max_points: qMap[r.question_id]?.max_points ?? 1,
-        is_correct: r.is_correct,
-        graded_at: r.graded_at,
-        model_answer: null,
-        rubric: null,
-      })),
-    }));
-  };
-
-  return (
-    <div className="rounded-2xl border border-border bg-card/40 overflow-hidden">
-      {rows.length === 0 ? (
-        <div className="p-10 text-center">
-          <Users className="mx-auto h-8 w-8 text-muted-foreground/50 mb-3" />
-          <p className="text-sm font-medium">{t("rep.noParticipantsMatch")}</p>
-          <p className="text-xs text-muted-foreground mt-1">{t("rep.tryChangingFilters")}</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-border/40">
-          {visibleRows.map((row) => {
-            const isExpanded = expandedId === row.id;
-            const answers = attemptAnswers[row.id] ?? [];
-            return (
-              <div key={row.id}>
-                <button
-                  type="button"
-                  onClick={() => void toggleExpand(row.id)}
-                  className="w-full text-left px-4 py-3 hover:bg-muted/10 transition-colors flex items-center gap-3"
-                >
-                  <span className={`shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </span>
-                  <span className="w-6 shrink-0 text-xs font-bold text-muted-foreground">{row.rank}</span>
-                  <span className="flex-1 min-w-0">
-                    <span className="font-semibold text-sm block truncate">{row.name}</span>
-                    <span className="text-xs text-muted-foreground truncate">
-                      {row.email || t("rep.noEmail")}
-                      {row.rollNumber ? ` · Roll: ${row.rollNumber}` : ""}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-4 shrink-0 text-sm">
-                    <span className="font-bold text-success">
-                      {row.score}
-                      <span className="text-xs text-muted-foreground font-normal">/{row.totalMaxPoints ?? row.totalQuestions}</span>
-                      <span className="text-xs text-muted-foreground font-normal ml-1">pts</span>
-                    </span>
-                    <span className="text-xs font-mono text-muted-foreground">{row.percent}%</span>
-                    <ResultBadge row={row} passMark={passMark} />
-                    <span className="text-xs text-muted-foreground hidden sm:block">{formatDuration(row.durationSeconds ?? null)}</span>
-                  </span>
-                </button>
-
-                {isExpanded && (
-                  <div className="bg-muted/5 border-t border-border/40 px-4 py-3">
-                    {loadingAnswers === row.id ? (
-                      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading answers…
-                      </div>
-                    ) : answers.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2">No answers found for this attempt.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {answers.map((a, idx) => (
-                          <AnswerCard key={a.id} a={a} i={idx} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      <div className="px-4 py-2 border-t border-border/40 text-xs text-muted-foreground">
-        {rows.length} {rows.length !== 1 ? t("rep.participantsMatched") : t("rep.participantMatched")} · Click a row to see per-question answers
-      </div>
-      <PaginationControls
-        page={page}
-        pageSize={REPORT_PAGE_SIZE}
-        total={rows.length}
-        label="participants"
-        onPageChange={setPage}
-      />
-    </div>
-  );
-}
-
-function ResultBadge({ row, passMark }: { row: QuizReportRow; passMark: number }) {
-  const { t } = useI18n();
-  if (!row.completed) {
-    return (
-      <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-        {t("rep.resultLeft")}
-      </span>
-    );
-  }
-  const passed = row.percent >= passMark;
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-        passed
-          ? "bg-success/15 text-success border border-success/30"
-          : "bg-destructive/15 text-destructive border border-destructive/30"
-      }`}
-    >
-      {passed ? t("rep.resultPass") : t("rep.resultFail")}
-    </span>
-  );
-}
-
-function DistributionBar({
-  buckets,
-  passMark,
-}: {
-  buckets: { top: number; pass: number; fail: number; left: number };
-  passMark: number;
-}) {
-  const { t } = useI18n();
-  const total = buckets.top + buckets.pass + buckets.fail + buckets.left;
-  if (total === 0) return null;
-  const pct = (n: number) => (n / total) * 100;
-  const topThreshold = Math.min(100, passMark + 25);
-
-  const bands = [
-    { dot: "bg-success", label: `${t("rep.excellent")} (≥ ${topThreshold}%)`, desc: t("rep.scoredTopBand"), value: buckets.top },
-    { dot: "bg-primary/80", label: `${t("rep.passedBand")} (${passMark}–${topThreshold - 1}%)`, desc: t("rep.metPassMark"), value: buckets.pass },
-    { dot: "bg-destructive/80", label: `${t("rep.belowPass")} (< ${passMark}%)`, desc: t("rep.didNotMeetPassMark"), value: buckets.fail },
-    { dot: "bg-muted-foreground/40", label: t("rep.didNotFinish"), desc: t("rep.leftWithoutSubmitting"), value: buckets.left },
-  ];
-
-  return (
-    <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-      {/* Bar */}
-      <div className="h-4 w-full overflow-hidden rounded-full bg-muted/30 flex gap-0.5">
-        {bands.map((b) =>
-          pct(b.value) > 0 ? (
-            <div
-              key={b.label}
-              className={`pct-bar h-full ${b.dot} first:rounded-l-full last:rounded-r-full transition-all`}
-              style={{ width: `${pct(b.value)}%` }}
-              title={`${b.label}: ${b.value}`}
-            />
-          ) : null
-        )}
-      </div>
-      {/* Legend */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {bands.map((b) => (
-          <div key={b.label} className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${b.dot}`} />
-              <span className="text-xs font-semibold">{b.value}</span>
-              <span className="text-xs text-muted-foreground">({Math.round(pct(b.value))}%)</span>
-            </div>
-            <div className="text-[11px] font-medium pl-4 leading-tight">{b.label}</div>
-            <div className="text-[10px] text-muted-foreground pl-4">{b.desc}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Legend({ dot, label, value }: { dot: string; label: string; value: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="ml-auto font-semibold">{value}</span>
-    </div>
-  );
-}
-
-function ReportDetail({ label, value }: { label: string; value: string }) {
-  const { t } = useI18n();
-  return (
-    <div>
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-semibold text-foreground">{value || t("rep.notSpecified")}</p>
-    </div>
-  );
-}
-
-type StudentAttemptRow = QuizReportRow & {
-  sessionId: string;
-  sessionTitle: string;
-  sessionCategory: string;
-  sessionCreatedAt: string;
-};
-
-type StudentSummaryRow = {
-  key: string;
-  name: string;
-  email: string | null;
-  attempts: number;
-  submitted: number;
-  avgPercent: number;
-  bestPercent: number;
-  worstPercent: number;
-  totalPoints: number;
-  lastAttemptAt: string | null;
-};
-
-function StudentReportsView({
-  attemptRows,
-  summaryRows,
-  mode,
-  passMark,
-}: {
-  attemptRows: StudentAttemptRow[];
-  summaryRows: StudentSummaryRow[];
-  mode: StudentMode;
-  passMark: number;
-}) {
-  const completed = attemptRows.filter((row) => row.completed).length;
-  const average =
-    attemptRows.length === 0
-      ? 0
-      : Math.round(attemptRows.reduce((sum, row) => sum + row.percent, 0) / attemptRows.length);
-  const passed = attemptRows.filter((row) => row.completed && row.percent >= passMark).length;
-  const passRate =
-    attemptRows.length === 0 ? 0 : Math.round((passed / attemptRows.length) * 100);
-  const uniqueStudents = summaryRows.length;
-  const { t } = useI18n();
-
-  return (
-    <main className="space-y-5 min-w-0 overflow-hidden">
-      <div className="rounded-2xl border border-border bg-card/60 p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              {t("rep.studentReport")}
-            </div>
-            <h2 className="font-display text-2xl font-bold">
-              {mode === "students" ? t("rep.allStudents") : t("rep.allStudentAttempts")}
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {mode === "students" ? t("rep.oneRowPerStudent") : t("rep.everyAttempt")}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="font-display text-2xl font-bold">
-              {mode === "students" ? uniqueStudents : attemptRows.length}
-            </div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              {mode === "students" ? t("rep.students") : t("rep.matchingAttempts")}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Metric icon={Users} label={t("rep.uniqueStudents")} value={uniqueStudents} desc={t("rep.uniqueStudentsDesc")} />
-        <Metric icon={BarChart3} label={t("rep.totalAttempts")} value={attemptRows.length} desc={t("rep.totalAttemptsDesc")} />
-        <Metric icon={Trophy} label={t("rep.submittedAttempts")} value={completed} desc={t("rep.submittedAttemptsDesc")} />
-        <Metric icon={Target} label={t("rep.passRate")} value={`${passRate}%`} desc={`% of attempts scoring ≥ ${passMark}%`} color={passRate >= 60 ? "text-success" : "text-destructive"} />
-      </div>
-
-      {mode === "students" ? (
-        <StudentSummaryTable rows={summaryRows} passMark={passMark} />
-      ) : (
-        <StudentAttemptsTable rows={attemptRows} passMark={passMark} average={average} />
-      )}
-    </main>
-  );
-}
-
-function StudentSummaryTable({
-  rows,
-  passMark,
-}: {
-  rows: StudentSummaryRow[];
-  passMark: number;
-}) {
-  const { t } = useI18n();
-  const [page, setPage] = useState(0);
-  const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(0);
-  }, [rows]);
-
-  return (
-    <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
-      {rows.length === 0 ? (
-        <div className="p-8 text-center text-sm text-muted-foreground">
-          {t("rep.noStudentsMatch")}
-        </div>
-      ) : (
-        <table className="w-full text-sm min-w-[820px]">
-          <thead className="bg-secondary/40">
-            <tr>
-              {[
-                t("rep.colStudent"),
-                t("rep.colEmail"),
-                t("rep.colAttempts"),
-                t("rep.colSubmitted"),
-                t("rep.colAvgPct"),
-                t("rep.colBestPct"),
-                t("rep.colWorstPct"),
-                t("rep.colPoints"),
-                t("rep.colLastAttempt"),
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-muted-foreground"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleRows.map((row) => {
-              const passing = row.avgPercent >= passMark;
-              return (
-                <tr key={row.key} className="border-t border-border/50">
-                  <td className="px-3 py-2 font-semibold">{row.name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{row.email || "-"}</td>
-                  <td className="px-3 py-2">{row.attempts}</td>
-                  <td className="px-3 py-2">{row.submitted}</td>
-                  <td
-                    className={`px-3 py-2 font-bold ${
-                      passing ? "text-success" : "text-destructive"
-                    }`}
-                  >
-                    {row.avgPercent}%
-                  </td>
-                  <td className="px-3 py-2 text-success font-semibold">{row.bestPercent}%</td>
-                  <td className="px-3 py-2 text-destructive font-semibold">{row.worstPercent}%</td>
-                  <td className="px-3 py-2">{row.totalPoints}</td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {row.lastAttemptAt
-                      ? new Date(row.lastAttemptAt).toLocaleDateString()
-                      : "-"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-      <PaginationControls
-        page={page}
-        pageSize={REPORT_PAGE_SIZE}
-        total={rows.length}
-        label="students"
-        onPageChange={setPage}
-      />
-    </div>
-  );
-}
-
-function StudentAttemptsTable({
-  rows,
-  passMark,
-  average,
-}: {
-  rows: StudentAttemptRow[];
-  passMark: number;
-  average: number;
-}) {
-  const { t } = useI18n();
-  const [page, setPage] = useState(0);
-  const visibleRows = paginate(rows, page, REPORT_PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(0);
-  }, [rows]);
-
-  return (
-    <>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Metric icon={BarChart3} label={t("rep.averageScore")} value={`${average}%`} desc={t("rep.averageScoreDesc")} color={average >= passMark ? "text-success" : "text-destructive"} />
-        <Metric icon={Trophy} label={t("rep.highestScore")} value={`${rows[0]?.percent ?? 0}%`} desc={t("rep.highestScoreDesc")} color="text-success" />
-        <Metric
-          icon={Timer} label={t("rep.averageTime")} desc={t("rep.averageTimeDesc")}
-          value={
-            rows.length === 0 ? "-"
-              : formatDuration(
-                  rows.reduce((sum, r) => sum + (r.durationSeconds ?? 0), 0) /
-                    Math.max(1, rows.filter((r) => r.durationSeconds).length),
-                )
-          }
-        />
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card/40 overflow-x-auto">
-        {rows.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">
-            {t("rep.noAttemptsMatch")}
-          </div>
-        ) : (
-          <table className="w-full text-sm min-w-[920px]">
-            <thead className="bg-secondary/40">
-              <tr>
-                {[
-                  t("rep.colStudent"),
-                  t("rep.colEmail"),
-                  t("rep.colQuiz"),
-                  t("rep.colRoll"),
-                  t("rep.colSeat"),
-                  t("rep.colPoints"),
-                  "%",
-                  t("rep.colResult"),
-                  t("rep.colTime"),
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-muted-foreground"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((row) => (
-                <tr key={`${row.sessionId}-${row.id}`} className="border-t border-border/50">
-                  <td className="px-3 py-2 font-semibold">{row.name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{row.email || "-"}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium">{row.sessionTitle}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.sessionCategory || new Date(row.sessionCreatedAt).toLocaleDateString()}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">{row.rollNumber || "-"}</td>
-                  <td className="px-3 py-2">{row.seatNumber || "-"}</td>
-                  <td className="px-3 py-2 font-bold text-success">
-                    {row.score}
-                    <span className="text-xs text-muted-foreground font-normal">/{row.totalMaxPoints ?? row.totalQuestions}</span>
-                  </td>
-                  <td className="px-3 py-2 font-mono">{row.percent}%</td>
-                  <td className="px-3 py-2">
-                    <ResultBadge row={row} passMark={passMark} />
-                  </td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {formatDuration(row.durationSeconds ?? null)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <PaginationControls
-          page={page}
-          pageSize={REPORT_PAGE_SIZE}
-          total={rows.length}
-          label="attempts"
-          onPageChange={setPage}
-        />
-      </div>
-    </>
-  );
-}
-
-function Metric({
-  icon: Icon,
-  label,
-  value,
-  desc,
-  color = "text-foreground",
-}: {
-  icon: typeof Users;
-  label: string;
-  value: string | number;
-  desc?: string;
-  color?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card/50 p-4 space-y-2 hover:border-primary/30 hover:shadow-glow transition-all duration-200">
-      <div className="flex items-center justify-between">
-        <Icon className="h-4 w-4 text-primary/70" />
-      </div>
-      <div className={`font-display text-2xl font-bold ${color}`}>{value}</div>
-      <div>
-        <div className="text-sm font-medium">{label}</div>
-        {desc && <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{desc}</div>}
-      </div>
-    </div>
-  );
-}
-
-function AnswerMetric({
-  label,
-  value,
-  tone,
-  desc,
-}: {
-  label: string;
-  value: number;
-  tone: "success" | "danger" | "muted";
-  desc?: string;
-}) {
-  const color = tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : "text-muted-foreground";
-  const border = tone === "success" ? "border-success/20" : tone === "danger" ? "border-destructive/20" : "border-border";
-  const bg = tone === "success" ? "bg-success/5" : tone === "danger" ? "bg-destructive/5" : "bg-card/50";
-  return (
-    <div className={`rounded-2xl border ${border} ${bg} p-4 space-y-1`}>
-      <div className={`font-display text-3xl font-bold ${color}`}>{value}</div>
-      <div className="text-sm font-medium">{label}</div>
-      {desc && <div className="text-[11px] text-muted-foreground leading-snug">{desc}</div>}
-    </div>
-  );
-}
-
-function categoryLabel(s: Pick<ReportSession, "categoryName" | "subcategoryName">) {
-  return [s.categoryName, s.subcategoryName].filter(Boolean).join(" → ");
-}
-
-function subjectLabel(s: Pick<ReportSession, "subject" | "categoryName" | "subcategoryName">) {
-  return s.subject || categoryLabel(s) || "Not specified";
-}
-
-function toReportAttempt(a: AttemptRow, totalMaxPoints?: number | null): QuizReportAttempt {
-  const meta =
-    a.participants?.metadata && typeof a.participants.metadata === "object"
-      ? (a.participants.metadata as Record<string, unknown>)
-      : {};
-  const attemptedQuestions = a.completed ? a.total_questions : 0;
-  const unattemptedQuestions = a.completed ? 0 : a.total_questions;
-  const startedAt = a.started_at ?? null;
-  const completedAt = a.completed_at ?? null;
-  const durationSeconds =
-    startedAt && completedAt
-      ? Math.max(0, Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000))
-      : null;
-  return {
-    id: a.id,
-    name: a.participant_name ?? "Anonymous",
-    email: a.participant_email,
-    rollNumber: stringMeta(meta.roll_number),
-    seatNumber: stringMeta(meta.seat_number),
-    score: a.score,
-    totalQuestions: a.total_questions,
-    totalMaxPoints: totalMaxPoints ?? null,
-    attemptedQuestions,
-    correctAnswers: 0,
-    wrongAnswers: 0,
-    unattemptedQuestions,
-    completed: a.completed,
-    startedAt,
-    completedAt,
-    durationSeconds,
-  };
-}
-
-function getTeacherName(profile: ProfileRow | null, email?: string | null) {
-  const full = profile?.full_name?.trim();
-  if (full) return full;
-  const joined = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim();
-  return joined || email?.split("@")[0] || "Teacher";
-}
-
-function stringMeta(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function sortRows<T extends QuizReportRow>(rows: T[], sort: SortOption): T[] {
-  const sorted = rows.slice();
-  switch (sort) {
-    case "rank":
-      sorted.sort((a, b) => a.rank - b.rank);
-      break;
-    case "percentDesc":
-      sorted.sort((a, b) => b.percent - a.percent || a.rank - b.rank);
-      break;
-    case "percentAsc":
-      sorted.sort((a, b) => a.percent - b.percent || a.rank - b.rank);
-      break;
-    case "name":
-      sorted.sort((a, b) => a.name.localeCompare(b.name));
-      break;
-    case "fastest":
-      sorted.sort((a, b) => {
-        const da = a.durationSeconds ?? Number.POSITIVE_INFINITY;
-        const db = b.durationSeconds ?? Number.POSITIVE_INFINITY;
-        return da - db;
-      });
-      break;
-    case "recent":
-      sorted.sort((a, b) => {
-        const ta = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-        const tb = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-        return tb - ta;
-      });
-      break;
-  }
-  return sorted;
-}
-
-function computeQuizStats(rows: QuizReportRow[], passMark: number) {
-  const submittedRows = rows.filter((r) => r.completed);
-  const total = rows.length;
-  const submitted = submittedRows.length;
-  const percents = submittedRows.map((r) => r.percent);
-  const avg =
-    percents.length === 0
-      ? 0
-      : Math.round(percents.reduce((sum, n) => sum + n, 0) / percents.length);
-  const sortedPercents = percents.slice().sort((a, b) => a - b);
-  const median =
-    sortedPercents.length === 0
-      ? null
-      : sortedPercents.length % 2
-        ? sortedPercents[(sortedPercents.length - 1) / 2]
-        : Math.round(
-            (sortedPercents[sortedPercents.length / 2 - 1] +
-              sortedPercents[sortedPercents.length / 2]) /
-              2,
-          );
-  const best = percents.length === 0 ? null : Math.max(...percents);
-  const worst = percents.length === 0 ? null : Math.min(...percents);
-  const passed = submittedRows.filter((r) => r.percent >= passMark).length;
-  const passRate = total === 0 ? 0 : Math.round((passed / total) * 100);
-
-  const durations = submittedRows
-    .map((r) => r.durationSeconds)
-    .filter((d): d is number => typeof d === "number" && d > 0);
-  const avgDuration =
-    durations.length === 0
-      ? null
-      : Math.round(durations.reduce((sum, n) => sum + n, 0) / durations.length);
-
-  const topThreshold = Math.min(100, passMark + 25);
-  const buckets = rows.reduce(
-    (acc, row) => {
-      if (!row.completed) acc.left += 1;
-      else if (row.percent >= topThreshold) acc.top += 1;
-      else if (row.percent >= passMark) acc.pass += 1;
-      else acc.fail += 1;
-      return acc;
-    },
-    { top: 0, pass: 0, fail: 0, left: 0 },
-  );
-
-  const totals = rows.reduce(
-    (sum, row) => ({
-      correct: sum.correct + row.correctAnswers,
-      wrong: sum.wrong + row.wrongAnswers,
-      unattempted: sum.unattempted + row.unattemptedQuestions,
-    }),
-    { correct: 0, wrong: 0, unattempted: 0 },
-  );
-
-  return { total, submitted, avg, median, best, worst, passRate, avgDuration, buckets, totals };
-}
-
-function aggregateByStudent(rows: StudentAttemptRow[]): StudentSummaryRow[] {
-  const map = new Map<string, StudentSummaryRow & { _percents: number[] }>();
-  for (const row of rows) {
-    const key = (row.email?.toLowerCase() || row.name || "").trim() || row.id;
-    const existing = map.get(key);
-    if (existing) {
-      existing.attempts += 1;
-      if (row.completed) existing.submitted += 1;
-      existing._percents.push(row.percent);
-      existing.bestPercent = Math.max(existing.bestPercent, row.percent);
-      existing.worstPercent = Math.min(existing.worstPercent, row.percent);
-      existing.totalPoints += row.score;
-      const last = row.completedAt ?? row.sessionCreatedAt;
-      if (
-        last &&
-        (!existing.lastAttemptAt || new Date(last) > new Date(existing.lastAttemptAt))
-      ) {
-        existing.lastAttemptAt = last;
-      }
-    } else {
-      map.set(key, {
-        key,
-        name: row.name,
-        email: row.email,
-        attempts: 1,
-        submitted: row.completed ? 1 : 0,
-        _percents: [row.percent],
-        bestPercent: row.percent,
-        worstPercent: row.percent,
-        totalPoints: row.score,
-        avgPercent: 0,
-        lastAttemptAt: row.completedAt ?? row.sessionCreatedAt,
-      });
-    }
-  }
-  return Array.from(map.values())
-    .map(({ _percents, ...rest }) => ({
-      ...rest,
-      avgPercent: Math.round(_percents.reduce((sum, n) => sum + n, 0) / _percents.length),
-    }))
-    .sort((a, b) => b.avgPercent - a.avgPercent || a.name.localeCompare(b.name));
-}
-
-function buildFilterSummary(args: {
-  dateRange: DateRange;
-  subjectFilter: string;
-  statusFilter: StatusFilter;
-  passMark: number;
-  studentQuery: string;
-  sort: SortOption;
-}) {
-  const parts: string[] = [];
-  if (args.dateRange !== "all") parts.push(DATE_RANGE_KEYS[args.dateRange]);
-  if (args.subjectFilter !== "all") parts.push(`Subject: ${args.subjectFilter}`);
-  if (args.statusFilter !== "all") parts.push(`Status: ${args.statusFilter}`);
-  parts.push(`Pass mark: ${args.passMark}%`);
-  if (args.studentQuery.trim()) parts.push(`Search: ${args.studentQuery.trim()}`);
-  if (args.sort !== "rank") parts.push(`Sort: ${SORT_KEYS[args.sort]}`);
-  return parts.join(" · ");
 }

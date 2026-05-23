@@ -1,12 +1,12 @@
 /**
  * Client-side image optimization using Canvas API
- * 
+ *
  * Optimizes images by:
  * - Resizing to target dimensions
  * - Converting to WebP format
  * - Compressing with quality parameter (0-100)
  * - Maintaining aspect ratio
- * 
+ *
  * No external dependencies required
  */
 
@@ -14,18 +14,15 @@ export interface OptimizationConfig {
   maxWidth?: number;
   maxHeight?: number;
   quality?: number; // 0-100, default 75
-  format?: 'webp' | 'jpeg' | 'png';
+  format?: "webp" | "jpeg" | "png";
 }
 
 /**
  * Optimize a File to WebP with resizing and compression
  * @returns Optimized File object ready to upload
  */
-export async function optimizeImage(
-  file: File,
-  config: OptimizationConfig = {}
-): Promise<File> {
-  const { maxWidth = 400, maxHeight = 400, quality = 75, format = 'webp' } = config;
+export async function optimizeImage(file: File, config: OptimizationConfig = {}): Promise<File> {
+  const { maxWidth = 400, maxHeight = 400, quality = 75, format = "webp" } = config;
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -33,10 +30,10 @@ export async function optimizeImage(
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
         if (!ctx) {
-          reject(new Error('Could not get canvas context'));
+          reject(new Error("Could not get canvas context"));
           return;
         }
 
@@ -61,33 +58,33 @@ export async function optimizeImage(
         canvas.toBlob(
           (blob) => {
             if (!blob) {
-              reject(new Error('Failed to create blob'));
+              reject(new Error("Failed to create blob"));
               return;
             }
 
             // Generate filename with format
             const timestamp = Date.now();
-            const ext = format === 'webp' ? 'webp' : format === 'jpeg' ? 'jpg' : 'png';
+            const ext = format === "webp" ? "webp" : format === "jpeg" ? "jpg" : "png";
             const optimizedName = `optimized-${timestamp}.${ext}`;
 
             // Create optimized File
             const optimizedFile = new File([blob], optimizedName, {
-              type: `image/${format === 'jpeg' ? 'jpeg' : format}`,
+              type: `image/${format === "jpeg" ? "jpeg" : format}`,
               lastModified: Date.now(),
             });
 
             resolve(optimizedFile);
           },
-          `image/${format === 'jpeg' ? 'jpeg' : format}`,
-          quality / 100
+          `image/${format === "jpeg" ? "jpeg" : format}`,
+          quality / 100,
         );
       };
 
-      img.onerror = () => reject(new Error('Failed to load image'));
+      img.onerror = () => reject(new Error("Failed to load image"));
       img.src = e.target?.result as string;
     };
 
-    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
 }
@@ -101,7 +98,7 @@ export function optimizeAvatar(file: File): Promise<File> {
     maxWidth: 256,
     maxHeight: 256,
     quality: 75,
-    format: 'webp',
+    format: "webp",
   });
 }
 
@@ -114,7 +111,7 @@ export function optimizeLogo(file: File): Promise<File> {
     maxWidth: 400,
     maxHeight: 400,
     quality: 80,
-    format: 'webp',
+    format: "webp",
   });
 }
 
@@ -124,12 +121,12 @@ export function optimizeLogo(file: File): Promise<File> {
  */
 export async function estimateOptimizedSize(
   file: File,
-  config: OptimizationConfig = {}
+  config: OptimizationConfig = {},
 ): Promise<number> {
   try {
     const optimized = await optimizeImage(file, config);
     return Math.round(optimized.size / 1024);
-  } catch (err) {
+  } catch {
     return Math.round(file.size / 1024);
   }
 }

@@ -21,6 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { emptyDraft, validateDraft, type ParticipantDraft, type ParticipantType } from "./types";
+import { StudentFields } from "./participant-dialog/StudentFields";
+import { TeacherFields } from "./participant-dialog/TeacherFields";
+import { EmployeeFields } from "./participant-dialog/EmployeeFields";
+import { FunGuestFields } from "./participant-dialog/FunGuestFields";
 
 type Props = {
   trigger: ReactNode;
@@ -87,12 +91,13 @@ export function ParticipantDialog({
         </DialogHeader>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {/* Participant type */}
           <div className="md:col-span-2">
             <Label className="mb-1.5">Participant type</Label>
             <Select
               value={ptype || "__none__"}
-              onValueChange={(v) => set("participant_type", v === "__none__" ? "" : v as ParticipantType)}
+              onValueChange={(v) =>
+                set("participant_type", v === "__none__" ? "" : (v as ParticipantType))
+              }
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select type (optional)" />
@@ -108,7 +113,6 @@ export function ParticipantDialog({
             </Select>
           </div>
 
-          {/* Name - always required */}
           <div className="md:col-span-2">
             <Label className="mb-1.5">
               Name <span className="text-destructive">*</span>
@@ -117,11 +121,9 @@ export function ParticipantDialog({
               value={draft.name}
               onChange={(e) => set("name", e.target.value)}
               placeholder="Full name"
-              autoFocus
             />
           </div>
 
-          {/* Email + Mobile - always shown */}
           <div>
             <Label className="mb-1.5">Email</Label>
             <Input
@@ -141,120 +143,11 @@ export function ParticipantDialog({
             />
           </div>
 
-          {/* ── Student fields ── */}
-          {(ptype === "student" || ptype === "") && (
-            <>
-              <div>
-                <Label className="mb-1.5">School / Organization</Label>
-                <Input
-                  value={draft.organization}
-                  onChange={(e) => set("organization", e.target.value)}
-                  placeholder="Babul Academy"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">Class / Grade</Label>
-                <Input
-                  value={draft.grade || draft.class}
-                  onChange={(e) => {
-                    set("grade", e.target.value);
-                    set("class", e.target.value);
-                  }}
-                  placeholder="Class 10 / Year 12"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">Roll number</Label>
-                <Input
-                  value={draft.roll_number}
-                  onChange={(e) => set("roll_number", e.target.value)}
-                  placeholder="2026-CS-042"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">Seat number</Label>
-                <Input
-                  value={draft.seat_number}
-                  onChange={(e) => set("seat_number", e.target.value)}
-                  placeholder="A-12"
-                />
-              </div>
-            </>
-          )}
+          {(ptype === "student" || ptype === "") && <StudentFields draft={draft} set={set} />}
+          {ptype === "teacher" && <TeacherFields draft={draft} set={set} />}
+          {ptype === "employee" && <EmployeeFields draft={draft} set={set} />}
+          {ptype === "fun" && <FunGuestFields draft={draft} set={set} />}
 
-          {/* ── Teacher fields ── */}
-          {ptype === "teacher" && (
-            <>
-              <div>
-                <Label className="mb-1.5">Employee ID</Label>
-                <Input
-                  value={draft.employee_id}
-                  onChange={(e) => set("employee_id", e.target.value)}
-                  placeholder="EMP-1234"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">School / Institution</Label>
-                <Input
-                  value={draft.organization}
-                  onChange={(e) => set("organization", e.target.value)}
-                  placeholder="Babul Academy"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">Subject / Class</Label>
-                <Input
-                  value={draft.class}
-                  onChange={(e) => set("class", e.target.value)}
-                  placeholder="Mathematics, Class 9–10"
-                />
-              </div>
-            </>
-          )}
-
-          {/* ── Employee fields ── */}
-          {ptype === "employee" && (
-            <>
-              <div>
-                <Label className="mb-1.5">Employee ID</Label>
-                <Input
-                  value={draft.employee_id}
-                  onChange={(e) => set("employee_id", e.target.value)}
-                  placeholder="EMP-1234"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">Organization / Company</Label>
-                <Input
-                  value={draft.organization}
-                  onChange={(e) => set("organization", e.target.value)}
-                  placeholder="Acme Corp"
-                />
-              </div>
-              <div>
-                <Label className="mb-1.5">Department</Label>
-                <Input
-                  value={draft.department}
-                  onChange={(e) => set("department", e.target.value)}
-                  placeholder="Engineering"
-                />
-              </div>
-            </>
-          )}
-
-          {/* ── Fun / Guest fields ── */}
-          {ptype === "fun" && (
-            <div>
-              <Label className="mb-1.5">Nickname / Alias</Label>
-              <Input
-                value={draft.notes}
-                onChange={(e) => set("notes", e.target.value)}
-                placeholder="e.g. QuizMaster99"
-              />
-            </div>
-          )}
-
-          {/* Address - shown for student/teacher/employee/unset */}
           {ptype !== "fun" && (
             <div className="md:col-span-2">
               <Label className="mb-1.5">Address</Label>
@@ -266,7 +159,6 @@ export function ParticipantDialog({
             </div>
           )}
 
-          {/* Notes - shown for non-fun (fun reuses notes for alias) */}
           {ptype !== "fun" && (
             <div className="md:col-span-2">
               <Label className="mb-1.5">Notes</Label>

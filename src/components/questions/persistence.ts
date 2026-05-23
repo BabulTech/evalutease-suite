@@ -55,7 +55,10 @@ export function draftToRow(
       base.options = ["true", "false"];
       break;
     case "short_answer":
-      base.acceptable_answers = d.acceptableAnswers.map((a) => a.trim()).filter(Boolean);
+      base.acceptable_answers = d.acceptableAnswers.flatMap((a) => {
+        const t = a.trim();
+        return t ? [t] : [];
+      });
       base.requires_manual_grading = d.requiresManualGrading;
       break;
     case "long_answer":

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  use,
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 
@@ -43,14 +51,19 @@ export function HostProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!user) { setLoading(false); return; }
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any).rpc("get_my_host_context");
-    // eslint-disable-next-line no-console
-    console.log("[HostContext] RPC result", { userId: user.id, data, error });
+
+    console.warn("[HostContext] RPC result", { userId: user.id, data, error });
     if (error || !data || data.length === 0) {
       setHostInfo(null);
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const r = data[0] as any;
       setHostInfo({
         member_id: r.member_id,
@@ -73,13 +86,17 @@ export function HostProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, [user]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  return (
-    <HostContext.Provider value={{ isHost: !!hostInfo, hostInfo, loading, reload: load }}>
-      {children}
-    </HostContext.Provider>
+  const ctxValue = useMemo(
+    () => ({ isHost: !!hostInfo, hostInfo, loading, reload: load }),
+    [hostInfo, loading, load],
   );
+
+  return <HostContext.Provider value={ctxValue}>{children}</HostContext.Provider>;
 }
 
-export const useHost = () => useContext(HostContext);
+// eslint-disable-next-line react-refresh/only-export-components -- standard context+hook co-location
+export const useHost = () => use(HostContext);

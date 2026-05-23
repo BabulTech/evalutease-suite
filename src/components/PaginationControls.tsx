@@ -76,7 +76,7 @@ export function PaginationControls({
           onClick={() => onPageChange(Math.max(0, safePage - 1))}
           className="h-8 gap-1"
         >
-          <ChevronLeft className="h-3.5 w-3.5" /> Prev
+          <ChevronLeft className="size-3.5" /> Prev
         </Button>
         {pageButtons.map((p) => (
           <Button
@@ -98,7 +98,7 @@ export function PaginationControls({
           onClick={() => onPageChange(Math.min(totalPages - 1, safePage + 1))}
           className="h-8 gap-1"
         >
-          Next <ChevronRight className="h-3.5 w-3.5" />
+          Next <ChevronRight className="size-3.5" />
         </Button>
       </div>
     </div>

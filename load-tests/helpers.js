@@ -173,6 +173,7 @@ export function optionalRealtimeProbe(quizCode = chooseQuizCode()) {
 
 export function parseQuestions(playPayload) {
   const questions = playPayload && Array.isArray(playPayload.questions) ? playPayload.questions : [];
+  // react-doctor-disable-next-line react-doctor/js-combine-iterations
   return questions
     .slice(0, config.questionCount)
     .map((q, index) => ({

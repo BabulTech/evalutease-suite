@@ -17,10 +17,10 @@ export type QuestionSource = "manual" | "ai" | "ocr" | "import";
 export type QuestionType = "mcq" | "true_false" | "short_answer" | "long_answer";
 
 export const QUESTION_TYPES: { value: QuestionType; label: string; description: string }[] = [
-  { value: "mcq",          label: "Multiple Choice",  description: "Pick one correct option" },
-  { value: "true_false",   label: "True / False",     description: "Statement is true or false" },
-  { value: "short_answer", label: "Short Answer",     description: "Brief written response" },
-  { value: "long_answer",  label: "Long Answer",      description: "Essay-style response" },
+  { value: "mcq", label: "Multiple Choice", description: "Pick one correct option" },
+  { value: "true_false", label: "True / False", description: "Statement is true or false" },
+  { value: "short_answer", label: "Short Answer", description: "Brief written response" },
+  { value: "long_answer", label: "Long Answer", description: "Essay-style response" },
 ];
 
 export type Category = {
@@ -64,7 +64,7 @@ type BaseDraft = {
 
 export type McqDraft = BaseDraft & {
   type: "mcq";
-  options: string[];     // 2-6 options (default 4)
+  options: string[]; // 2-6 options (default 4)
   correctIndex: number;
 };
 
@@ -78,7 +78,7 @@ export type GradingMode = "auto" | "ai" | "manual";
 export type ShortAnswerDraft = BaseDraft & {
   type: "short_answer";
   acceptableAnswers: string[];
-  requiresManualGrading: boolean;   // kept for backward compat — derived from gradingMode
+  requiresManualGrading: boolean; // kept for backward compat — derived from gradingMode
   gradingMode: GradingMode;
 };
 
@@ -86,7 +86,7 @@ export type LongAnswerDraft = BaseDraft & {
   type: "long_answer";
   modelAnswer: string;
   rubric: string;
-  gradingMode: "ai" | "manual";     // long answer can't be auto-graded
+  gradingMode: "ai" | "manual"; // long answer can't be auto-graded
 };
 
 export type DraftQuestion = McqDraft | TrueFalseDraft | ShortAnswerDraft | LongAnswerDraft;
@@ -179,9 +179,15 @@ export function validateDraft(d: DraftQuestion): DraftValidation {
     }
     case "short_answer": {
       if (d.gradingMode === "auto") {
-        const valid = d.acceptableAnswers.map((a) => a.trim()).filter(Boolean);
+        const valid = d.acceptableAnswers.flatMap((a) => {
+          const t = a.trim();
+          return t ? [t] : [];
+        });
         if (valid.length === 0)
-          return { ok: false, reason: "Add at least one accepted answer, or choose AI / Manual grading" };
+          return {
+            ok: false,
+            reason: "Add at least one accepted answer, or choose AI / Manual grading",
+          };
       }
       return { ok: true };
     }
@@ -199,16 +205,22 @@ export function labelFor(i: number) {
 // Type guards — let consumers narrow the discriminated union.
 export const isMcqDraft = (d: DraftQuestion): d is McqDraft => d.type === "mcq";
 export const isTrueFalseDraft = (d: DraftQuestion): d is TrueFalseDraft => d.type === "true_false";
-export const isShortAnswerDraft = (d: DraftQuestion): d is ShortAnswerDraft => d.type === "short_answer";
-export const isLongAnswerDraft = (d: DraftQuestion): d is LongAnswerDraft => d.type === "long_answer";
+export const isShortAnswerDraft = (d: DraftQuestion): d is ShortAnswerDraft =>
+  d.type === "short_answer";
+export const isLongAnswerDraft = (d: DraftQuestion): d is LongAnswerDraft =>
+  d.type === "long_answer";
 
 // Canonical "what answer string goes in DB.correct_answer" for each draft type.
 // Used when saving questions so legacy code that reads correct_answer keeps working.
 export function canonicalCorrectAnswer(d: DraftQuestion): string {
   switch (d.type) {
-    case "mcq":          return d.options[d.correctIndex] ?? "";
-    case "true_false":   return d.correctValue ? "true" : "false";
-    case "short_answer": return d.acceptableAnswers.find((a) => a.trim()) ?? "";
-    case "long_answer":  return d.modelAnswer;
+    case "mcq":
+      return d.options[d.correctIndex] ?? "";
+    case "true_false":
+      return d.correctValue ? "true" : "false";
+    case "short_answer":
+      return d.acceptableAnswers.find((a) => a.trim()) ?? "";
+    case "long_answer":
+      return d.modelAnswer;
   }
 }

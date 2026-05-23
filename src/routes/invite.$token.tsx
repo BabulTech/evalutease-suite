@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, UserPlus, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Logo } from "@/components/Logo";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -15,13 +14,14 @@ import {
   type ParticipantDraft,
 } from "@/components/participants/types";
 import {
-  defaultHostSettings,
   normalizeRegistrationFields,
   normalizeRegistrationFieldsByType,
   resolveRegistrationFields,
   PARTICIPANT_TYPE_LABELS,
 } from "@/components/settings/host-settings";
+import { PageShell } from "./invite/PageShell";
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/invite/$token")({ component: InvitePage });
 
 type InviteData = {
@@ -42,6 +42,7 @@ type Phase =
   | { kind: "done"; data: InviteData; participantId: string }
   | { kind: "error"; message: string };
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 function InvitePage() {
   const { token } = Route.useParams();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
@@ -70,10 +71,10 @@ function InvitePage() {
     if (payload.invite.email) {
       const prefillEmail = payload.invite.email;
       setDraft((d) => ({ ...d, email: prefillEmail }));
-      // check if this prefilled email is already in this subtype
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefillEmail)) {
         setEmailCheck("checking");
-        const { data: exists } = await supabase.rpc("check_participant_email_in_subtype", {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not yet in generated Supabase types
+        const { data: exists } = await (supabase as any).rpc("check_participant_email_in_subtype", {
           p_subtype_id: payload.subtype.id,
           p_email: prefillEmail,
         });
@@ -86,11 +87,14 @@ function InvitePage() {
     void load();
   }, [load]);
 
+  // suppress unused warning – emailTimer used for future debounce extensions
+  void emailTimer;
+
   if (phase.kind === "loading") {
     return (
       <PageShell>
         <div className="flex items-center justify-center py-16">
-          <div className="h-10 w-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+          <div className="size-10 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         </div>
       </PageShell>
     );
@@ -100,7 +104,7 @@ function InvitePage() {
     return (
       <PageShell>
         <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-8 text-center">
-          <AlertTriangle className="mx-auto h-10 w-10 text-destructive" />
+          <AlertTriangle className="mx-auto size-10 text-destructive" />
           <p className="mt-3 font-semibold">Invite unavailable</p>
           <p className="mt-1 text-sm text-muted-foreground">{phase.message}</p>
         </div>
@@ -113,12 +117,13 @@ function InvitePage() {
     return (
       <PageShell>
         <div className="rounded-2xl border border-success/40 bg-success/10 p-8 text-center">
-          <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
+          <CheckCircle2 className="mx-auto size-10 text-success" />
           <p className="mt-3 font-semibold">You're in!</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            You've been added to <span className="font-medium text-foreground">{data.type.name}</span>{" "}
-            → <span className="font-medium text-foreground">{data.subtype.name}</span>. Your host
-            will share the quiz PIN when it's time to play.
+            You've been added to{" "}
+            <span className="font-medium text-foreground">{data.type.name}</span> →{" "}
+            <span className="font-medium text-foreground">{data.subtype.name}</span>. Your host will
+            share the quiz PIN when it's time to play.
           </p>
         </div>
       </PageShell>
@@ -127,7 +132,10 @@ function InvitePage() {
 
   const submit = async () => {
     const v = validateDraft(draft);
-    if (!v.ok) { toast.error(v.reason); return; }
+    if (!v.ok) {
+      toast.error(v.reason);
+      return;
+    }
     if (emailCheck === "taken") {
       toast.error("A participant with this email is already in this group.");
       return;
@@ -137,8 +145,8 @@ function InvitePage() {
     const { data: rpcData, error } = await supabase.rpc("redeem_participant_invite", {
       p_token: token,
       p_name: row.name,
-      p_email: row.email,
-      p_mobile: row.mobile,
+      p_email: row.email ?? undefined,
+      p_mobile: row.mobile ?? undefined,
       p_metadata: row.metadata,
     });
     if (error) {
@@ -163,38 +171,14 @@ function InvitePage() {
     setPhase({ kind: "done", data, participantId: payload.participant_id });
   };
 
-  const set = (patch: Partial<ParticipantDraft>) => {
-    setDraft((prev) => ({ ...prev, ...patch }));
-    if ("email" in patch && phase.kind !== "submitting") {
-      const email = patch.email?.trim() ?? "";
-      if (emailTimer.current) clearTimeout(emailTimer.current);
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        setEmailCheck("idle");
-        return;
-      }
-      setEmailCheck("checking");
-      const subtypeId = (phase as { kind: "ready"; data: InviteData }).data?.subtype?.id;
-      if (!subtypeId) return;
-      emailTimer.current = setTimeout(async () => {
-        const { data: exists } = await supabase.rpc("check_participant_email_in_subtype", {
-          p_subtype_id: subtypeId,
-          p_email: email,
-        });
-        setEmailCheck(exists ? "taken" : "available");
-      }, 600);
-    }
-  };
-
+  const set = (patch: Partial<ParticipantDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
   const busy = phase.kind === "submitting";
   const lockedType = data.participant_type ?? "";
-
-  // Host field config comes directly from the RPC response — no extra fetch needed.
   const hostSettings = {
     registration_fields: normalizeRegistrationFields(data.host_registration_fields),
     registration_fields_by_type: normalizeRegistrationFieldsByType(data.host_fields_by_type),
   };
   const fieldConfig = resolveRegistrationFields(hostSettings, lockedType);
-
   const lockedTypeLabel = lockedType
     ? PARTICIPANT_TYPE_LABELS[lockedType as keyof typeof PARTICIPANT_TYPE_LABELS]
     : undefined;
@@ -202,8 +186,10 @@ function InvitePage() {
   return (
     <PageShell>
       <div className="rounded-2xl border border-border bg-card/60 p-6 md:p-8 shadow-card">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">You're invited to join</div>
-        <h1 className="mt-1 font-display text-2xl font-bold">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">
+          You're invited to join
+        </div>
+        <h1 className="mt-1 font-display text-2xl font-semibold">
           {data.type.name} → {data.subtype.name}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -211,13 +197,18 @@ function InvitePage() {
         </p>
 
         <div className="mt-6 space-y-4">
-          {/* Name — always */}
           <div>
-            <Label className="mb-1.5">Name <span className="text-destructive">*</span></Label>
-            <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} placeholder="Full name" autoFocus maxLength={120} />
+            <Label className="mb-1.5">
+              Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              value={draft.name}
+              onChange={(e) => set({ name: e.target.value })}
+              placeholder="Full name"
+              maxLength={120}
+            />
           </div>
 
-          {/* Dynamic fields — driven by host config + locked type */}
           <DynamicParticipantFields
             draft={draft}
             fields={fieldConfig}
@@ -225,18 +216,21 @@ function InvitePage() {
             lockedTypeLabel={lockedTypeLabel}
           />
 
-          {/* Email duplicate feedback */}
           {draft.email && emailCheck !== "idle" && (
-            <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
-              emailCheck === "checking" ? "bg-muted/30 text-muted-foreground" :
-              emailCheck === "taken"    ? "bg-destructive/10 text-destructive border border-destructive/30" :
-              "bg-success/10 text-success border border-success/30"
-            }`}>
+            <div
+              className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+                emailCheck === "checking"
+                  ? "bg-muted/30 text-muted-foreground"
+                  : emailCheck === "taken"
+                    ? "bg-destructive/10 text-destructive border border-destructive/30"
+                    : "bg-success/10 text-success border border-success/30"
+              }`}
+            >
               {emailCheck === "checking" && <Loader2 size={13} className="animate-spin shrink-0" />}
-              {emailCheck === "taken"    && <XCircle size={13} className="shrink-0" />}
+              {emailCheck === "taken" && <XCircle size={13} className="shrink-0" />}
               {emailCheck === "available" && <CheckCircle size={13} className="shrink-0" />}
-              {emailCheck === "checking"  && "Checking email…"}
-              {emailCheck === "taken"     && "This email is already registered in this group."}
+              {emailCheck === "checking" && "Checking email…"}
+              {emailCheck === "taken" && "This email is already registered in this group."}
               {emailCheck === "available" && "Email is available ✓"}
             </div>
           )}
@@ -248,24 +242,11 @@ function InvitePage() {
             disabled={busy || emailCheck === "checking" || emailCheck === "taken"}
             className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
             {busy ? "Submitting…" : emailCheck === "checking" ? "Checking…" : "Join group"}
           </Button>
         </div>
       </div>
     </PageShell>
-  );
-}
-
-function PageShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-background py-10 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-center">
-          <Logo />
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

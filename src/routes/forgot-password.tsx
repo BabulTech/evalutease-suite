@@ -10,10 +10,12 @@ import { toast } from "sonner";
 import { validationError } from "@/components/ui/validation-toast";
 import { AuthShell } from "./login";
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/forgot-password")({
   component: ForgotPasswordPage,
 });
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 function ForgotPasswordPage() {
   const { t } = useI18n();
   const [email, setEmail] = useState("");
@@ -23,20 +25,26 @@ function ForgotPasswordPage() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const parsed = z.string().trim().email().max(255).safeParse(email);
-    if (!parsed.success) { validationError("Invalid email"); return; }
+    if (!parsed.success) {
+      validationError("Invalid email");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     setSent(true);
     toast.success(t("auth.resetSent"));
   };
 
   return (
     <AuthShell>
-      <h1 className="font-display text-3xl font-bold mb-2">{t("auth.reset")}</h1>
+      <h1 className="font-display text-3xl font-semibold mb-2">{t("auth.reset")}</h1>
       <p className="text-muted-foreground text-sm mb-6">
         {sent ? t("auth.resetSent") : "Enter your email to receive a reset link."}
       </p>
@@ -46,13 +54,19 @@ function ForgotPasswordPage() {
             <Label className="mb-1.5">{t("auth.email")}</Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <Button type="submit" disabled={loading} className="w-full h-12 bg-gradient-primary text-primary-foreground font-semibold shadow-glow">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 bg-gradient-primary text-primary-foreground font-semibold shadow-glow"
+          >
             {loading ? t("common.loading") : t("auth.reset")}
           </Button>
         </form>
       )}
       <p className="text-center text-sm text-muted-foreground mt-6">
-        <Link to="/login" className="text-primary font-semibold hover:underline">← {t("auth.signin")}</Link>
+        <Link to="/login" className="text-primary font-semibold hover:underline">
+          ← {t("auth.signin")}
+        </Link>
       </p>
     </AuthShell>
   );

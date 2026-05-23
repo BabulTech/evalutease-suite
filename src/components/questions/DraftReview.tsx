@@ -64,7 +64,7 @@ export function DraftReview({ drafts, setDrafts, onSave, onClear, source, saving
             onClick={onClear}
             disabled={submitting || saving}
           >
-            <X className="h-4 w-4 mr-1" /> Discard all
+            <X className="size-4 mr-1" /> Discard all
           </Button>
           <Button
             type="button"
@@ -73,7 +73,7 @@ export function DraftReview({ drafts, setDrafts, onSave, onClear, source, saving
             disabled={submitting || saving}
             className="bg-gradient-primary text-primary-foreground shadow-glow"
           >
-            <Save className="h-4 w-4 mr-1" />
+            <Save className="size-4 mr-1" />
             {submitting || saving ? "Saving…" : `Save all (${drafts.length})`}
           </Button>
         </div>
@@ -82,7 +82,7 @@ export function DraftReview({ drafts, setDrafts, onSave, onClear, source, saving
       <div className="space-y-3">
         {drafts.map((d, i) => (
           <DraftEditorRouter
-            key={i}
+            key={`${i}-${d.text.slice(0, 20)}`}
             draft={d}
             index={i}
             onChange={(next) => updateAt(i, next)}

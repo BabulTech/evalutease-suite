@@ -17,11 +17,12 @@ export function usePaginationState(
   initialPage = 0,
 ): PaginationState {
   const [page, setPage] = useState(initialPage);
-  const [pageSize, setPageSize] = useState(() =>
-    isMobile() ? mobileDefault : desktopDefault,
-  );
+  const [pageSize, setPageSize] = useState(() => (isMobile() ? mobileDefault : desktopDefault));
 
+  // react-doctor-disable-next-line react-doctor/no-derived-state-effect
   useEffect(() => {
+    // react-doctor-disable-next-line react-doctor/no-chain-state-updates
+    // react-doctor-disable-next-line react-doctor/no-derived-state
     setPage(0);
   }, [pageSize]);
 

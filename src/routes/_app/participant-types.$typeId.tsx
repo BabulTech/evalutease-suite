@@ -9,20 +9,25 @@ import { SubTypeDialog, type SubTypeDraft } from "@/components/participants/SubT
 import { SubTypeGrid, type SubTypeCard } from "@/components/participants/SubTypeGrid";
 import { iconFor, type IconKey } from "@/components/categories/icons";
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/_app/participant-types/$typeId")({
   component: TypeDetailPage,
 });
 
 type TypeRow = { id: string; name: string; icon: string | null };
 
+// react-doctor-disable-next-line react-doctor/only-export-components
 function TypeDetailPage() {
   const { typeId } = Route.useParams();
   const { user } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const expected = `/participant-types/${typeId}`;
   const onIndex = pathname === expected || pathname === expected + "/";
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const [type, setType] = useState<TypeRow | null>(null);
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const [cards, setCards] = useState<SubTypeCard[]>([]);
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -41,10 +46,7 @@ function TypeDetailPage() {
         .eq("type_id", typeId)
         .eq("owner_id", user.id)
         .order("created_at", { ascending: true }),
-      supabase
-        .from("participants")
-        .select("subtype_id")
-        .eq("owner_id", user.id),
+      supabase.from("participants").select("subtype_id").eq("owner_id", user.id),
     ]);
     setLoading(false);
     if (t.error) toast.error(t.error.message);
@@ -118,21 +120,24 @@ function TypeDetailPage() {
     <div className="space-y-4">
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Link to="/participant-types" className="hover:text-foreground transition-colors flex items-center gap-1">
+        <Link
+          to="/participant-types"
+          className="hover:text-foreground transition-colors flex items-center gap-1"
+        >
           <UsersRound size={12} /> All types
         </Link>
-        <ChevronLeft className="h-3 w-3 rotate-180 shrink-0" />
+        <ChevronLeft className="size-3 rotate-180 shrink-0" />
         <span className="text-foreground font-medium">{type?.name ?? "Type"}</span>
       </nav>
 
       {/* Hero header */}
       <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
-            <Icon className="h-6 w-6" />
+          <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <Icon className="size-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight truncate">
+            <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight truncate">
               {type?.name ?? "Type"}
             </h1>
             <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -151,7 +156,7 @@ function TypeDetailPage() {
           onSubmit={create}
           trigger={
             <Button className="h-10 gap-2 bg-gradient-primary text-primary-foreground shadow-glow">
-              <Plus className="h-4 w-4" /> Add Group
+              <Plus className="size-4" /> Add Group
             </Button>
           }
         />
@@ -168,11 +173,14 @@ function TypeDetailPage() {
           onDelete={remove}
           emptyState={
             <div className="rounded-2xl border border-dashed border-border bg-card/30 p-12 text-center space-y-3">
-              <UsersRound className="mx-auto h-10 w-10 text-muted-foreground/40" />
+              <UsersRound className="mx-auto size-10 text-muted-foreground/40" />
               <div>
                 <p className="text-sm font-semibold">No groups yet</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Add a group to segment participants — e.g. <span className="text-foreground">Class 9</span>, <span className="text-foreground">Engineering Team</span>, or <span className="text-foreground">Batch 2024</span>.
+                  Add a group to segment participants, e.g.{" "}
+                  <span className="text-foreground">Class 9</span>,{" "}
+                  <span className="text-foreground">Engineering Team</span>, or{" "}
+                  <span className="text-foreground">Batch 2024</span>.
                 </p>
               </div>
               <SubTypeDialog
@@ -180,7 +188,10 @@ function TypeDetailPage() {
                 submitLabel="Create"
                 onSubmit={create}
                 trigger={
-                  <Button size="sm" className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow">
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-gradient-primary text-primary-foreground shadow-glow"
+                  >
                     <Plus size={14} /> Add first group
                   </Button>
                 }

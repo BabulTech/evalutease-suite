@@ -1,21 +1,11 @@
-import { Trash2, Check, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import {
-  type TrueFalseDraft,
-  type Difficulty,
-  MAX_QUESTION_LENGTH,
-} from "./types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { type TrueFalseDraft, MAX_QUESTION_LENGTH } from "./types";
+import { TrueFalsePicker } from "./true-false-editor/TrueFalsePicker";
+import { TrueFalseSettings } from "./true-false-editor/TrueFalseSettings";
 
 type Props = {
   draft: TrueFalseDraft;
@@ -27,8 +17,7 @@ type Props = {
 
 export function TrueFalseEditor({ draft, index, onChange, onRemove, compact }: Props) {
   const { t } = useI18n();
-  const remaining = MAX_QUESTION_LENGTH - draft.text.length;
-  const overLimit = remaining < 0;
+  const overLimit = draft.text.length > MAX_QUESTION_LENGTH;
 
   return (
     <div className="rounded-2xl border border-border bg-card/60 p-5 space-y-4">
@@ -39,7 +28,9 @@ export function TrueFalseEditor({ draft, index, onChange, onRemove, compact }: P
               {typeof index === "number" ? `${t("q.question")} ${index + 1}` : t("q.question")}
               <span className="ml-2 text-[10px] font-bold text-primary">· TRUE / FALSE</span>
             </Label>
-            <span className={`text-xs font-medium ${overLimit ? "text-destructive" : "text-muted-foreground"}`}>
+            <span
+              className={`text-xs font-medium ${overLimit ? "text-destructive" : "text-muted-foreground"}`}
+            >
               {draft.text.length}/{MAX_QUESTION_LENGTH}
             </span>
           </div>
@@ -61,91 +52,13 @@ export function TrueFalseEditor({ draft, index, onChange, onRemove, compact }: P
             onClick={onRemove}
             className="text-muted-foreground hover:text-destructive"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="size-4" />
           </Button>
         )}
       </div>
 
-      <div>
-        <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-          Correct answer
-        </Label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => onChange({ ...draft, correctValue: true })}
-            className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 transition-all ${
-              draft.correctValue
-                ? "border-success bg-success/15 text-success shadow-glow"
-                : "border-border bg-card/40 text-muted-foreground hover:border-success/50"
-            }`}
-          >
-            <Check className="h-5 w-5" />
-            <span className="font-semibold">True</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onChange({ ...draft, correctValue: false })}
-            className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 transition-all ${
-              !draft.correctValue
-                ? "border-destructive bg-destructive/15 text-destructive shadow-glow"
-                : "border-border bg-card/40 text-muted-foreground hover:border-destructive/50"
-            }`}
-          >
-            <X className="h-5 w-5" />
-            <span className="font-semibold">False</span>
-          </button>
-        </div>
-      </div>
-
-      {!compact && (
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              {t("q.difficulty")}
-            </Label>
-            <Select
-              value={draft.difficulty}
-              onValueChange={(v) => onChange({ ...draft, difficulty: v as Difficulty })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="easy">{t("q.easy")}</SelectItem>
-                <SelectItem value="medium">{t("q.medium")}</SelectItem>
-                <SelectItem value="hard">{t("q.hard")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              {t("q.timeSec")}
-            </Label>
-            <Input
-              type="number"
-              min={5}
-              max={3600}
-              value={draft.timeSeconds}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                onChange({ ...draft, timeSeconds: Number.isFinite(n) ? n : 10 });
-              }}
-              placeholder="10"
-            />
-          </div>
-          <div>
-            <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
-              {t("q.explanation")}
-            </Label>
-            <Input
-              value={draft.explanation}
-              onChange={(e) => onChange({ ...draft, explanation: e.target.value })}
-              placeholder={t("q.explanationPlaceholder")}
-            />
-          </div>
-        </div>
-      )}
+      <TrueFalsePicker draft={draft} onChange={onChange} />
+      {!compact && <TrueFalseSettings draft={draft} onChange={onChange} />}
     </div>
   );
 }

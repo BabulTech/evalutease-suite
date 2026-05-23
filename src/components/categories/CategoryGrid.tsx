@@ -1,12 +1,23 @@
+/* eslint-disable sonarjs/cognitive-complexity -- grid card renders have many conditional branches by design */
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { iconFor } from "./icons";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { CategoryDialog, type CategoryDraft } from "./CategoryDialog";
 import type { IconKey } from "./icons";
@@ -36,9 +47,8 @@ export function CategoryGrid({ categories, onEdit, onDelete, emptyState }: Props
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {categories.map((c) => {
         const Icon = iconFor(c.icon);
-        const sharePct = totalQuestions > 0
-          ? Math.round((c.questionCount / totalQuestions) * 100)
-          : 0;
+        const sharePct =
+          totalQuestions > 0 ? Math.round((c.questionCount / totalQuestions) * 100) : 0;
 
         return (
           <div
@@ -57,8 +67,8 @@ export function CategoryGrid({ categories, onEdit, onDelete, emptyState }: Props
               className="block p-5 pr-10"
             >
               {/* Icon */}
-              <div className="h-12 w-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow mb-4">
-                <Icon className="h-6 w-6" />
+              <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow mb-4">
+                <Icon className="size-6" />
               </div>
 
               {/* Name */}
@@ -71,14 +81,15 @@ export function CategoryGrid({ categories, onEdit, onDelete, emptyState }: Props
                 </span>
                 <span className="text-muted-foreground/40 text-xs">·</span>
                 <span className="text-xs text-muted-foreground">
-                  <span className="font-semibold text-foreground">{c.subcategoryCount}</span> {c.subcategoryCount === 1 ? "topic" : "topics"}
+                  <span className="font-semibold text-foreground">{c.subcategoryCount}</span>{" "}
+                  {c.subcategoryCount === 1 ? "topic" : "topics"}
                 </span>
               </div>
 
               {/* Open + share indicator */}
               <div className="mt-3 flex items-center justify-between">
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary group-hover:gap-2 transition-all">
-                  Browse <ArrowRight className="h-3.5 w-3.5" />
+                  Browse <ArrowRight className="size-3.5" />
                 </span>
                 {totalQuestions > 0 && (
                   <span className="text-[10px] text-muted-foreground">{sharePct}% of bank</span>
@@ -90,10 +101,23 @@ export function CategoryGrid({ categories, onEdit, onDelete, emptyState }: Props
                 <div className="mt-2 h-1 rounded-full bg-muted/40 overflow-hidden">
                   <div
                     className={`h-full rounded-full bg-primary/60 transition-all ${
-                      sharePct <= 10 ? "w-[10%]" : sharePct <= 20 ? "w-1/5"
-                      : sharePct <= 25 ? "w-1/4" : sharePct <= 33 ? "w-1/3"
-                      : sharePct <= 50 ? "w-1/2" : sharePct <= 66 ? "w-2/3"
-                      : sharePct <= 75 ? "w-3/4" : sharePct <= 90 ? "w-[90%]" : "w-full"
+                      sharePct <= 10
+                        ? "w-[10%]"
+                        : sharePct <= 20
+                          ? "w-1/5"
+                          : sharePct <= 25
+                            ? "w-1/4"
+                            : sharePct <= 33
+                              ? "w-1/3"
+                              : sharePct <= 50
+                                ? "w-1/2"
+                                : sharePct <= 66
+                                  ? "w-2/3"
+                                  : sharePct <= 75
+                                    ? "w-3/4"
+                                    : sharePct <= 90
+                                      ? "w-[90%]"
+                                      : "w-full"
                     }`}
                   />
                 </div>
@@ -107,7 +131,9 @@ export function CategoryGrid({ categories, onEdit, onDelete, emptyState }: Props
 }
 
 function CategoryRowMenu({
-  category, onEdit, onDelete,
+  category,
+  onEdit,
+  onDelete,
 }: {
   category: CategoryCard;
   onEdit: (id: string, draft: CategoryDraft) => Promise<void>;
@@ -121,7 +147,7 @@ function CategoryRowMenu({
           className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 min-h-[32px] min-w-[32px] flex items-center justify-center"
           aria-label="Open menu"
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreHorizontal className="size-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
@@ -132,14 +158,17 @@ function CategoryRowMenu({
           onSubmit={(draft) => onEdit(category.id, draft)}
           trigger={
             <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2">
-              <Pencil className="h-3.5 w-3.5" /> Edit
+              <Pencil className="size-3.5" /> Edit
             </DropdownMenuItem>
           }
         />
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2 text-destructive focus:text-destructive">
-              <Trash2 className="h-3.5 w-3.5" /> Delete
+            <DropdownMenuItem
+              onSelect={(e) => e.preventDefault()}
+              className="gap-2 text-destructive focus:text-destructive"
+            >
+              <Trash2 className="size-3.5" /> Delete
             </DropdownMenuItem>
           </AlertDialogTrigger>
           <AlertDialogContent>

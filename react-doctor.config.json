@@ -1,0 +1,6 @@
+{
+  "ignore": ["load-tests/**"],
+  "rules": {
+    "deslop/unused-file": "off"
+  }
+}

@@ -6,7 +6,7 @@ export type QuizReportAttempt = {
   seatNumber?: string | null;
   score: number;
   totalQuestions: number;
-  totalMaxPoints?: number | null;  // sum of all question max_points for the session
+  totalMaxPoints?: number | null; // sum of all question max_points for the session
   attemptedQuestions: number;
   correctAnswers: number;
   wrongAnswers: number;
@@ -47,7 +47,10 @@ export function getQuizReportRows(attempts: QuizReportAttempt[]): QuizReportRow[
     .map((a, index) => ({
       ...a,
       rank: index + 1,
-      percent: Math.min(100, Math.round((a.score / Math.max(1, a.totalMaxPoints ?? a.totalQuestions)) * 100)),
+      percent: Math.min(
+        100,
+        Math.round((a.score / Math.max(1, a.totalMaxPoints ?? a.totalQuestions)) * 100),
+      ),
     }));
 }
 
@@ -73,12 +76,13 @@ export function downloadQuizReportCsv(
     "Status",
     "Completed At",
   ];
+  const NOT_SPECIFIED = "Not specified";
   const csv = [
     [`Quiz Report: ${session.title}`],
-    [`Teacher: ${session.teacherName || "Not specified"}`],
-    [`School/Organization: ${session.schoolName || "Not specified"}`],
-    [`Subject: ${session.subjectLabel || session.categoryLabel || "Not specified"}`],
-    [`Topic: ${session.topicLabel || "Not specified"}`],
+    [`Teacher: ${session.teacherName || NOT_SPECIFIED}`],
+    [`School/Organization: ${session.schoolName || NOT_SPECIFIED}`],
+    [`Subject: ${session.subjectLabel || session.categoryLabel || NOT_SPECIFIED}`],
+    [`Topic: ${session.topicLabel || NOT_SPECIFIED}`],
     [`Category: ${session.categoryLabel || "Uncategorised"}`],
     options?.filterSummary ? [`Filters: ${options.filterSummary}`] : null,
     [`Generated: ${new Date().toLocaleString()}`],
@@ -103,8 +107,7 @@ export function downloadQuizReportCsv(
       r.completedAt ? new Date(r.completedAt).toLocaleString() : "",
     ]),
   ]
-    .filter((row): row is (string | number)[] => row !== null)
-    .map((row) => row.map(csvCell).join(","))
+    .flatMap((row) => (row !== null ? [row.map(csvCell).join(",")] : []))
     .join("\n");
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -122,7 +125,9 @@ export function printQuizResults(session: QuizReportSession) {
   const rows = getQuizReportRows(session.attempts);
   const now = new Date().toLocaleString();
 
-  const tableRows = rows.map((r, i) => `
+  const tableRows = rows
+    .map(
+      (r, i) => `
     <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
       <td style="text-align:center;font-weight:700;">${r.rank}</td>
       <td><strong>${r.name}</strong></td>
@@ -133,7 +138,9 @@ export function printQuizResults(session: QuizReportSession) {
       <td style="text-align:center;color:#dc2626;font-weight:700;">${r.wrongAnswers}</td>
       <td style="text-align:center;">${formatDuration(r.durationSeconds ?? null)}</td>
       <td style="text-align:center;">${r.unattemptedQuestions}</td>
-    </tr>`).join("");
+    </tr>`,
+    )
+    .join("");
 
   const html = `<!DOCTYPE html>
 <html lang="en">

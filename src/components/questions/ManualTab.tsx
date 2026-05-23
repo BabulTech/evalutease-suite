@@ -12,12 +12,7 @@ import {
 } from "@/components/ui/select";
 import { DraftEditorRouter } from "./DraftEditorRouter";
 import { QuestionTypePicker } from "./QuestionTypePicker";
-import {
-  emptyDraft,
-  validateDraft,
-  type DraftQuestion,
-  type QuestionType,
-} from "./types";
+import { emptyDraft, validateDraft, type DraftQuestion, type QuestionType } from "./types";
 import { useI18n } from "@/lib/i18n";
 
 type Props = {
@@ -61,8 +56,10 @@ export function ManualTab({ disabled, onSave, allowedTypes = DEFAULT_ALLOWED }: 
       <div className="flex items-center justify-between rounded-xl border border-border bg-card/30 px-4 py-3">
         <p className="text-sm text-muted-foreground flex-1">{t("q.manualHint")}</p>
         <div className="flex items-center gap-2 ml-4 shrink-0">
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">{t("q.aiLanguage")}</Label>
+          <Globe className="size-4 text-muted-foreground" />
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">
+            {t("q.aiLanguage")}
+          </Label>
           <Select value={lang} onValueChange={(v) => setLang(v as "en" | "ur")}>
             <SelectTrigger className="w-36 h-8 text-xs">
               <SelectValue />
@@ -87,11 +84,7 @@ export function ManualTab({ disabled, onSave, allowedTypes = DEFAULT_ALLOWED }: 
         <Label className="mb-2 text-xs uppercase tracking-wider text-muted-foreground block">
           Question Type
         </Label>
-        <QuestionTypePicker
-          value={draft.type}
-          onChange={changeType}
-          allowedTypes={allowedTypes}
-        />
+        <QuestionTypePicker value={draft.type} onChange={changeType} allowedTypes={allowedTypes} />
       </div>
 
       <DraftEditorRouter draft={draft} onChange={setDraft} />
@@ -111,7 +104,7 @@ export function ManualTab({ disabled, onSave, allowedTypes = DEFAULT_ALLOWED }: 
           disabled={disabled || saving}
           className="bg-gradient-primary text-primary-foreground shadow-glow"
         >
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="size-4 mr-1" />
           {saving ? t("common.saving") : t("q.addQuestion")}
         </Button>
       </div>

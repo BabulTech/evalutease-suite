@@ -15,13 +15,17 @@ export function LanguageSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2">
-          <Globe className="h-4 w-4" />
+          <Globe className="size-4" />
           <span className="text-xs font-medium">{label}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {(["en", "ur"] as Language[]).map((l) => (
-          <DropdownMenuItem key={l} onClick={() => setLang(l)} className={lang === l ? "bg-accent" : ""}>
+          <DropdownMenuItem
+            key={l}
+            onClick={() => setLang(l)}
+            className={lang === l ? "bg-accent" : ""}
+          >
             {l === "en" ? t("lang.english") : t("lang.urdu")}
           </DropdownMenuItem>
         ))}

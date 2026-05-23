@@ -18,7 +18,7 @@ type Props = {
 
 // Chip-style picker, rendered at the top of every question editor.
 // Phase 1: clicking switches the active draft to a fresh empty of that
-// type — caller decides how to handle the reset.
+// type, caller decides how to handle the reset.
 export function QuestionTypePicker({ value, onChange, allowedTypes, className }: Props) {
   return (
     <div className={`grid grid-cols-2 md:grid-cols-4 gap-2 ${className ?? ""}`}>
@@ -45,7 +45,7 @@ export function QuestionTypePicker({ value, onChange, allowedTypes, className }:
               <span className={`text-sm font-semibold ${isActive ? "text-primary" : ""}`}>
                 {label}
               </span>
-              {isLocked && <Lock className="h-3 w-3 ml-auto text-muted-foreground" />}
+              {isLocked && <Lock className="size-3 ml-auto text-muted-foreground" />}
             </div>
             <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{description}</p>
           </button>

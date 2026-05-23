@@ -15,6 +15,7 @@ type ClientActivityInput = {
 
 export async function logClientActivity(input: ClientActivityInput) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not yet in generated Supabase types
     await (supabase as any).rpc("log_activity", {
       p_action_type: input.actionType,
       p_module: input.module,

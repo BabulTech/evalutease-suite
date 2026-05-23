@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -24,24 +24,19 @@ type Props = {
   onSubmit: (draft: CategoryDraft) => Promise<void>;
 };
 
-export function CategoryDialog({
-  trigger,
-  initial,
-  title,
-  submitLabel = "Save",
-  onSubmit,
-}: Props) {
+export function CategoryDialog({ trigger, initial, title, submitLabel = "Save", onSubmit }: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initial?.name ?? "");
   const [icon, setIcon] = useState<IconKey>(initial?.icon ?? "book");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (open) {
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
       setName(initial?.name ?? "");
       setIcon(initial?.icon ?? "book");
     }
-  }, [open, initial]);
+    setOpen(next);
+  };
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -65,7 +60,7 @@ export function CategoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
@@ -79,7 +74,6 @@ export function CategoryDialog({
           <div>
             <Label className="mb-1.5">Name</Label>
             <Input
-              autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. History, Science, Sports"
@@ -104,7 +98,7 @@ export function CategoryDialog({
                         : "border-border bg-card/40 hover:border-primary/30 text-muted-foreground"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="size-5" />
                   </button>
                 );
               })}

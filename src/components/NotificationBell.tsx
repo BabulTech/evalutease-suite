@@ -1,14 +1,14 @@
 import { useRef, useState, useEffect } from "react";
-import { Bell, Check, CheckCheck, Info, AlertTriangle, XCircle, CheckCircle } from "lucide-react";
+import { Bell, CheckCheck, Info, AlertTriangle, XCircle, CheckCircle } from "lucide-react";
 import { useNotifications, type Notification } from "@/contexts/NotificationContext";
 import { useNavigate } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
 const TYPE_ICON = {
-  info: <Info className="h-3.5 w-3.5 text-blue-500" />,
-  success: <CheckCircle className="h-3.5 w-3.5 text-green-500" />,
-  warning: <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />,
-  error: <XCircle className="h-3.5 w-3.5 text-red-500" />,
+  info: <Info className="size-3.5 text-blue-500" />,
+  success: <CheckCircle className="size-3.5 text-green-500" />,
+  warning: <AlertTriangle className="size-3.5 text-yellow-500" />,
+  error: <XCircle className="size-3.5 text-red-500" />,
 };
 
 function timeAgo(dateStr: string) {
@@ -50,12 +50,12 @@ export function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex items-center justify-center h-9 w-9 rounded-xl hover:bg-sidebar-accent transition-colors"
+        className="relative flex items-center justify-center size-9 rounded-xl hover:bg-sidebar-accent transition-colors"
         aria-label="Notifications"
       >
-        <Bell className="h-4.5 w-4.5" />
+        <Bell className="size-4.5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+          <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -72,7 +72,7 @@ export function NotificationBell() {
                 onClick={markAllRead}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <CheckCheck className="h-3.5 w-3.5" />
+                <CheckCheck className="size-3.5" />
                 Mark all read
               </button>
             )}
@@ -92,22 +92,26 @@ export function NotificationBell() {
                   onClick={() => handleClick(n)}
                   className={cn(
                     "w-full text-left px-4 py-3 hover:bg-sidebar-accent transition-colors flex items-start gap-3",
-                    !n.read && "bg-primary/5"
+                    !n.read && "bg-primary/5",
                   )}
                 >
                   <span className="mt-0.5 shrink-0">{TYPE_ICON[n.type]}</span>
                   <div className="flex-1 min-w-0">
-                    <div className={cn("text-sm leading-snug truncate", !n.read && "font-semibold")}>
+                    <div
+                      className={cn("text-sm leading-snug truncate", !n.read && "font-semibold")}
+                    >
                       {n.title}
                     </div>
                     {n.body && (
-                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {n.body}
+                      </div>
                     )}
-                    <div className="text-[10px] text-muted-foreground mt-1">{timeAgo(n.created_at)}</div>
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {timeAgo(n.created_at)}
+                    </div>
                   </div>
-                  {!n.read && (
-                    <span className="mt-1.5 h-2 w-2 rounded-full bg-primary shrink-0" />
-                  )}
+                  {!n.read && <span className="mt-1.5 size-2 rounded-full bg-primary shrink-0" />}
                 </button>
               ))
             )}

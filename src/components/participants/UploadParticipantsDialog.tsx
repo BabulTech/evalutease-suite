@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { FileText, Save, Upload, X } from "lucide-react";
+import { Save, Upload, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,16 +16,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { ParticipantDraftReview } from "./ParticipantDraftReview";
 import { parseParticipantsCsv } from "./parser";
 import { type ParticipantDraft } from "./types";
+import { CsvDropZone } from "./upload-dialog/CsvDropZone";
 
-const ACCEPTED = ".csv,.tsv,.txt,text/csv,text/plain";
 const MAX_BYTES = 1024 * 1024;
 
 type Props = {
   trigger: ReactNode;
-  /** Called once for the whole batch - implementer should bulk insert. */
   onSave: (drafts: ParticipantDraft[]) => Promise<void>;
 };
 
+// react-doctor-disable-next-line react-doctor/prefer-useReducer
 export function UploadParticipantsDialog({ trigger, onSave }: Props) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -100,34 +100,17 @@ export function UploadParticipantsDialog({ trigger, onSave }: Props) {
           <DialogDescription>
             Drop a CSV (or TSV) with a header row. Recognised columns:{" "}
             <span className="font-mono">name</span>, <span className="font-mono">email</span>,{" "}
-            <span className="font-mono">mobile</span>, <span className="font-mono">roll_number</span>,{" "}
-            <span className="font-mono">seat_number</span>, <span className="font-mono">class</span>,{" "}
-            <span className="font-mono">organization</span>, <span className="font-mono">address</span>,{" "}
-            <span className="font-mono">notes</span>. Only <span className="font-mono">name</span> is required.
+            <span className="font-mono">mobile</span>,{" "}
+            <span className="font-mono">roll_number</span>,{" "}
+            <span className="font-mono">seat_number</span>, <span className="font-mono">class</span>
+            , <span className="font-mono">organization</span>,{" "}
+            <span className="font-mono">address</span>, <span className="font-mono">notes</span>.
+            Only <span className="font-mono">name</span> is required.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div
-            className="rounded-2xl border-2 border-dashed border-border hover:border-primary/40 bg-card/30 p-6 text-center transition-colors cursor-pointer"
-            onClick={() => fileRef.current?.click()}
-            role="button"
-          >
-            <FileText className="mx-auto h-10 w-10 text-muted-foreground/60" />
-            <div className="mt-3 text-sm font-medium">
-              {filename ? `Loaded: ${filename}` : "Click to choose a CSV file"}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {filename ? "Click to replace, or edit the content below." : "Up to 1 MB"}
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept={ACCEPTED}
-              className="hidden"
-              onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-            />
-          </div>
+          <CsvDropZone filename={filename} fileRef={fileRef} onFile={handleFile} />
 
           <div>
             <Label className="mb-1.5 text-xs uppercase tracking-wider text-muted-foreground">
@@ -150,7 +133,7 @@ export function UploadParticipantsDialog({ trigger, onSave }: Props) {
               onClick={() => fileRef.current?.click()}
               className="gap-2"
             >
-              <Upload className="h-4 w-4" /> File
+              <Upload className="size-4" /> File
             </Button>
             <Button
               type="button"
@@ -167,7 +150,7 @@ export function UploadParticipantsDialog({ trigger, onSave }: Props) {
         <DialogFooter>
           {drafts.length > 0 && (
             <Button variant="ghost" onClick={() => setDrafts([])} disabled={saving}>
-              <X className="h-4 w-4 mr-1" /> Discard parsed
+              <X className="size-4 mr-1" /> Discard parsed
             </Button>
           )}
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
@@ -178,7 +161,7 @@ export function UploadParticipantsDialog({ trigger, onSave }: Props) {
             disabled={saving || drafts.length === 0}
             className="gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
           >
-            <Save className="h-4 w-4" />
+            <Save className="size-4" />
             {saving ? "Saving…" : `Save all (${drafts.length})`}
           </Button>
         </DialogFooter>

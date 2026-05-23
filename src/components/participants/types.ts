@@ -65,10 +65,7 @@ export type DraftValidation = { ok: true } | { ok: false; reason: string };
 
 import type { RegistrationFields } from "@/components/settings/host-settings";
 
-export function validateDraft(
-  d: ParticipantDraft,
-  fields?: RegistrationFields,
-): DraftValidation {
+export function validateDraft(d: ParticipantDraft, fields?: RegistrationFields): DraftValidation {
   const name = d.name.trim();
   if (!name) return { ok: false, reason: "Name is required" };
   if (name.length > PARTICIPANT_NAME_MAX)

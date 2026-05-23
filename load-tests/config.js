@@ -56,6 +56,7 @@ export function selectedSchoolProfile() {
 }
 
 export function parseList(value) {
+  // react-doctor-disable-next-line react-doctor/js-flatmap-filter
   return String(value || "")
     .split(",")
     .map((item) => item.trim())

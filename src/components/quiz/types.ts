@@ -76,10 +76,7 @@ export function computeClock(
   // The cumulative pause_offset_seconds from previous pause/resume cycles is
   // always subtracted from elapsed.
   const reference = pausedAtIso ? new Date(pausedAtIso).getTime() : now;
-  let elapsed = Math.max(
-    0,
-    Math.floor((reference - started) / 1000) - Math.max(0, pauseOffsetSec),
-  );
+  let elapsed = Math.max(0, Math.floor((reference - started) / 1000) - Math.max(0, pauseOffsetSec));
   for (let i = 0; i < questions.length; i++) {
     const dur = questions[i].time_seconds || defaultTime;
     if (elapsed < dur) {

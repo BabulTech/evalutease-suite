@@ -16,10 +16,11 @@ export function parseParticipantsCsv(input: string): ParticipantDraft[] {
   if (lines.length < 1) return [];
 
   const headerCells = parseCsvLine(lines[0]).map((c) => c.toLowerCase().trim());
+  const headerIndex = new Map(headerCells.map((h, i) => [h, i]));
   const idx = (...names: string[]) => {
     for (const n of names) {
-      const i = headerCells.indexOf(n);
-      if (i >= 0) return i;
+      const i = headerIndex.get(n);
+      if (i !== undefined) return i;
     }
     return -1;
   };

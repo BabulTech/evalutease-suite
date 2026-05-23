@@ -42,6 +42,7 @@ export async function logActivity(input: ActivityInput) {
     // actor_name and actor_email columns were removed in migration 23.
     // Reader RPCs (get_session_activity, get_my_recent_activity) join
     // profiles on actor_user_id to surface the display name on read.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabaseAdmin as any).from("activity_logs").insert({
       actor_user_id: input.actorUserId,
       plan_owner_id: input.planOwnerId ?? input.actorUserId,
@@ -62,6 +63,7 @@ export async function logActivity(input: ActivityInput) {
 
 async function createSecurityAlert(input: AlertInput) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabaseAdmin as any).from("security_alerts").insert({
       severity: input.severity,
       alert_type: input.alertType,
@@ -77,6 +79,7 @@ async function createSecurityAlert(input: AlertInput) {
 }
 
 async function estimateAiCost(model: string, inputTokens: number, outputTokens: number) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (supabaseAdmin as any)
     .from("ai_model_pricing")
     .select("input_cost_per_million, output_cost_per_million, currency")
@@ -101,11 +104,13 @@ async function runAiAlertRules(input: AiUsageInput, estimatedCost: number) {
   const sinceDay = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const [{ count: hourCalls }, { count: dayCalls }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabaseAdmin as any)
       .from("ai_usage_logs")
       .select("id", { count: "exact", head: true })
       .eq("plan_owner_id", input.planOwnerId)
       .gte("created_at", sinceHour),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabaseAdmin as any)
       .from("ai_usage_logs")
       .select("id", { count: "exact", head: true })
@@ -161,8 +166,10 @@ export async function logAiUsage(input: AiUsageInput) {
   try {
     const inputTokens = Math.max(0, input.inputTokens ?? 0);
     const outputTokens = Math.max(0, input.outputTokens ?? 0);
+    // react-doctor-disable-next-line react-doctor/async-parallel
     const { cost, currency } = await estimateAiCost(input.model, inputTokens, outputTokens);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabaseAdmin as any).from("ai_usage_logs").insert({
       actor_user_id: input.actorUserId,
       plan_owner_id: input.planOwnerId,

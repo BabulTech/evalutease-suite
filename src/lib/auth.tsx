@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logClientActivity } from "@/lib/audit";
@@ -19,7 +27,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // CRITICAL: set up listener FIRST then check existing session
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
     });
@@ -33,8 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = async () => {
-    // Log BEFORE signOut while auth.uid() is still valid
+  const signOut = useCallback(async () => {
     if (user) {
       await logClientActivity({
         actionType: "signed_out",
@@ -47,17 +56,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }
     await supabase.auth.signOut();
-  };
+  }, [user]);
 
-  return (
-    <Ctx.Provider value={{ user, session, loading, signOut }}>
-      {children}
-    </Ctx.Provider>
+  const ctxValue = useMemo(
+    () => ({ user, session, loading, signOut }),
+    [user, session, loading, signOut],
   );
+
+  return <Ctx.Provider value={ctxValue}>{children}</Ctx.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- standard context+hook co-location
 export function useAuth() {
-  const ctx = useContext(Ctx);
+  const ctx = use(Ctx);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }

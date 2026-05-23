@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
 
     if (usageError) throw usageError;
 
-    const expiredUserIds = [...new Set((expiredUsage ?? []).map((row) => row.user_id).filter(Boolean))];
+    const expiredUserIds = [...new Set((expiredUsage ?? []).flatMap((row) => row.user_id ? [row.user_id] : []))];
     if (expiredUserIds.length === 0) {
       return new Response(
         JSON.stringify({ success: true, expired_count: 0, fallback_plan: targetPlan.slug }),

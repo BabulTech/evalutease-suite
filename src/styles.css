@@ -1,5 +1,4 @@
-@import "tailwindcss" source(none);
-@source "../src";
+@import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -94,8 +93,9 @@
   --sidebar-ring: oklch(0.82 0.16 180);
 
   --gradient-primary: linear-gradient(135deg, var(--primary), var(--primary-glow));
-  --gradient-hero: radial-gradient(ellipse at top, oklch(0.28 0.08 200 / 0.4), transparent 60%),
-                   radial-gradient(ellipse at bottom right, oklch(0.3 0.1 220 / 0.3), transparent 60%);
+  --gradient-hero:
+    radial-gradient(ellipse at top, oklch(0.28 0.08 200 / 0.4), transparent 60%),
+    radial-gradient(ellipse at bottom right, oklch(0.3 0.1 220 / 0.3), transparent 60%);
   --shadow-glow: 0 0 40px oklch(0.82 0.16 180 / 0.25);
   --shadow-elegant: 0 20px 60px -20px oklch(0.1 0.04 240 / 0.6);
   --shadow-card: 0 8px 24px -8px oklch(0.08 0.04 240 / 0.4);
@@ -108,8 +108,12 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
-  html { font-family: "Inter", system-ui, sans-serif; }
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    font-family: "Inter", system-ui, sans-serif;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -117,18 +121,40 @@
     background-attachment: fixed;
     min-height: 100vh;
   }
-  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.01em; }
-  button, [role="button"], select, label[for], summary { cursor: pointer; }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  button,
+  [role="button"],
+  select,
+  label[for],
+  summary {
+    cursor: pointer;
+  }
 
   /* RTL support for Urdu */
-  [dir="rtl"] { font-family: "Noto Naskh Arabic", "Inter", system-ui, sans-serif; }
+  [dir="rtl"] {
+    font-family: "Noto Naskh Arabic", "Inter", system-ui, sans-serif;
+  }
 }
 
 @layer utilities {
-  .bg-gradient-primary { background-image: var(--gradient-primary); }
-  .shadow-glow { box-shadow: var(--shadow-glow); }
-  .shadow-elegant { box-shadow: var(--shadow-elegant); }
-  .shadow-card { box-shadow: var(--shadow-card); }
+  .bg-gradient-primary {
+    background-image: var(--gradient-primary);
+  }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
   .text-gradient {
     background-image: var(--gradient-primary);
     -webkit-background-clip: text;
@@ -140,14 +166,24 @@
 /* ===== Print stylesheet for the Quiz Results page (Print / Download PDF) ===== */
 @media print {
   /* Light page background — easier to read on paper. */
-  html, body {
+  html,
+  body {
     background: #ffffff !important;
     background-image: none !important;
     color: #000 !important;
   }
   /* Hide chrome that doesn't belong on a printed leaderboard. */
-  aside, nav, header, .print\:hidden { display: none !important; }
-  main, .min-h-screen { padding: 0 !important; min-height: 0 !important; }
+  aside,
+  nav,
+  header,
+  .print\:hidden {
+    display: none !important;
+  }
+  main,
+  .min-h-screen {
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
   /* Drop dark theme tweaks. */
   * {
     color: #000 !important;
@@ -155,15 +191,29 @@
     box-shadow: none !important;
   }
   /* Keep table rows from splitting across pages mid-row. */
-  tr, li { break-inside: avoid; }
+  tr,
+  li {
+    break-inside: avoid;
+  }
 }
 
-.chart-label { font-size: 10px; fill: rgba(128,128,128,0.9); font-weight: 600; }
-.pct-bar { width: var(--pct, 0%); }
-
+.chart-label {
+  font-size: 10px;
+  fill: rgba(128, 128, 128, 0.9);
+  font-weight: 600;
+}
+.pct-bar {
+  width: var(--pct, 0%);
+}
 
 @keyframes shimmer {
-  0% { background-position: 200% center; }
-  100% { background-position: -200% center; }
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
 }
-.animate-shimmer { animation: shimmer 2s linear infinite; }
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
+}
