@@ -412,17 +412,14 @@ export function UsersSection() {
       )
       .maybeSingle();
     if (!plan) return;
-    await Promise.all([
-      supabase
-        .from("user_subscriptions")
-        .upsert({ user_id: userId, plan_id: plan.id, status: "active", expires_at: null }, { onConflict: "user_id" }),
-      // Keep profiles.selected_plan in sync so the client repair logic
-      // doesn't auto-downgrade the user back to free on next page load.
-      supabase
-        .from("profiles")
-        .update({ selected_plan: slug, updated_at: new Date().toISOString() })
-        .eq("id", userId),
-    ]);
+    // admin_assign_plan is SECURITY DEFINER — it updates both user_subscriptions
+    // AND profiles.selected_plan in one atomic call, bypassing RLS.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("admin_assign_plan", {
+      p_user_id: userId,
+      p_plan_slug: slug,
+    });
+    if (error) { toast.error("Failed to update plan: " + error.message); return; }
     toast.success("Plan updated");
     void load();
   };
