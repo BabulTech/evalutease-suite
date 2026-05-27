@@ -8,21 +8,18 @@ export function Logo({
   customLogoUrl?: string | null;
 }) {
   const { t } = useI18n();
-  const dim =
-    size === "lg" ? "size-14 text-xl" : size === "sm" ? "size-9 text-sm" : "size-11 text-base";
-
   if (customLogoUrl) {
     return (
       <div className="flex items-center gap-3">
         <img
           src={customLogoUrl}
           alt="Logo"
-          className={`object-contain rounded-xl ${size === "sm" ? "h-8 max-w-[80px]" : size === "lg" ? "h-12 max-w-[160px]" : "h-10 max-w-[120px]"}`}
+          className={`object-contain ${size === "sm" ? "h-12 max-w-[96px]" : size === "lg" ? "h-16 max-w-[180px]" : "h-14 max-w-[140px]"}`}
         />
         {size !== "sm" && (
           <div className="flex flex-col leading-tight">
             <span className="font-display text-lg font-bold text-foreground">
-              Babul<span className="text-primary">.Quiz</span>
+              Jan<span className="text-primary">cho</span>
             </span>
             <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               {t("app.tagline")}
@@ -35,15 +32,15 @@ export function Logo({
 
   return (
     <div className="flex items-center gap-3">
-      <div
-        className={`${dim} rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center font-display font-bold text-primary shadow-glow`}
-      >
-        BQ
-      </div>
+      <img
+        src="/jancho_logo_512.svg"
+        alt="Jancho"
+        className={`object-contain ${size === "sm" ? "h-12 w-12" : size === "lg" ? "h-18 w-18" : "h-16 w-16"}`}
+      />
       {size !== "sm" && (
         <div className="flex flex-col leading-tight">
           <span className="font-display text-lg font-bold text-foreground">
-            Babul<span className="text-primary">.Quiz</span>
+            Jan<span className="text-primary">cho</span>
           </span>
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             {t("app.tagline")}

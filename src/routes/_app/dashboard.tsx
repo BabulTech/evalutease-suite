@@ -19,7 +19,7 @@ function DashboardPage() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const firstName = user?.user_metadata?.first_name ?? user?.email?.split("@")[0] ?? "there";
 
-  const { stats, recent, credits } = useDashboardData(user, plan, hostLoading || !!hostInfo);
+  const { stats, recent, credits, loading: dataLoading } = useDashboardData(user, plan, hostLoading || !!hostInfo);
 
   if (hostLoading) return null;
   if (hostInfo) return <HostDashboard host={hostInfo} userId={user!.id} />;
@@ -27,7 +27,7 @@ function DashboardPage() {
   return (
     <OwnerDashboard
       plan={plan}
-      planLoading={planLoading}
+      planLoading={planLoading || dataLoading}
       stats={stats}
       recent={recent}
       credits={credits}

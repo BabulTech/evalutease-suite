@@ -81,7 +81,7 @@ export function CreditsSection() {
         "id, name, slug, credit_cost_ai_10q, credit_cost_ai_scan, credit_cost_ai_tf_10q, credit_cost_ai_short_10q, credit_cost_ai_long_10q, credit_cost_ai_mix_10q, credit_cost_ai_grade_short, credit_cost_ai_grade_long, credit_cost_session_launch, credit_cost_export, credit_cost_extra_quiz, credit_cost_extra_participants",
       )
       .order("sort_order");
-    if (data) setCostPlans(data as CostRow[]);
+    if (data) setCostPlans((data as CostRow[]).filter((p) => !["individual_starter", "enterprise_free"].includes(p.slug)));
   }, []);
 
   const saveCosts = async () => {

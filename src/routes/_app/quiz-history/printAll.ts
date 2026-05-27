@@ -46,7 +46,7 @@ export function printAll(
     <div class="session-block">
       <div class="top-bar">
         <div>
-          <div class="app-name">EvaluTease</div>
+          <div class="app-name">Jancho</div>
           <div class="app-sub">Quiz Results Report</div>
         </div>
         <div class="print-date">
@@ -123,7 +123,7 @@ export function printAll(
     </div>
     <div class="sig-right">
       <div>© 2025 BabulTech · All rights reserved</div>
-      <div>evalutease.com</div>
+      <div>jancho.app</div>
     </div>
   </div>
   <script>window.onload = () => { window.print(); }</script>

@@ -1,18 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-type PlanSlug = "individual_starter" | "enterprise_starter";
+type PlanSlug = "individual_starter" | "enterprise_free";
 
 type EnsurePlanInput = {
   planSlug: PlanSlug;
   _token: string;
+  isNgo?: boolean;
 };
 
-type TokenInput = {
-  _token: string;
-};
-
-const VALID_PLANS = new Set(["individual_starter", "enterprise_starter"]);
+const VALID_PLANS = new Set(["individual_starter", "enterprise_free"]);
 
 async function getUserIdFromToken(token: string): Promise<string> {
   const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token);
@@ -36,68 +33,13 @@ async function getPlanBySlug(slug: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabaseAdmin as any)
     .from("plans")
-    .select("id, slug, trial_days")
+    .select("id, slug")
     .eq("slug", slug)
     .eq("is_active", true)
     .maybeSingle();
   if (error) throw error;
-  return data as { id: string; slug: string; trial_days: number | null } | null;
+  return data as { id: string; slug: string } | null;
 }
-
-async function expirePlanOwnerTrial(
-  planOwnerId: string,
-): Promise<{ expired: boolean; toPlanSlug: string | null }> {
-  const { data: currentSub } = await supabaseAdmin
-    .from("user_subscriptions")
-    .select("plan_id, expires_at, plans(slug)")
-    .eq("user_id", planOwnerId)
-    .eq("status", "active")
-    .maybeSingle();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const currentSlug = (currentSub as any)?.plans?.slug;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const expiresAt = (currentSub as any)?.expires_at as string | null;
-  if (currentSlug !== "enterprise_starter" || !expiresAt || new Date(expiresAt) >= new Date()) {
-    return { expired: false, toPlanSlug: null };
-  }
-
-  const fallback =
-    (await getPlanBySlug("enterprise_free")) ?? (await getPlanBySlug("individual_starter"));
-  if (!fallback?.id) throw new Error("No free fallback plan found");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabaseAdmin as any).from("user_subscriptions").upsert(
-    {
-      user_id: planOwnerId,
-      plan_id: fallback.id,
-      status: "active",
-      expires_at: null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" },
-  );
-  if (error) throw error;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { expired: true, toPlanSlug: (fallback as any).slug ?? null };
-}
-
-export const expireMyTrialIfNeeded = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown): TokenInput => {
-    if (typeof data !== "object" || data === null) throw new Error("Invalid input");
-    const _token =
-      typeof (data as Record<string, unknown>)._token === "string"
-        ? ((data as Record<string, unknown>)._token as string)
-        : "";
-    if (!_token) throw new Error("Unauthorized");
-    return { _token };
-  })
-  .handler(async ({ data }) => {
-    const userId = await getUserIdFromToken(data._token);
-    const planOwnerId = await resolvePlanOwnerId(userId);
-    return expirePlanOwnerTrial(planOwnerId);
-  });
 
 export const ensureSelectedPlan = createServerFn({ method: "POST" })
   .inputValidator((data: unknown): EnsurePlanInput => {
@@ -109,7 +51,8 @@ export const ensureSelectedPlan = createServerFn({ method: "POST" })
         : "individual_starter";
     const _token = typeof v._token === "string" ? v._token : "";
     if (!_token) throw new Error("Unauthorized");
-    return { planSlug, _token };
+    const isNgo = v.isNgo === true;
+    return { planSlug, _token, isNgo };
   })
   .handler(async ({ data }): Promise<{ planSlug: string; expiresAt: string | null }> => {
     const [userId, { data: userData }, plan] = await Promise.all([
@@ -119,13 +62,6 @@ export const ensureSelectedPlan = createServerFn({ method: "POST" })
     ]);
     const user = userData.user;
     if (!plan?.id) throw new Error(`Plan not found: ${data.planSlug}`);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const trialDays = Number((plan as any).trial_days ?? 15);
-    const expiresAt =
-      data.planSlug === "enterprise_starter"
-        ? new Date(Date.now() + Math.max(1, trialDays) * 24 * 60 * 60 * 1000).toISOString()
-        : null;
 
     const fullName =
       (user?.user_metadata?.full_name as string | undefined) ||
@@ -140,6 +76,7 @@ export const ensureSelectedPlan = createServerFn({ method: "POST" })
         email: user?.email,
         full_name: fullName,
         selected_plan: data.planSlug,
+        is_ngo: data.isNgo ?? false,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" },
@@ -152,28 +89,27 @@ export const ensureSelectedPlan = createServerFn({ method: "POST" })
         user_id: userId,
         plan_id: plan.id,
         status: "active",
-        expires_at: expiresAt,
+        expires_at: null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
     );
     if (subErr) throw subErr;
 
-    if (data.planSlug === "enterprise_starter") {
-      const trialEnd = expiresAt ?? new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
+    // For enterprise free plan — initialise the lifetime free AI calls tracker (10 calls, no expiry)
+    if (data.planSlug === "enterprise_free") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: trialErr } = await (supabaseAdmin as any).from("trial_ai_usage").upsert(
+      await (supabaseAdmin as any).from("trial_ai_usage").upsert(
         {
           user_id: userId,
           used_calls: 0,
           trial_start: new Date().toISOString(),
-          trial_end: trialEnd,
+          trial_end: null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id", ignoreDuplicates: true },
       );
-      if (trialErr) throw trialErr;
     }
 
-    return { planSlug: data.planSlug, expiresAt };
+    return { planSlug: data.planSlug, expiresAt: null };
   });

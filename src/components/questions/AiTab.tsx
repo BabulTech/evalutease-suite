@@ -14,7 +14,7 @@ import { AiGenerateControls } from "./ai-tab/AiGenerateControls";
 import { AiUpgradeGate } from "./ai-tab/AiUpgradeGate";
 
 const MAX_AI_COUNT_DEFAULT = 20;
-const MAX_AI_COUNT_TRIAL = 10;
+const MAX_AI_COUNT_FREE = 10;
 
 type Props = {
   disabled?: boolean;
@@ -34,22 +34,22 @@ export function AiTab({ disabled, onSave, saving }: Props) {
   const [drafts, setDrafts] = useState<DraftQuestion[]>([]);
   const [generating, setGenerating] = useState(false);
 
-  const isTrial = plan?.slug === "enterprise_starter";
-  const MAX_AI_COUNT = isTrial ? MAX_AI_COUNT_TRIAL : MAX_AI_COUNT_DEFAULT;
-  const trialLimit = plan?.trial_ai_calls ?? 10;
+  const isFreeAi = plan?.slug === "enterprise_free";
+  const MAX_AI_COUNT = isFreeAi ? MAX_AI_COUNT_FREE : MAX_AI_COUNT_DEFAULT;
+  const freeAiLimit = plan?.trial_ai_calls ?? 10;
 
-  const [trialUsed, setTrialUsed] = useState<number | null>(null);
+  const [freeAiUsed, setFreeAiUsed] = useState<number | null>(null);
   useEffect(() => {
-    if (!isTrial) return;
+    if (!isFreeAi) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("trial_ai_usage")
       .select("used_calls")
       .maybeSingle()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data }: any) => setTrialUsed(data?.used_calls ?? 0));
-  }, [isTrial]);
-  const trialRemaining = trialLimit - (trialUsed ?? 0);
+      .then(({ data }: any) => setFreeAiUsed(data?.used_calls ?? 0));
+  }, [isFreeAi]);
+  const freeAiRemaining = freeAiLimit - (freeAiUsed ?? 0);
 
   const creditCost =
     kind === "true_false"
@@ -62,7 +62,7 @@ export function AiTab({ disabled, onSave, saving }: Props) {
             ? (plan?.credit_cost_ai_mix_10q ?? 4)
             : (plan?.credit_cost_ai_10q ?? 3);
   const totalCost = Math.max(1, Math.ceil(count * (creditCost / 10)));
-  const hasEnoughCredits = isTrial ? trialRemaining > 0 : credits.balance >= totalCost;
+  const hasEnoughCredits = isFreeAi ? freeAiRemaining > 0 : credits.balance >= totalCost;
 
   const generate = async () => {
     if (!topic.trim()) {
@@ -73,13 +73,13 @@ export function AiTab({ disabled, onSave, saving }: Props) {
       toast.error(t("q.aiCountError"));
       return;
     }
-    if (isTrial && trialRemaining <= 0) {
+    if (isFreeAi && freeAiRemaining <= 0) {
       toast.error(
         "Your 10 complimentary AI calls have been used. Upgrade to Enterprise Pro for full AI access.",
       );
       return;
     }
-    if (!isTrial && credits.balance < totalCost) {
+    if (!isFreeAi && credits.balance < totalCost) {
       toast.error(
         `Not enough credits. Need ${totalCost}, you have ${credits.balance}. Buy more credits in Billing.`,
       );
@@ -102,14 +102,15 @@ export function AiTab({ disabled, onSave, saving }: Props) {
         return;
       }
       setDrafts(out);
-      if (isTrial) {
-        setTrialUsed((prev) => (prev !== null ? prev + 1 : 1));
+      if (isFreeAi) {
+        setFreeAiUsed((prev) => (prev !== null ? prev + 1 : 1));
+        window.dispatchEvent(new CustomEvent("free-ai-consumed"));
       } else {
         reload();
       }
       toast.success(
-        isTrial
-          ? `${out.length} ${t("q.aiGenSuccess")} · 1 trial AI call used (${trialRemaining - 1} left)`
+        isFreeAi
+          ? `${out.length} ${t("q.aiGenSuccess")} · 1 free AI call used (${freeAiRemaining - 1} left)`
           : `${out.length} ${t("q.aiGenSuccess")} · ${totalCost} credits used`,
       );
     } catch (err) {
@@ -129,25 +130,29 @@ export function AiTab({ disabled, onSave, saving }: Props) {
   }
 
   if (!isAiAllowed) return <AiUpgradeGate />;
+  // Lock the AI tab once free-plan users exhaust their lifetime allowance
+  if (isFreeAi && freeAiUsed !== null && freeAiUsed >= freeAiLimit) {
+    return <AiUpgradeGate />;
+  }
 
   return (
     <>
       <LoadingOverlay visible={generating} variant="ai" />
       <div className="space-y-5">
         <AiTabHeader
-          isTrial={isTrial}
-          trialUsed={trialUsed}
-          trialRemaining={trialRemaining}
-          trialLimit={trialLimit}
+          isFreeAi={isFreeAi}
+          freeAiUsed={freeAiUsed}
+          freeAiRemaining={freeAiRemaining}
+          freeAiLimit={freeAiLimit}
           creditsBalance={credits.balance}
           count={count}
           totalCost={totalCost}
         />
-        {isTrial && (
+        {isFreeAi && (
           <TrialNotice
-            trialRemaining={trialRemaining}
-            trialLimit={trialLimit}
-            maxCount={MAX_AI_COUNT_TRIAL}
+            freeAiRemaining={freeAiRemaining}
+            freeAiLimit={freeAiLimit}
+            maxCount={MAX_AI_COUNT_FREE}
           />
         )}
         <QuestionKindPicker kind={kind} onChange={setKind} />
@@ -164,7 +169,7 @@ export function AiTab({ disabled, onSave, saving }: Props) {
           generating={generating}
           disabled={disabled}
           hasEnoughCredits={hasEnoughCredits}
-          isTrial={isTrial}
+          isFreeAi={isFreeAi}
           totalCost={totalCost}
           creditsBalance={credits.balance}
           onGenerate={generate}

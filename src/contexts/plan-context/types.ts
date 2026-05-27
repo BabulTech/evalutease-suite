@@ -1,11 +1,8 @@
 export type PlanSlug =
   | "individual_starter"
   | "individual_pro"
-  | "individual_pro_plus"
-  | "enterprise_starter"
   | "enterprise_free"
-  | "enterprise_pro"
-  | "enterprise_elite";
+  | "enterprise_pro";
 
 export type PlanTier = "individual" | "enterprise";
 

@@ -152,15 +152,128 @@ export function OtherDetails({ form, setForm }: Omit<RoleDetailsProps, "role">) 
         value={form.otherDetails ?? ""}
         onChange={(e) => setForm((f) => ({ ...f, otherDetails: e.target.value }))}
         rows={3}
-        aria-label="Describe how you plan to use EvaluTease"
-        placeholder="Describe how you plan to use EvaluTease..."
+        aria-label="Describe how you plan to use Jancho"
+        placeholder="Describe how you plan to use Jancho..."
         className="w-full rounded-xl border border-input bg-background p-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
       />
     </div>
   );
 }
 
-export function RoleDetails({ role, form, setForm }: RoleDetailsProps) {
+function EnterpriseRoleDetails({ role, form, setForm }: RoleDetailsProps) {
+  const showDept = ["HR Manager", "Admin", "Director"].includes(role);
+  const showOrg = ["HR Manager", "Admin", "Director"].includes(role);
+  const showInstitution = role === "Principal";
+  const showIndustry = role === "Director";
+  const showTeamSize = role === "HR Manager";
+  const showYearsExp = role === "Principal";
+
+  if (role === "Other") return <OtherDetails form={form} setForm={setForm} />;
+  if (!role) return null;
+
+  return (
+    <div className="space-y-3 p-4 rounded-2xl bg-yellow-500/5 border border-yellow-500/15">
+      <p className="text-xs font-semibold text-yellow-400 uppercase tracking-wide">
+        {role} Details
+      </p>
+
+      {showOrg && (
+        <div>
+          <Label className="mb-1.5 text-xs">Organisation Name</Label>
+          <Input
+            value={form.companyName ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
+            placeholder="e.g. Acme Corp"
+            className="h-12 text-base"
+            autoComplete="organization"
+          />
+        </div>
+      )}
+
+      {showInstitution && (
+        <div>
+          <Label className="mb-1.5 text-xs">School / Institution Name</Label>
+          <Input
+            value={form.institution ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, institution: e.target.value }))}
+            placeholder="e.g. Beaconhouse School"
+            className="h-12 text-base"
+            autoComplete="organization"
+          />
+        </div>
+      )}
+
+      {showDept && (
+        <div>
+          <Label className="mb-1.5 text-xs">Department</Label>
+          <Input
+            value={form.department ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+            placeholder="e.g. Human Resources"
+            className="h-12 text-base"
+          />
+        </div>
+      )}
+
+      {showIndustry && (
+        <div>
+          <Label className="mb-2 text-xs block">Industry</Label>
+          <div className="flex flex-wrap gap-2">
+            {INDUSTRIES.map((ind) => (
+              <ChipButton
+                key={ind}
+                active={form.industry === ind}
+                onClick={() => setForm((f) => ({ ...f, industry: ind }))}
+              >
+                {ind}
+              </ChipButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showTeamSize && (
+        <div>
+          <Label className="mb-2 text-xs block">Team Size</Label>
+          <div className="flex flex-wrap gap-2">
+            {TEAM_SIZES.map((sz) => (
+              <ChipButton
+                key={sz}
+                active={form.teamSize === sz}
+                onClick={() => setForm((f) => ({ ...f, teamSize: sz }))}
+              >
+                {sz}
+              </ChipButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showYearsExp && (
+        <div>
+          <Label className="mb-1.5 text-xs">Years of Experience</Label>
+          <Input
+            value={form.yearsExp ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, yearsExp: e.target.value }))}
+            type="number"
+            inputMode="numeric"
+            min="0"
+            max="50"
+            placeholder="5"
+            className="h-12 text-base"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface RoleDetailsFullProps extends RoleDetailsProps {
+  category?: string;
+}
+
+export function RoleDetails({ role, form, setForm, category }: RoleDetailsFullProps) {
+  if (category === "enterprise") return <EnterpriseRoleDetails role={role} form={form} setForm={setForm} />;
   if (role === "Student") return <StudentDetails form={form} setForm={setForm} />;
   if (role === "Teacher") return <TeacherDetails form={form} setForm={setForm} />;
   if (role === "Employer") return <EmployerDetails form={form} setForm={setForm} />;

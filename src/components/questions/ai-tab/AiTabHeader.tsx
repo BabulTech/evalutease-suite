@@ -2,20 +2,20 @@ import { Sparkles, Coins } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
 type Props = {
-  isTrial: boolean;
-  trialUsed: number | null;
-  trialRemaining: number;
-  trialLimit: number;
+  isFreeAi: boolean;
+  freeAiUsed: number | null;
+  freeAiRemaining: number;
+  freeAiLimit: number;
   creditsBalance: number;
   count: number;
   totalCost: number;
 };
 
 export function AiTabHeader({
-  isTrial,
-  trialUsed,
-  trialRemaining,
-  trialLimit,
+  isFreeAi,
+  freeAiUsed,
+  freeAiRemaining,
+  freeAiLimit,
   creditsBalance,
   count,
   totalCost,
@@ -27,13 +27,13 @@ export function AiTabHeader({
         <div className="flex items-center gap-2 font-semibold text-primary">
           <Sparkles className="size-4" /> {t("q.aiTitle")}
         </div>
-        {isTrial ? (
+        {isFreeAi ? (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Sparkles className="size-3.5 text-warning" />
             <span className="text-warning font-semibold">
-              {trialUsed === null ? "…" : trialRemaining}
+              {freeAiUsed === null ? "…" : freeAiRemaining}
             </span>
-            <span>/ {trialLimit} free AI calls remaining</span>
+            <span>/ {freeAiLimit} free AI calls remaining</span>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

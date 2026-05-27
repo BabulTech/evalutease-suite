@@ -19,4 +19,4 @@ export const TX_LABELS: Record<string, string> = {
   expiry: "Credits Expired",
 };
 
-export const FREE_SLUGS = ["individual_starter", "enterprise_starter", "enterprise_free"];
+export const FREE_SLUGS = ["individual_starter", "enterprise_free"];

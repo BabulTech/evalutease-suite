@@ -46,9 +46,30 @@ export function OwnerDashboard({
     () => sessionStorage.getItem("upgrade_banner_dismissed") === "1",
   );
 
+  if (planLoading) {
+    return (
+      <div className="space-y-5 md:space-y-6 animate-pulse">
+        <div className="h-24 rounded-xl md:rounded-2xl bg-muted/40" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="h-24 rounded-xl md:rounded-2xl bg-muted/30" />
+          <div className="h-24 rounded-xl md:rounded-2xl bg-muted/30" />
+          <div className="h-24 rounded-xl md:rounded-2xl bg-muted/30" />
+        </div>
+        <div className="h-56 rounded-xl md:rounded-2xl bg-muted/40" />
+        <div className="h-40 rounded-xl md:rounded-2xl bg-muted/30" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="h-20 rounded-xl bg-muted/30" />
+          <div className="h-20 rounded-xl bg-muted/30" />
+          <div className="h-20 rounded-xl bg-muted/30" />
+          <div className="h-20 rounded-xl bg-muted/30" />
+        </div>
+      </div>
+    );
+  }
+
   const questionLimit = plan?.question_bank ?? 100;
   const participantLimit = plan?.participants_per_session ?? 30;
-  const FREE_SLUGS = ["individual_starter", "enterprise_starter", "enterprise_free"];
+  const FREE_SLUGS = ["individual_starter", "enterprise_free"];
   const isFreeTier = !planLoading && (!plan || plan.slug === "individual_starter");
   const showCredits = !planLoading && plan && !FREE_SLUGS.includes(plan.slug);
 
@@ -203,7 +224,7 @@ export function OwnerDashboard({
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">
           Quick Access
         </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           {[
             {
               label: "Categories",

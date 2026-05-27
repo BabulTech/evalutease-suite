@@ -18,7 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProfile } from "@/contexts/ProfileContext";
 import { usePlan } from "@/contexts/PlanContext";
 import { useHost } from "@/contexts/HostContext";
-import { DesktopSidebar } from "./app-sidebar/DesktopSidebar";
+import { DesktopSidebar, type NavGroup } from "./app-sidebar/DesktopSidebar";
 import { MobileBottomNav } from "./app-sidebar/MobileBottomNav";
 import { MobileMoreDrawer } from "./app-sidebar/MobileMoreDrawer";
 
@@ -71,27 +71,46 @@ export function AppSidebar({ open, onToggle }: Props) {
     };
   }, [user, canSeeRequests]);
 
-  const items = [
-    { to: "/dashboard", icon: LayoutDashboard, label: t("nav.dashboard") },
-    { to: "/categories", icon: FolderTree, label: t("nav.manageCategories") },
-    { to: "/participant-types", icon: UsersRound, label: t("nav.manageParticipants") },
-    { to: "/sessions", icon: PlayCircle, label: t("nav.sessions") },
-    { to: "/quiz-history", icon: Archive, label: t("nav.quizHistory") },
-    { to: "/reports", icon: BarChart3, label: t("nav.reports") },
-    { to: "/reviews", icon: Star, label: "Reviews" },
-    ...(!["individual_starter", "enterprise_starter", "enterprise_free"].includes(
-      plan?.slug ?? "",
-    ) || isHost
-      ? [{ to: "/billing", icon: Coins, label: isHost ? "Credits" : "Billing" }]
-      : []),
-    ...(isEnterpriseAdmin
-      ? [{ to: "/company", icon: Building2, label: "Org", badge: pendingReqCount }]
-      : []),
-    ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin", special: true }] : []),
-  ];
+  const groups: NavGroup[] = [
+    {
+      label: "Home",
+      items: [
+        { to: "/dashboard", icon: LayoutDashboard, label: t("nav.dashboard") },
+      ],
+    },
+    {
+      label: "Manage",
+      items: [
+        { to: "/categories", icon: FolderTree, label: t("nav.manageCategories") },
+        { to: "/participant-types", icon: UsersRound, label: t("nav.manageParticipants") },
+        { to: "/sessions", icon: PlayCircle, label: t("nav.sessions") },
+      ],
+    },
+    {
+      label: "Track",
+      items: [
+        { to: "/quiz-history", icon: Archive, label: t("nav.quizHistory") },
+        { to: "/reports", icon: BarChart3, label: t("nav.reports") },
+        { to: "/reviews", icon: Star, label: "Reviews" },
+      ],
+    },
+    {
+      label: "Account",
+      items: [
+        ...(!["individual_starter", "enterprise_free"].includes(plan?.slug ?? "") || isHost
+          ? [{ to: "/billing", icon: Coins, label: isHost ? "Credits" : "Billing" }]
+          : []),
+        ...(isEnterpriseAdmin
+          ? [{ to: "/company", icon: Building2, label: "Org", badge: pendingReqCount }]
+          : []),
+        ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin", special: true }] : []),
+      ],
+    },
+  ].filter((g) => g.items.length > 0);
 
-  const mobilePrimary = items.slice(0, 4);
-  const mobileMore = items.slice(4);
+  const allItems = groups.flatMap((g) => g.items);
+  const mobilePrimary = allItems.slice(0, 4);
+  const mobileMore = allItems.slice(4);
   const isMoreActive = mobileMore.some(
     ({ to }) => pathname === to || pathname.startsWith(to + "/"),
   );
@@ -101,7 +120,7 @@ export function AppSidebar({ open, onToggle }: Props) {
       <DesktopSidebar
         open={open}
         onToggle={onToggle}
-        items={items}
+        groups={groups}
         pathname={pathname}
         logoUrl={profile?.logo_url ?? null}
       />

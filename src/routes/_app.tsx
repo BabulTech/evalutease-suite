@@ -1,5 +1,6 @@
-import { Outlet, createFileRoute, redirect, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Outlet, createFileRoute, redirect, Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { AppSidebar } from "@/components/AppSidebar";
 import { TopBar } from "@/components/TopBar";
 import { PlanProvider, usePlan } from "@/contexts/PlanContext";
@@ -27,8 +28,6 @@ function PlanBanners() {
   // Hosts never see plan banners; don't flash while we resolve
   if (hostLoading || isHost) return null;
 
-  const isTrial = plan?.slug === "enterprise_starter";
-  const isExpiringSoon = daysUntilExpiry !== null && daysUntilExpiry <= 7 && daysUntilExpiry > 0;
   const isFree = plan?.slug === "individual_starter" || plan?.slug === "enterprise_free";
 
   return (
@@ -51,55 +50,6 @@ function PlanBanners() {
         </div>
       )}
 
-      {/* Trial active, always show days remaining */}
-      {isTrial && !isExpired && daysUntilExpiry !== null && !dismissedWarning && (
-        <div className="bg-yellow-500/15 border-b border-yellow-500/25 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-3">
-          <Clock className="size-4 text-yellow-400 shrink-0" />
-          <div className="flex-1 text-xs text-yellow-300 font-medium leading-relaxed">
-            🎉 Enterprise Trial,{" "}
-            <strong>
-              {daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"} remaining
-            </strong>
-            . Upgrade to Enterprise Pro to keep full access after trial ends.
-          </div>
-          <Link
-            to="/billing"
-            search={{ plan: "" }}
-            className="shrink-0 rounded-lg bg-yellow-400 text-black px-3 py-1.5 text-xs font-semibold hover:bg-yellow-300 transition-colors"
-          >
-            Upgrade
-          </Link>
-          <button
-            type="button"
-            title="Dismiss"
-            onClick={() => setDismissedWarning(true)}
-            className="shrink-0 rounded p-1 hover:bg-yellow-400/20 transition-colors text-yellow-400"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* Trial expiring soon, extra urgent warning */}
-      {isTrial && isExpiringSoon && !dismissedWarning && (
-        <div className="bg-warning/90 text-warning-foreground p-3 sm:px-4 flex items-start sm:items-center gap-3">
-          <AlertTriangle className="size-4 shrink-0" />
-          <div className="flex-1 text-xs sm:text-sm font-medium leading-relaxed">
-            ⚠️ Trial expires in{" "}
-            <strong>
-              {daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"}
-            </strong>
-            ! Upgrade now to avoid losing AI access and team tools.
-          </div>
-          <Link
-            to="/billing"
-            search={{ plan: "" }}
-            className="shrink-0 rounded-lg bg-black/20 hover:bg-black/30 px-3 py-1.5 text-xs font-semibold transition-colors"
-          >
-            Upgrade Now
-          </Link>
-        </div>
-      )}
 
       {/* Free plan upsell, shown once, dismissible */}
       {isFree && !isExpired && !dismissedExpiry && (
@@ -129,9 +79,49 @@ function PlanBanners() {
   );
 }
 
+function PageSkeleton() {
+  return (
+    <div className="space-y-5 animate-pulse">
+      <div className="h-24 rounded-xl md:rounded-2xl bg-muted/40" />
+      <div className="grid grid-cols-3 gap-3">
+        <div className="h-20 rounded-xl bg-muted/30" />
+        <div className="h-20 rounded-xl bg-muted/30" />
+        <div className="h-20 rounded-xl bg-muted/30" />
+      </div>
+      <div className="h-64 rounded-xl md:rounded-2xl bg-muted/40" />
+      <div className="h-40 rounded-xl md:rounded-2xl bg-muted/30" />
+    </div>
+  );
+}
+
 function AppLayout() {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
+  const navigate = useNavigate();
+  const hadUser = useRef(false);
+
+  // Detect when an active session is invalidated (user deleted by admin)
+  useEffect(() => {
+    if (!loading && user) hadUser.current = true;
+    if (!loading && !user && hadUser.current) {
+      toast.error("Your account no longer exists. Please contact support.");
+      void navigate({ to: "/login" });
+    }
+  }, [user, loading, navigate]);
+
+  // Periodically verify the session is still valid (catches deleted users faster)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const { error } = await supabase.auth.getUser();
+      if (error) {
+        await supabase.auth.signOut();
+        toast.error("Your session is no longer valid.");
+        void navigate({ to: "/login" });
+      }
+    }, 60_000); // check every 60 seconds
+    return () => clearInterval(interval);
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -150,7 +140,7 @@ function AppLayout() {
               <TopBar onMenuClick={() => setSidebarOpen((v) => !v)} />
               <PlanBanners />
               <main className="flex-1 px-3 py-4 pb-24 sm:p-5 md:p-8 md:pb-8">
-                <Outlet />
+                {isNavigating ? <PageSkeleton /> : <Outlet />}
               </main>
             </div>
           </div>

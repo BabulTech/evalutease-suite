@@ -41,7 +41,7 @@ export function AuthForm({
               Join {invitePreview?.company_name ?? "Organization"}
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              You've been invited to join as a Host on EvaluTease
+              You've been invited to join as a Host on Jancho
             </p>
           </div>
         </div>

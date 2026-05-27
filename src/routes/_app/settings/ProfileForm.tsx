@@ -13,6 +13,7 @@ import { useI18n } from "@/lib/i18n";
 import { usePlan } from "@/contexts/PlanContext";
 import {
   ROLES_OPTS,
+  ENTERPRISE_ROLES_OPTS,
   USE_CASES_OPTS,
   REFERRALS_OPTS,
   REFERRAL_KEYS_MAP,
@@ -42,6 +43,8 @@ type Profile = {
   industry: string;
   team_size: string;
   other_details: string;
+  department: string;
+  is_ngo: boolean;
 };
 
 function BrandingBlock({
@@ -169,6 +172,8 @@ export function ProfileForm({ userId }: { userId: string }) {
     industry: "",
     team_size: "",
     other_details: "",
+    department: "",
+    is_ngo: false,
   });
   const [uploading, setUploading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -204,6 +209,8 @@ export function ProfileForm({ userId }: { userId: string }) {
           industry: (d.industry as string) ?? "",
           team_size: (d.team_size as string) ?? "",
           other_details: (d.other_details as string) ?? "",
+          department: (d.department as string) ?? "",
+          is_ngo: (d.is_ngo as boolean) ?? false,
         });
       });
   }, [userId]);
@@ -284,7 +291,7 @@ export function ProfileForm({ userId }: { userId: string }) {
   };
 
   const set =
-    (k: keyof Omit<Profile, "use_cases" | "avatar_url" | "logo_url">) =>
+    (k: keyof Omit<Profile, "use_cases" | "avatar_url" | "logo_url" | "is_ngo">) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setProfile((p) => ({ ...p, [k]: e.target.value }));
 
@@ -396,11 +403,16 @@ export function ProfileForm({ userId }: { userId: string }) {
             <option value="" disabled>
               {t("signup.selectRole")}
             </option>
-            {ROLES_OPTS.map((r) => (
-              <option key={r} value={r}>
-                {tRole(r)}
-              </option>
-            ))}
+            <optgroup label="Personal">
+              {ROLES_OPTS.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Enterprise / Organisation">
+              {ENTERPRISE_ROLES_OPTS.filter((r) => r !== "Other").map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
 
@@ -555,9 +567,60 @@ export function ProfileForm({ userId }: { userId: string }) {
               value={profile.other_details}
               onChange={set("other_details")}
               rows={3}
-              placeholder="Describe how you use EvaluTease..."
+              placeholder="Describe how you use Jancho..."
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
             />
+          </div>
+        )}
+
+        {/* Enterprise role details */}
+        {["HR Manager", "Admin", "Director", "Principal"].includes(profile.role) && (
+          <div className="space-y-3 p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/15">
+            <p className="text-xs font-semibold text-yellow-400 uppercase tracking-wide">
+              {profile.role} Details
+            </p>
+            {["HR Manager", "Admin", "Director"].includes(profile.role) && (
+              <div>
+                <Label className="mb-1.5 text-xs">Organisation Name</Label>
+                <Input value={profile.company_name} onChange={set("company_name")} placeholder="e.g. Acme Corp" className="h-9 text-sm" />
+              </div>
+            )}
+            {profile.role === "Principal" && (
+              <div>
+                <Label className="mb-1.5 text-xs">School / Institution Name</Label>
+                <Input value={profile.institution} onChange={set("institution")} placeholder="e.g. Beaconhouse School" className="h-9 text-sm" />
+              </div>
+            )}
+            {["HR Manager", "Admin", "Director"].includes(profile.role) && (
+              <div>
+                <Label className="mb-1.5 text-xs">Department</Label>
+                <Input value={profile.department} onChange={set("department")} placeholder="e.g. Human Resources" className="h-9 text-sm" />
+              </div>
+            )}
+            {profile.role === "Director" && (
+              <div>
+                <Label className="mb-1.5 text-xs">Industry</Label>
+                <select title="Industry" value={profile.industry} onChange={set("industry")} className={selectCls}>
+                  <option value="">Select</option>
+                  {INDUSTRIES_OPTS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+            )}
+            {profile.role === "HR Manager" && (
+              <div>
+                <Label className="mb-1.5 text-xs">Team Size</Label>
+                <select title="Team Size" value={profile.team_size} onChange={set("team_size")} className={selectCls}>
+                  <option value="">Select</option>
+                  {TEAM_SIZES_OPTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+            {profile.role === "Principal" && (
+              <div>
+                <Label className="mb-1.5 text-xs">Years of Experience</Label>
+                <Input value={profile.years_exp} onChange={set("years_exp")} type="number" min="0" max="50" placeholder="e.g. 5" className="h-9 text-sm" />
+              </div>
+            )}
           </div>
         )}
 

@@ -44,10 +44,11 @@ export function DashboardActivityCard({ limit = 20 }: Props) {
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let active = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id ?? null;
-      if (!userId) return;
+      if (!userId || !active) return;
       channel = supabase
         .channel(`my-activity:${userId}`)
         .on(
@@ -58,19 +59,18 @@ export function DashboardActivityCard({ limit = 20 }: Props) {
             table: "activity_logs",
             filter: `plan_owner_id=eq.${userId}`,
           },
-          () => {
-            void load();
-          },
+          () => { void load(); },
         )
         .subscribe();
     })();
     return () => {
+      active = false;
       if (channel) {
-        void channel.unsubscribe();
         void supabase.removeChannel(channel);
+        channel = null;
       }
     };
-  }, [load]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredRows = (
     moduleFilter === "all" ? rows : rows.filter((r) => r.module === moduleFilter)

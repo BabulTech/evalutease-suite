@@ -13,14 +13,14 @@ export const USER_TYPES = [
     note: "Start free forever",
   },
   {
-    slug: "enterprise_starter",
+    slug: "enterprise_free",
     label: "Enterprise",
     desc: "We're a school, company, or team",
     icon: Building2,
     color: "text-yellow-400",
     activeBorder: "border-yellow-400/60 bg-yellow-400/5 ring-2 ring-yellow-400/40",
     inactiveBorder: "border-border bg-secondary/20 hover:border-yellow-400/40",
-    note: "15-day free trial included",
+    note: "10 free AI calls included",
   },
 ] as const;
 

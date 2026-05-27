@@ -25,7 +25,7 @@ type Props = {
   generating: boolean;
   disabled?: boolean;
   hasEnoughCredits: boolean;
-  isTrial: boolean;
+  isFreeAi: boolean;
   totalCost: number;
   creditsBalance: number;
   onGenerate: () => void;
@@ -44,7 +44,7 @@ export function AiGenerateControls({
   generating,
   disabled,
   hasEnoughCredits,
-  isTrial,
+  isFreeAi,
   totalCost,
   creditsBalance,
   onGenerate,
@@ -120,14 +120,14 @@ export function AiGenerateControls({
             <Wand2 className="size-4" />
             {generating
               ? t("q.aiGenerating")
-              : isTrial
+              : isFreeAi
                 ? `${t("q.aiGenerate")} (Free)`
                 : `${t("q.aiGenerate")} (${totalCost} cr)`}
           </Button>
         </div>
       </div>
 
-      {!isTrial && creditsBalance < totalCost && (
+      {!isFreeAi && creditsBalance < totalCost && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive flex items-center gap-2">
           <Coins className="size-4 shrink-0" />
           <span>

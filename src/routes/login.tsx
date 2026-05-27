@@ -6,7 +6,6 @@ import { logClientActivity } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Logo } from "@/components/Logo";
 import { useI18n } from "@/lib/i18n";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
@@ -99,11 +98,9 @@ function LoginPage() {
   return (
     <AuthShell>
       <div className="text-center mb-7">
-        <div className="flex justify-center mb-4">
-          <Logo size="sm" />
+        <div className="flex justify-center mb-5">
+          <img src="/jancho_logo_512.svg" alt="Jancho" className="h-28 w-28 object-contain" />
         </div>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold">{t("auth.title")}</h1>
-        <p className="text-muted-foreground text-sm mt-1.5">{t("auth.subtitle")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mb-6 p-1.5 bg-secondary/50 rounded-2xl">

@@ -9,7 +9,7 @@ import { sanitizeHint, OFF_TOPIC_PATTERNS, wrapUserField } from "./security";
 import { SYSTEM_SCAN } from "./prompts";
 import { SCHEMA_MCQ } from "./schemas";
 import { normalizeRows, parseQuestions } from "./normalizers";
-import { getClient, getUserPlanCosts, consumeTrialCall } from "./client";
+import { getClient, getUserPlanCosts, consumeFreeAiCall } from "./client";
 
 export const extractQuestionsFromImage = createServerFn({ method: "POST" })
   .inputValidator((data: unknown): ExtractInput => {
@@ -54,11 +54,11 @@ export const extractQuestionsFromImage = createServerFn({ method: "POST" })
     const plansRaw = (subData as any)?.plans;
     const planInfo = Array.isArray(plansRaw) ? plansRaw[0] : plansRaw;
     const planSlug = planInfo?.slug ?? "individual_starter";
-    const trialLimit: number = planInfo?.trial_ai_calls ?? 10;
+    const freeAiLimit: number = planInfo?.trial_ai_calls ?? 10;
 
     let creditsCharged = 0;
-    if (planSlug === "enterprise_starter") {
-      await consumeTrialCall(planOwnerId, trialLimit);
+    if (planSlug === "enterprise_free") {
+      await consumeFreeAiCall(planOwnerId, freeAiLimit);
     } else {
       const { costScan } = await getUserPlanCosts(planOwnerId);
       const { data: deducted, error: deductErr } = await supabaseAdmin.rpc("deduct_credits", {

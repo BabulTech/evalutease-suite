@@ -5,15 +5,15 @@ import { grade } from "./canvasUtils";
 export function participantText(d: ParticipantShareData) {
   const medal = d.pct >= 90 ? "🥇" : d.pct >= 70 ? "🥈" : d.pct >= 50 ? "🥉" : "🎯";
   return [
-    `${medal} Just completed a quiz on EvaluTease!`,
+    `${medal} Just completed a quiz on Jancho!`,
     ``,
     `📚 "${d.quizTitle}"`,
     `✅ Score: ${d.score}/${d.total} · ${d.pct}% accuracy`,
     `🎓 Grade: ${grade(d.pct)}`,
     ...(d.speedBonus && d.speedBonus > 0 ? [`⚡ Speed Bonus: +${d.speedBonus}`] : []),
     ``,
-    `Think you can beat me? Try it on EvaluTease! 🚀`,
-    `#EvaluTease #Quiz #Education`,
+    `Think you can beat me? Try it on Jancho! 🚀`,
+    `#Jancho #Quiz #Education`,
   ].join("\n");
 }
 
@@ -28,7 +28,7 @@ export function hostText(d: HostShareData) {
     `🎯 Pass Rate: ${d.passRate}%`,
     ...(d.topScorer ? [`🏆 Top Scorer: ${d.topScorer}`] : []),
     ``,
-    `Powered by EvaluTease 🚀 #EvaluTease #Quiz #Teaching`,
+    `Powered by Jancho 🚀 #Jancho #Quiz #Teaching`,
   ].join("\n");
 }
 

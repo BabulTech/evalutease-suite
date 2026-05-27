@@ -63,7 +63,10 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   const { remaining, isLocked, usedPct } = makeLimitHelpers(currentPlan, usage);
 
   const isPaidPlan = !["free", "individual_starter", "enterprise_free"].includes(currentPlan.slug);
-  const isAiAllowed = !!hostInfo || currentPlan.ai_enabled || isPaidPlan;
+  // enterprise_free gets a lifetime allocation (plan.trial_ai_calls). Let them
+  // into the AI tab — the server-side consumeFreeAiCall() guard enforces the cap.
+  const hasFreeAiAllowance = (currentPlan.trial_ai_calls ?? 0) > 0;
+  const isAiAllowed = !!hostInfo || currentPlan.ai_enabled || isPaidPlan || hasFreeAiAllowance;
   const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
   const daysUntilExpiry = expiresAt
     ? Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400000)

@@ -47,7 +47,6 @@ export function statusBadge(s: string, map?: Record<string, string>) {
   const defaults: Record<string, string> = {
     active: CLS_SUCCESS,
     completed: CLS_SUCCESS,
-    trialing: CLS_PRIMARY,
     open: CLS_PRIMARY,
     in_review: CLS_WARNING,
     scheduled: CLS_WARNING,

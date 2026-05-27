@@ -10,7 +10,7 @@ import { useBillingData } from "./billing/useBillingData";
 import { HostBillingView } from "./billing/HostBillingView";
 import { OverviewStep } from "./billing/OverviewStep";
 import { PickStep } from "./billing/PickStep";
-import { PayStep } from "./billing/PayStep";
+import { PayStep, type PromoResult } from "./billing/PayStep";
 import { UploadStep } from "./billing/UploadStep";
 import { DoneStep } from "./billing/DoneStep";
 import type { BillingStep, PickMode, CreditPackage } from "./billing/types";
@@ -62,6 +62,8 @@ function BillingPage() {
   const [uploading, setUploading] = useState(false);
   // react-doctor-disable-next-line react-doctor/no-event-handler
   const [copied, setCopied] = useState<string | null>(null);
+  // react-doctor-disable-next-line react-doctor/no-event-handler
+  const [appliedPromo, setAppliedPromo] = useState<PromoResult | null>(null);
 
   const isFreeUser = !currentPlan || currentPlan.slug === "individual_starter";
   const canBuyCredits = currentPlan?.can_buy_credits ?? false;
@@ -99,6 +101,21 @@ function BillingPage() {
     setStep("pay");
   };
 
+  const handleFreePromo = async (promo: PromoResult) => {
+    if (!user || !selectedPlan) return;
+    setUploading(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("redeem_free_promo", {
+      p_code: promo.code,
+      p_plan_id: selectedPlan.id,
+    });
+    setUploading(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("🎁 Plan activated for free!");
+    setStep("done");
+    void reload();
+  };
+
   const handleUpload = async () => {
     if (!user || !screenshot || !selectedPlan || !selectedMethod) return;
     setUploading(true);
@@ -118,21 +135,37 @@ function BillingPage() {
       setUploading(false);
       return;
     }
+    const discountedPrice = appliedPromo
+      ? appliedPromo.discount_type === "percent" && appliedPromo.discount_percent
+        ? Math.max(0, Math.round(selectedPlan.price_pkr * (1 - appliedPromo.discount_percent / 100)))
+        : appliedPromo.discount_type === "fixed" && appliedPromo.discount_fixed_pkr
+          ? Math.max(0, selectedPlan.price_pkr - appliedPromo.discount_fixed_pkr)
+          : selectedPlan.price_pkr
+      : selectedPlan.price_pkr;
+
+    const promoNote = appliedPromo ? `Promo: ${appliedPromo.code}` : null;
+    const fullNotes = [notes.trim() || null, promoNote].filter(Boolean).join(" | ");
+
     const { error } = await supabase.from("manual_payments").insert({
       user_id: user.id,
       plan_id: selectedPlan.id.startsWith("__credit_pack__") ? null : selectedPlan.id,
-      amount_pkr: selectedPlan.price_pkr,
+      amount_pkr: discountedPrice,
       payment_method: selectedMethod as "easypaisa" | "jazzcash" | "bank_transfer" | "other",
       transaction_ref: txRef.trim() || null,
       screenshot_url: path,
       status: "pending" as "pending" | "approved" | "rejected" | "refunded",
       credits_to_add: 0,
-      notes: notes.trim() || null,
+      notes: fullNotes || null,
     });
     setUploading(false);
     if (error) {
       toast.error(error.message);
       return;
+    }
+    // Increment promo uses_count for non-free promos
+    if (appliedPromo) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).rpc("record_promo_use", { p_code: appliedPromo.code });
     }
     toast.success("Payment submitted! Admin will verify within 24 hours.");
     setStep("done");
@@ -187,10 +220,12 @@ function BillingPage() {
       <PayStep
         selectedPlan={selectedPlan}
         accounts={accounts}
-        onSelectMethod={(method) => {
+        onSelectMethod={(method, promo) => {
           setSelectedMethod(method);
+          setAppliedPromo(promo);
           setStep("upload");
         }}
+        onFreePromo={(promo) => { setAppliedPromo(promo); void handleFreePromo(promo); }}
         onBack={() => {
           if (planSearch) {
             void navigate({ to: "/settings", search: { tab: "plan" } });
@@ -230,6 +265,7 @@ function BillingPage() {
           setScreenshot(null);
           setTxRef("");
           setNotes("");
+          setAppliedPromo(null);
         }}
       />
     );

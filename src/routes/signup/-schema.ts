@@ -4,7 +4,7 @@ import { passwordSchema } from "./constants";
 export const signupSchema = z.object({
   firstName: z.string().trim().min(1, "First name required").max(60),
   lastName: z.string().trim().min(1, "Last name required").max(60),
-  mobile: z.string().trim().max(30).optional(),
+  mobile: z.string().trim().min(7, "Mobile number is required").max(30),
   email: z.string().trim().email("Invalid email").max(255),
   password: passwordSchema,
   role: z.string().min(1, "Please select your role"),
@@ -20,6 +20,7 @@ export const signupSchema = z.object({
   industry: z.string().trim().max(120).optional(),
   teamSize: z.string().trim().max(20).optional(),
   otherDetails: z.string().trim().max(300).optional(),
+  department: z.string().trim().max(120).optional(),
 });
 
 export type SignupFormData = z.infer<typeof signupSchema>;
@@ -44,4 +45,5 @@ export const initialForm: SignupFormData & { useCases: string[] } = {
   industry: "",
   teamSize: "",
   otherDetails: "",
+  department: "",
 };

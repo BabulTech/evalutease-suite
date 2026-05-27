@@ -7,7 +7,7 @@ type Props = {
 
 export function IconPicker({ value, onChange }: Props) {
   return (
-    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+    <div className="grid grid-cols-3 min-[380px]:grid-cols-4 sm:grid-cols-6 gap-2">
       {PARTICIPANT_TYPE_ICONS.map((ic) => {
         const Icon = ic.icon;
         const active = value === ic.key;

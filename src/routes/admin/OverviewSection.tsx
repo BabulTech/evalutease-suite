@@ -24,13 +24,13 @@ import { StatCard, SectionHead } from "./-shared";
 import { planBadge, statusBadge, ago } from "./helpers";
 
 // react-doctor-disable-next-line react-doctor/prefer-useReducer
-export function OverviewSection({ onNavigate }: { onNavigate: (section: string) => void }) {
+export function OverviewSection({ onNavigate }: { onNavigate: (section: string, recordId?: string) => void }) {
   const [stats, setStats] = useState<Record<string, number>>({});
   const [recentUsers, setRecentUsers] = useState<
-    { name: string; email: string; plan: string; joined: string }[]
+    { id: string; name: string; email: string; plan: string; joined: string }[]
   >([]);
   const [recentQuizzes, setRecentQuizzes] = useState<
-    { title: string; owner: string; status: string; created: string }[]
+    { id: string; title: string; owner: string; ownerId: string; status: string; created: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState("all");
@@ -127,6 +127,7 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string) 
       });
       setRecentUsers(
         (profiles ?? []).map((p) => ({
+          id: p.id,
           name: p.full_name ?? "-",
           email: p.email ?? "-",
           plan: planMap[p.id] ?? "free",
@@ -145,8 +146,10 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string) 
       });
       setRecentQuizzes(
         (sessions ?? []).map((s) => ({
+          id: s.id,
           title: s.title,
           owner: ownerMap[s.owner_id] ?? "-",
+          ownerId: s.owner_id,
           status: s.status,
           created: s.created_at,
         })),
@@ -195,7 +198,7 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string) 
               <SelectItem value="individual_starter">Individual Free</SelectItem>
               <SelectItem value="individual_pro">Individual Pro</SelectItem>
               <SelectItem value="individual_pro_plus">Individual Pro+</SelectItem>
-              <SelectItem value="enterprise_starter">Org Free</SelectItem>
+              <SelectItem value="enterprise_free">Org Free</SelectItem>
               <SelectItem value="enterprise_pro">Org Pro</SelectItem>
               <SelectItem value="enterprise_elite">Org Elite</SelectItem>
             </SelectContent>
@@ -327,22 +330,32 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string) 
           </div>
           <div className="divide-y divide-border/40">
             {filteredRecentUsers.map((u) => (
-              <div
-                key={u.email}
-                className="px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10"
+              <button
+                type="button"
+                key={u.id}
+                onClick={() => onNavigate("users", u.id)}
+                className="w-full text-left px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10 transition-colors cursor-pointer"
+                aria-label={`View ${u.name}`}
               >
                 <div className="size-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
                   {u.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{u.name}</div>
+                  <div className="text-xs font-medium truncate text-primary hover:underline">{u.name}</div>
                   <div className="text-[11px] text-muted-foreground truncate">{u.email}</div>
                 </div>
-                <div className="shrink-0">{planBadge(u.plan)}</div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onNavigate("plans", u.plan); }}
+                  className="shrink-0 hover:scale-105 transition-transform cursor-pointer"
+                  aria-label={`View ${u.plan} plan`}
+                >
+                  {planBadge(u.plan)}
+                </button>
                 <span className="hidden sm:inline text-[11px] text-muted-foreground shrink-0">
                   {ago(u.joined)}
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -361,15 +374,30 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string) 
           <div className="divide-y divide-border/40">
             {recentQuizzes.map((q) => (
               <div
-                key={`${q.title}-${q.created}`}
-                className="px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10"
+                key={q.id}
+                className="px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10 transition-colors"
               >
                 <div className="size-8 rounded-xl bg-muted/40 flex items-center justify-center shrink-0">
                   <PlayCircle className="size-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate">{q.title}</div>
-                  <div className="text-[11px] text-muted-foreground">by {q.owner}</div>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("quizzes", q.id)}
+                    className="text-xs font-medium truncate text-primary hover:underline text-left cursor-pointer"
+                  >
+                    {q.title}
+                  </button>
+                  <div className="text-[11px] text-muted-foreground">
+                    by{" "}
+                    <button
+                      type="button"
+                      onClick={() => onNavigate("users", q.ownerId)}
+                      className="hover:text-primary hover:underline cursor-pointer"
+                    >
+                      {q.owner}
+                    </button>
+                  </div>
                 </div>
                 <div className="shrink-0">{statusBadge(q.status)}</div>
                 <span className="hidden sm:inline text-[11px] text-muted-foreground shrink-0">

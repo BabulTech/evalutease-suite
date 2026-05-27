@@ -10,7 +10,7 @@ const MAX_QUESTION_LENGTH = 200;
 import { validateTopic, wrapUserField } from "./security";
 import { promptAndSchemaFor } from "./prompts";
 import { normalizeRows, parseQuestions } from "./normalizers";
-import { getClient, getUserPlanCosts, consumeTrialCall } from "./client";
+import { getClient, getUserPlanCosts, consumeFreeAiCall } from "./client";
 
 export const generateQuestions = createServerFn({ method: "POST" })
   .inputValidator((data: unknown): GenerateInput => {
@@ -53,11 +53,11 @@ export const generateQuestions = createServerFn({ method: "POST" })
     const plansRaw = (subData as any)?.plans;
     const planInfo = Array.isArray(plansRaw) ? plansRaw[0] : plansRaw;
     const planSlug = planInfo?.slug ?? "individual_starter";
-    const trialLimit: number = planInfo?.trial_ai_calls ?? 10;
+    const freeAiLimit: number = planInfo?.trial_ai_calls ?? 10;
 
     let creditsCharged = 0;
-    if (planSlug === "enterprise_starter") {
-      await consumeTrialCall(planOwnerId, trialLimit);
+    if (planSlug === "enterprise_free") {
+      await consumeFreeAiCall(planOwnerId, freeAiLimit);
     } else {
       const { costByKind } = await getUserPlanCosts(planOwnerId);
       const kind = data.kind ?? "mcq";

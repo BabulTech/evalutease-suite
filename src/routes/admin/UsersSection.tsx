@@ -11,6 +11,12 @@ import {
   PlayCircle,
   BookOpen,
   UsersRound,
+  Pencil,
+  Trash2,
+  ShieldOff,
+  ShieldCheck,
+  X,
+  Save,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -49,13 +55,65 @@ type CompanyGroup = {
   member_user_ids: string[];
 };
 
+function ConfirmDialog({
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl space-y-4">
+        <p className="text-sm font-medium">{message}</p>
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted/40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UserDetailPanel({
   user,
   onChangePlan,
+  onSuspend,
+  onUnsuspend,
+  onDelete,
+  onBack,
 }: {
   user: UserRow;
   onChangePlan: (userId: string, slug: string) => void;
+  onSuspend: (userId: string) => Promise<void>;
+  onUnsuspend: (userId: string) => Promise<void>;
+  onDelete: (userId: string) => Promise<void>;
+  onBack: () => void;
 }) {
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState({
+    full_name: user.full_name ?? "",
+    organization: user.organization ?? "",
+    mobile: user.mobile ?? "",
+    country: user.country ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState<null | "delete" | "suspend" | "unsuspend">(null);
+  const isSuspended = user.sub_status === "suspended";
   const [subDetails, setSubDetails] = useState<{
     plan_name: string;
     status: string;
@@ -127,6 +185,19 @@ function UserDetailPanel({
     })();
   }, [user.id, user.plan_slug]);
 
+  const saveEdit = async () => {
+    setSaving(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("profiles") as any)
+      .update({ ...editData, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Profile updated");
+    setEditMode(false);
+    Object.assign(user, editData);
+  };
+
   const limitLabels: Record<string, string> = {
     quizzes_per_day: "Quizzes / day",
     participants_per_session: "Participants / session",
@@ -136,6 +207,25 @@ function UserDetailPanel({
 
   return (
     <div className="space-y-5">
+      {confirm && (
+        <ConfirmDialog
+          message={
+            confirm === "delete"
+              ? `Permanently delete ${user.full_name ?? user.email}? This cannot be undone.`
+              : confirm === "suspend"
+                ? `Suspend ${user.full_name ?? user.email}? They will lose access immediately.`
+                : `Unsuspend ${user.full_name ?? user.email}? They will regain access.`
+          }
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => {
+            setConfirm(null);
+            if (confirm === "delete") { await onDelete(user.id); onBack(); }
+            else if (confirm === "suspend") await onSuspend(user.id);
+            else await onUnsuspend(user.id);
+          }}
+        />
+      )}
+
       <div className="flex items-center gap-4">
         <div className="size-16 rounded-2xl bg-primary/15 flex items-center justify-center text-primary font-bold text-2xl shrink-0">
           {(user.full_name ?? user.email ?? "?").charAt(0).toUpperCase()}
@@ -148,7 +238,70 @@ function UserDetailPanel({
             {statusBadge(user.sub_status)}
           </div>
         </div>
+        {/* Action buttons */}
+        <div className="flex gap-2 shrink-0">
+          <button
+            type="button"
+            title="Edit profile"
+            onClick={() => setEditMode((v) => !v)}
+            className="p-2 rounded-xl border border-border hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {editMode ? <X className="size-4" /> : <Pencil className="size-4" />}
+          </button>
+          <button
+            type="button"
+            title={isSuspended ? "Unsuspend" : "Suspend"}
+            onClick={() => setConfirm(isSuspended ? "unsuspend" : "suspend")}
+            className={`p-2 rounded-xl border transition-colors ${isSuspended ? "border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10" : "border-warning/40 text-warning hover:bg-warning/10"}`}
+          >
+            {isSuspended ? <ShieldCheck className="size-4" /> : <ShieldOff className="size-4" />}
+          </button>
+          <button
+            type="button"
+            title="Delete user"
+            onClick={() => setConfirm("delete")}
+            className="p-2 rounded-xl border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Edit form */}
+      {editMode && (
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+          <p className="text-xs font-semibold text-primary uppercase tracking-wider">Edit Profile</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {([
+              ["Full Name", "full_name", "text"],
+              ["Organisation", "organization", "text"],
+              ["Mobile", "mobile", "tel"],
+              ["Country", "country", "text"],
+            ] as [string, keyof typeof editData, string][]).map(([label, key, type]) => (
+              <div key={key}>
+                <label htmlFor={`edit-${key}`} className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">{label}</label>
+                <input
+                  id={`edit-${key}`}
+                  type={type}
+                  title={label}
+                  placeholder={label}
+                  value={editData[key]}
+                  onChange={(e) => setEditData((d) => ({ ...d, [key]: e.target.value }))}
+                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={saveEdit}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-60"
+          >
+            <Save className="size-3.5" /> {saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
+      )}
 
       <div className="rounded-xl border border-border bg-card/40 p-4">
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
@@ -291,10 +444,8 @@ function UserDetailPanel({
           {[
             { s: "individual_starter", label: "Ind. Free" },
             { s: "individual_pro", label: "Ind. Pro" },
-            { s: "individual_pro_plus", label: "Ind. Pro+" },
-            { s: "enterprise_starter", label: "Org Free" },
+            { s: "enterprise_free", label: "Org Free" },
             { s: "enterprise_pro", label: "Org Pro" },
-            { s: "enterprise_elite", label: "Org Elite" },
           ].map(({ s, label }) => (
             <button
               key={s}
@@ -326,11 +477,18 @@ export function UsersSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data: profiles } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profiles, error: profilesError } = await (supabase as any)
       .from("profiles")
       .select("id,full_name,email,organization,country,mobile,created_at")
       .order("created_at", { ascending: false });
+    if (profilesError) {
+      toast.error("Failed to load users: " + profilesError.message);
+      setLoading(false);
+      return;
+    }
     if (!profiles?.length) {
+      setUsers([]);
       setLoading(false);
       return;
     }
@@ -395,6 +553,30 @@ export function UsersSection() {
     void load();
   }, [load]);
 
+  const suspendUser = async (userId: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("admin_suspend_user", { p_user_id: userId });
+    if (error) { toast.error("Failed to suspend: " + error.message); return; }
+    toast.success("User suspended");
+    void load();
+  };
+
+  const unsuspendUser = async (userId: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("admin_unsuspend_user", { p_user_id: userId });
+    if (error) { toast.error("Failed to unsuspend: " + error.message); return; }
+    toast.success("User unsuspended");
+    void load();
+  };
+
+  const deleteUser = async (userId: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("admin_delete_user", { p_user_id: userId });
+    if (error) { toast.error("Failed to delete: " + error.message); return; }
+    toast.success("User deleted");
+    void load();
+  };
+
   const changePlan = async (userId: string, slug: string) => {
     const { data: plan } = await supabase
       .from("plans")
@@ -404,11 +586,8 @@ export function UsersSection() {
         slug as
           | "individual_starter"
           | "individual_pro"
-          | "individual_pro_plus"
-          | "enterprise_starter"
-          | "enterprise_pro"
-          | "enterprise_elite"
-          | "enterprise_free",
+          | "enterprise_free"
+          | "enterprise_pro",
       )
       .maybeSingle();
     if (!plan) return;
@@ -421,6 +600,8 @@ export function UsersSection() {
     });
     if (error) { toast.error("Failed to update plan: " + error.message); return; }
     toast.success("Plan updated");
+    // Immediately update the open detail panel so the badge/buttons reflect the change
+    setDetail((prev) => prev?.id === userId ? { ...prev, plan_slug: slug } : prev);
     void load();
   };
 
@@ -559,7 +740,14 @@ export function UsersSection() {
             {detail.full_name ?? detail.email ?? "User"}
           </span>
         </div>
-        <UserDetailPanel user={detail} onChangePlan={changePlan} />
+        <UserDetailPanel
+          user={detail}
+          onChangePlan={changePlan}
+          onSuspend={suspendUser}
+          onUnsuspend={unsuspendUser}
+          onDelete={deleteUser}
+          onBack={() => setDetail(null)}
+        />
       </div>
     );
   }
@@ -589,10 +777,8 @@ export function UsersSection() {
             <SelectItem value="all">All plans</SelectItem>
             <SelectItem value="individual_starter">Individual Free</SelectItem>
             <SelectItem value="individual_pro">Individual Pro</SelectItem>
-            <SelectItem value="individual_pro_plus">Individual Pro+</SelectItem>
-            <SelectItem value="enterprise_starter">Org Free</SelectItem>
+            <SelectItem value="enterprise_free">Org Free</SelectItem>
             <SelectItem value="enterprise_pro">Org Pro</SelectItem>
-            <SelectItem value="enterprise_elite">Org Elite</SelectItem>
           </SelectContent>
         </Select>
         <Button

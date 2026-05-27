@@ -45,7 +45,7 @@ function SessionsPage() {
       </div>
 
       {sessions.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 min-[380px]:grid-cols-3 gap-2.5 sm:gap-3">
           {[
             { label: "Active", value: activeSessions.length, color: "text-success" },
             { label: "Scheduled", value: scheduledSessions.length, color: "text-primary" },

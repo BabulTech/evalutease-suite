@@ -4,9 +4,10 @@ import type { User } from "@supabase/supabase-js";
 import type { PlanInfo } from "@/contexts/PlanContext";
 import type { Stats, RecentSession } from "./types";
 
-const FREE_SLUGS = ["individual_starter", "enterprise_starter", "enterprise_free"];
+const FREE_SLUGS = ["individual_starter", "enterprise_free"];
 
 export function useDashboardData(user: User | null, plan: PlanInfo | null, skip: boolean) {
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats>({
     sessions: 0,
     active: 0,
@@ -22,6 +23,7 @@ export function useDashboardData(user: User | null, plan: PlanInfo | null, skip:
 
   useEffect(() => {
     if (!user || skip) return;
+    setLoading(true);
     (async () => {
       const [sess, active, parts, qs, recentSessions] = await Promise.all([
         supabase
@@ -67,10 +69,11 @@ export function useDashboardData(user: User | null, plan: PlanInfo | null, skip:
           .maybeSingle();
         if (creditsRow.data) setCredits(creditsRow.data);
       }
+      setLoading(false);
     })();
   }, [user, plan, skip]);
 
-  return { stats, recent, credits };
+  return { stats, recent, credits, loading };
 }
 
 export { FREE_SLUGS };

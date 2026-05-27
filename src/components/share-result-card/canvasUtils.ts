@@ -131,7 +131,7 @@ export function drawParticipant(canvas: HTMLCanvasElement, d: ParticipantShareDa
   ctx.font = "bold 20px sans-serif";
   ctx.fillStyle = "rgba(139,92,246,0.8)";
   ctx.textAlign = "right";
-  ctx.fillText("EvaluTease", W - 54, H - 46);
+  ctx.fillText("Jancho", W - 54, H - 46);
   ctx.font = "15px sans-serif";
   ctx.fillStyle = "rgba(140,140,170,0.55)";
   ctx.fillText("Share your knowledge", W - 54, H - 26);
@@ -246,7 +246,7 @@ export function drawHost(canvas: HTMLCanvasElement, d: HostShareData) {
   ctx.font = "bold 20px sans-serif";
   ctx.fillStyle = "rgba(59,130,246,0.8)";
   ctx.textAlign = "right";
-  ctx.fillText("EvaluTease", W - 54, H - 46);
+  ctx.fillText("Jancho", W - 54, H - 46);
   ctx.font = "15px sans-serif";
   ctx.fillStyle = "rgba(140,140,170,0.55)";
   ctx.fillText("Smarter quizzing for everyone", W - 54, H - 26);

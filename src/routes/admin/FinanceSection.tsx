@@ -26,6 +26,38 @@ import { PaginationControls } from "@/components/PaginationControls";
 import { StatCard, TableShell, THead, SkeletonRows, SectionHead } from "./-shared";
 import { fmtDate } from "./helpers";
 
+function ScreenshotThumb({
+  path,
+  onOpen,
+}: {
+  path: string;
+  onOpen: (url: string) => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.storage
+      .from("uploads")
+      .createSignedUrl(path, 600)
+      .then(({ data }) => { if (data?.signedUrl) setUrl(data.signedUrl); });
+  }, [path]);
+
+  if (!url) {
+    return <div className="size-14 rounded-md border border-border bg-muted/30 animate-pulse" />;
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label="View payment proof"
+      onClick={() => onOpen(url)}
+      className="size-14 shrink-0 rounded-md border border-border hover:border-primary/60 transition-colors overflow-hidden p-0 bg-transparent"
+    >
+      <img src={url} alt="Payment proof" className="size-full object-cover" />
+    </button>
+  );
+}
+
 // react-doctor-disable-next-line react-doctor/prefer-useReducer
 export function FinanceSection() {
   const { user } = useAuth();
@@ -39,6 +71,7 @@ export function FinanceSection() {
     payment_method: string;
     status: string;
     screenshot_url: string | null;
+    ngo_certificate_url: string | null;
     credits_to_add: number;
     notes: string | null;
     created_at: string;
@@ -49,23 +82,33 @@ export function FinanceSection() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [actioning, setActioning] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<PayRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
       .from("manual_payments")
       .select("*, plans(name)")
       .order("created_at", { ascending: false })
       .limit(300);
+    if (error) {
+      toast.error("Failed to load payments: " + error.message);
+      setLoading(false);
+      return;
+    }
     if (!data?.length) {
+      setPayments([]);
       setLoading(false);
       return;
     }
 
-    const userIds = [...new Set(data.map((p) => p.user_id))];
-    const { data: profiles } = await supabase
+    const userIds = [...new Set((data as { user_id: string }[]).map((p) => p.user_id))];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profiles } = await (supabase as any)
       .from("profiles")
       .select("id,full_name,email")
       .in("id", userIds);
@@ -86,6 +129,7 @@ export function FinanceSection() {
         payment_method: p.payment_method,
         status: p.status,
         screenshot_url: p.screenshot_url ?? null,
+        ngo_certificate_url: p.ngo_certificate_url ?? null,
         credits_to_add: p.credits_to_add,
         notes: p.notes ?? null,
         created_at: p.created_at,
@@ -114,18 +158,44 @@ export function FinanceSection() {
     void load();
   };
 
-  const handleReject = async (p: PayRow) => {
-    setActioning(p.id);
+  const submitReject = async () => {
+    if (!rejectTarget) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast.error("Please provide a rejection reason.");
+      return;
+    }
+    setActioning(rejectTarget.id);
     const { error } = await supabase
       .from("manual_payments")
-      .update({ status: "rejected", reviewed_at: new Date().toISOString() })
-      .eq("id", p.id);
+      .update({
+        status: "rejected",
+        reviewed_at: new Date().toISOString(),
+        admin_notes: reason,
+      })
+      .eq("id", rejectTarget.id);
     if (error) {
       toast.error("Failed: " + error.message);
     } else {
-      toast.success("Payment rejected.");
+      // Notify the user with the reason + contact info
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).rpc("create_notification", {
+        p_user_id: rejectTarget.user_id,
+        p_title:   "Payment rejected",
+        p_body:
+          `Your payment of PKR ${rejectTarget.amount_pkr.toLocaleString()} was not approved.\n\n` +
+          `Reason: ${reason}\n\n` +
+          `For more details, contact us:\n` +
+          `📞 +92 310 2700403\n` +
+          `✉️ contact@babultech.com`,
+        p_type: "error",
+        p_link: "/billing",
+      });
+      toast.success("Payment rejected and user notified.");
     }
     setActioning(null);
+    setRejectTarget(null);
+    setRejectReason("");
     void load();
   };
 
@@ -277,34 +347,22 @@ export function FinanceSection() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     {p.screenshot_url && (
-                      <button
-                        type="button"
-                        aria-label="View payment proof"
-                        className="size-14 shrink-0 rounded-md border border-border hover:border-primary/60 transition-colors cursor-pointer p-0 bg-transparent overflow-hidden"
-                        onClick={async () => {
-                          const { data } = await supabase.storage
-                            .from("uploads")
-                            .createSignedUrl(p.screenshot_url!, 300);
-                          if (data?.signedUrl) setScreenshotUrl(data.signedUrl);
-                        }}
-                      >
-                        <img
-                          src="#"
-                          alt=""
-                          className="size-full object-cover"
-                          onLoad={(e) => {
-                            const img = e.currentTarget;
-                            if (img.src.endsWith("#")) {
-                              supabase.storage
-                                .from("uploads")
-                                .createSignedUrl(p.screenshot_url!, 300)
-                                .then(({ data }) => {
-                                  if (data?.signedUrl) img.src = data.signedUrl;
-                                });
-                            }
-                          }}
+                      <div className="flex flex-col items-center gap-0.5">
+                        <ScreenshotThumb
+                          path={p.screenshot_url}
+                          onOpen={setScreenshotUrl}
                         />
-                      </button>
+                        <span className="text-[9px] text-muted-foreground">Payment</span>
+                      </div>
+                    )}
+                    {p.ngo_certificate_url && (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <ScreenshotThumb
+                          path={p.ngo_certificate_url}
+                          onOpen={setScreenshotUrl}
+                        />
+                        <span className="text-[9px] text-emerald-400 font-semibold">NGO</span>
+                      </div>
                     )}
                     {p.status === "pending" && (
                       <div className="flex flex-col gap-1">
@@ -323,7 +381,7 @@ export function FinanceSection() {
                           variant="destructive"
                           className="h-6 px-2 text-[11px] gap-1"
                           disabled={actioning === p.id}
-                          onClick={() => void handleReject(p)}
+                          onClick={() => { setRejectTarget(p); setRejectReason(""); }}
                         >
                           <X className="size-3" />
                           Reject
@@ -356,6 +414,57 @@ export function FinanceSection() {
               alt="Payment proof"
               className="w-full rounded-lg object-contain max-h-[70vh]"
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) { setRejectTarget(null); setRejectReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject Payment</DialogTitle>
+          </DialogHeader>
+          {rejectTarget && (
+            <div className="space-y-4">
+              <div className="text-xs text-muted-foreground">
+                Rejecting <strong className="text-foreground">{rejectTarget.user_name}</strong>'s payment of{" "}
+                <strong className="text-foreground">PKR {rejectTarget.amount_pkr.toLocaleString()}</strong> for{" "}
+                <strong className="text-foreground">{rejectTarget.plan_name}</strong>.
+              </div>
+              <div>
+                <label className="text-xs font-semibold block mb-1.5" htmlFor="reject-reason">
+                  Reason for rejection <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  id="reject-reason"
+                  rows={4}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="e.g. Screenshot is blurry, transaction reference missing, amount doesn't match..."
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  The user will be notified with this reason + our contact info.
+                </p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setRejectTarget(null); setRejectReason(""); }}
+                  disabled={actioning === rejectTarget.id}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => void submitReject()}
+                  disabled={actioning === rejectTarget.id || !rejectReason.trim()}
+                >
+                  Reject &amp; Notify
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

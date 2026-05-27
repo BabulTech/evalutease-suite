@@ -16,38 +16,34 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Babul.Quiz - Premium Live Quiz Platform" },
+      { title: "Jancho | AI-Powered Platform to Evaluate Your Knowledge & Skills" },
       {
         name: "description",
         content:
-          "Create, run, and analyze live quizzes for students, teams, and events. Live mode and QR/link sessions, multilingual.",
+          "Jancho is an AI-powered smart platform that evaluates your knowledge and skills through live assessments, instant AI grading, and deep analytics. For educators, trainers, HR teams, and beyond.",
       },
-      { property: "og:title", content: "Babul.Quiz - Premium Live Quiz Platform" },
+      { property: "og:title", content: "Jancho | AI-Powered Platform to Evaluate Your Knowledge & Skills" },
       {
         property: "og:description",
         content:
-          "Create, run, and analyze live quizzes for students, teams, and events. Live mode and QR/link sessions, multilingual.",
+          "Jancho is an AI-powered smart platform that evaluates your knowledge and skills through live assessments, instant AI grading, and deep analytics. For educators, trainers, HR teams, and beyond.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Babul.Quiz - Premium Live Quiz Platform" },
+      { name: "twitter:title", content: "Jancho | AI-Powered Platform to Evaluate Your Knowledge & Skills" },
       {
         name: "twitter:description",
         content:
-          "Create, run, and analyze live quizzes for students, teams, and events. Live mode and QR/link sessions, multilingual.",
+          "Jancho is an AI-powered smart platform that evaluates your knowledge and skills through live assessments, instant AI grading, and deep analytics. For educators, trainers, HR teams, and beyond.",
       },
-      {
-        property: "og:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/193ece12-b840-4daa-99c5-09247ead6a06/id-preview-8b6aa23c--670faacf-1228-4bc2-9900-19f5bae1658a.lovable.app-1777735469352.png",
-      },
-      {
-        name: "twitter:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/193ece12-b840-4daa-99c5-09247ead6a06/id-preview-8b6aa23c--670faacf-1228-4bc2-9900-19f5bae1658a.lovable.app-1777735469352.png",
-      },
+      { property: "og:image", content: "/jancho_logo_512.svg" },
+      { name: "twitter:image", content: "/jancho_logo_512.svg" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+      { rel: "icon", type: "image/svg+xml", href: "/jancho_logo_512.svg" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

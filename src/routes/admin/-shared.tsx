@@ -17,7 +17,7 @@ export function StatCard({
   color?: string;
 }) {
   return (
-    <div className="min-h-[112px] rounded-xl md:rounded-2xl border border-border bg-card/60 p-4 md:p-5 hover:shadow-glow hover:border-primary/40 md:hover:scale-[1.02] transition-all duration-300 cursor-default">
+    <div className="min-h-[112px] rounded-xl md:rounded-2xl border border-border bg-card/60 p-4 md:p-5 hover:shadow-glow hover:border-primary/40 md:hover:scale-[1.02] transition-all duration-300">
       <div className="flex items-start justify-between">
         <div className="rounded-lg md:rounded-xl p-2 bg-primary/10">
           <Icon className={`size-4 md:h-5 md:w-5 ${color}`} />
@@ -67,8 +67,16 @@ export function SkeletonRows({ cols, n = 5 }: { cols: number; n?: number }) {
 export function TableShell({ children, footer }: { children: React.ReactNode; footer?: string }) {
   return (
     <div className="rounded-xl md:rounded-2xl border border-border bg-card/60 overflow-hidden">
-      <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full min-w-[720px] text-sm">{children}</table>
+      {/* Horizontal scroll wrapper. The fade gradient on the right is a visual
+          affordance (Jakob's Law) telling the user content extends past the edge. */}
+      <div className="relative">
+        <div className="overflow-x-auto overscroll-x-contain">
+          <table className="w-full min-w-[720px] text-sm">{children}</table>
+        </div>
+        <div
+          className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-card/80 to-transparent md:hidden"
+          aria-hidden="true"
+        />
       </div>
       {footer && (
         <div className="px-4 py-2.5 border-t border-border/40 bg-muted/10 text-xs text-muted-foreground">
@@ -81,10 +89,10 @@ export function TableShell({ children, footer }: { children: React.ReactNode; fo
 
 export function THead({ cols }: { cols: string[] }) {
   return (
-    <thead>
-      <tr className="border-b border-border bg-muted/20 text-[11px] uppercase tracking-wider text-muted-foreground">
+    <thead className="sticky top-0 z-10">
+      <tr className="border-b border-border bg-muted/40 backdrop-blur text-[11px] uppercase tracking-wider text-muted-foreground">
         {cols.map((c) => (
-          <th key={c} className={`px-4 py-3 ${c === "" ? "" : "text-left"}`}>
+          <th key={c} className={`px-4 py-3 ${c === "" ? "" : "text-left"} whitespace-nowrap`}>
             {c}
           </th>
         ))}

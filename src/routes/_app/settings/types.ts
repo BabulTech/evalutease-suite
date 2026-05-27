@@ -55,6 +55,7 @@ export const LIMIT_ROWS: { label: string; key: string }[] = [
 ];
 
 export const ROLES_OPTS = ["Student", "Teacher", "Employer", "Other"] as const;
+export const ENTERPRISE_ROLES_OPTS = ["HR Manager", "Principal", "Admin", "Director", "Other"] as const;
 export const USE_CASES_OPTS = [
   "Education",
   "Sports",

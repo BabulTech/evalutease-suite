@@ -71,9 +71,9 @@ function CompanyPage() {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: comp } = await (supabase as any)
-        .from("companies")
+        .from("company_profiles")
         .select("*")
-        .eq("owner_user_id", user.id)
+        .eq("admin_user_id", user.id)
         .single();
       if (comp) {
         setCompanyId(comp.id);
@@ -87,8 +87,14 @@ function CompanyPage() {
   }, [user, loadMembers]);
 
   useEffect(() => {
-    reload();
+    void reload();
   }, [reload]);
+
+  // Re-fetch org data whenever the user gains enterprise access
+  useEffect(() => {
+    if (isEnterprise) void reload();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEnterprise]);
 
   if (!isEnterprise) {
     return (

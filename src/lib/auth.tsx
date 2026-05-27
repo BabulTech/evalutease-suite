@@ -20,6 +20,29 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+async function ensureProfile(user: import("@supabase/supabase-js").User) {
+  const meta = user.user_metadata ?? {};
+  const fullName =
+    [meta.first_name, meta.last_name].filter(Boolean).join(" ").trim() ||
+    meta.full_name ||
+    user.email?.split("@")[0] ||
+    "User";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any).from("profiles").upsert(
+    {
+      id: user.id,
+      email: user.email,
+      full_name: fullName,
+      selected_plan: meta.selected_plan ?? "individual_starter",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id", ignoreDuplicates: false },
+  );
+  // Note: user_credits / user_roles / user_subscriptions are created by the
+  // handle_new_user DB trigger on signup. Don't upsert client-side — RLS
+  // forbids INSERT for non-admins and the row already exists from the trigger.
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -32,12 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
+      if (sess?.user) void ensureProfile(sess.user);
     });
 
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       setLoading(false);
+      // Self-heal: ensure profile row exists for this user
+      if (sess?.user) void ensureProfile(sess.user);
     });
 
     return () => subscription.unsubscribe();

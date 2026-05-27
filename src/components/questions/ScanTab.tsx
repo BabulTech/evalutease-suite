@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { DraftReview } from "./DraftReview";
@@ -24,6 +24,20 @@ type Props = {
 // react-doctor-disable-next-line react-doctor/prefer-useReducer
 export function ScanTab({ disabled, onSave, saving }: Props) {
   const { plan, credits, reload, isAiAllowed } = usePlan();
+  const isFreeAi = plan?.slug === "enterprise_free";
+  const freeAiLimit = plan?.trial_ai_calls ?? 10;
+  const [freeAiUsed, setFreeAiUsed] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isFreeAi) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("trial_ai_usage")
+      .select("used_calls")
+      .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: any) => setFreeAiUsed(data?.used_calls ?? 0));
+  }, [isFreeAi]);
+  const freeAiExhausted = isFreeAi && freeAiUsed !== null && freeAiUsed >= freeAiLimit;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageName, setImageName] = useState<string>("");
   const [imageBase64, setImageBase64] = useState<string>("");
@@ -110,6 +124,8 @@ export function ScanTab({ disabled, onSave, saving }: Props) {
   };
 
   if (!isAiAllowed) return <UpgradePrompt />;
+  // Lock scan once enterprise_free users exhaust their lifetime AI allowance
+  if (freeAiExhausted) return <UpgradePrompt />;
 
   return (
     <div className="space-y-5">

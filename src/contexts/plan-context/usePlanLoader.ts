@@ -103,13 +103,13 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
       const pendingPlan =
         typeof window !== "undefined" ? window.localStorage.getItem("pending_signup_plan") : null;
       const wanted = [pendingPlan, metadataPlan, profile?.selected_plan].find(
-        (slug): slug is "individual_starter" | "enterprise_starter" =>
-          slug === "individual_starter" || slug === "enterprise_starter",
+        (slug): slug is "individual_starter" | "enterprise_free" =>
+          slug === "individual_starter" || slug === "enterprise_free",
       );
       const current = (planRaw as { slug?: string } | null)?.slug ?? null;
       // Only repair if the user has no plan or is already on a free/starter plan.
       // Never auto-downgrade a paid plan subscription via this path.
-      const paidSlugs = new Set(["individual_pro", "enterprise_pro", "enterprise_elite", "individual_pro_plus"]);
+      const paidSlugs = new Set(["individual_pro", "enterprise_pro"]);
       const currentIsPaid = current !== null && paidSlugs.has(current);
       if (wanted && wanted !== current && !currentIsPaid) {
         try {
