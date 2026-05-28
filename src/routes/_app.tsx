@@ -154,6 +154,7 @@ function AppLayout() {
   const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
   const navigate = useNavigate();
   const hadUser = useRef(false);
+  const pushInitedFor = useRef<string | null>(null);
 
   // Detect when an active session is invalidated (user deleted by admin)
   useEffect(() => {
@@ -164,11 +165,11 @@ function AppLayout() {
     }
   }, [user, loading, navigate]);
 
-  // Push notifications are disabled until Firebase / google-services.json is
-  // configured. To enable later: install @capacitor/push-notifications,
-  // drop google-services.json into android/app/, then uncomment below and
-  // set localStorage push_enabled=1 from a Settings toggle.
-  /*
+  // Initialise native push notifications once per authenticated session,
+  // only when running inside the Capacitor shell. No-op on the web.
+  // Guarded by localStorage "push_enabled" — user must opt-in once from
+  // Settings so we don't try to register on devices where Firebase isn't
+  // configured.
   useEffect(() => {
     if (!user || pushInitedFor.current === user.id) return;
     pushInitedFor.current = user.id;
@@ -177,7 +178,6 @@ function AppLayout() {
       void initPushNotifications((link) => { window.location.href = link; });
     });
   }, [user, navigate]);
-  */
 
   // Periodically verify the session is still valid (catches deleted users +
   // post-network-blip 401s faster). Run on visibilitychange too so a tab

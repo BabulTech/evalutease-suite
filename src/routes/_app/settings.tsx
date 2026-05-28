@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useHost } from "@/contexts/HostContext";
 import { ProfileForm } from "./settings/ProfileForm";
+import { PushNotificationsToggle } from "@/components/PushNotificationsToggle";
 import { HostSettingsForm } from "./settings/HostSettingsForm";
 import { MessagesForm } from "./settings/MessagesForm";
 import { PlanSection } from "./settings/PlanSection";
@@ -89,8 +90,9 @@ function SettingsPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="profile" className="mt-4">
+        <TabsContent value="profile" className="mt-4 space-y-4">
           {user && <ProfileForm userId={user.id} />}
+          <PushNotificationsToggle />
         </TabsContent>
         <TabsContent value="registration" className="mt-4">
           {user && <HostSettingsForm userId={user.id} section="registration" />}
