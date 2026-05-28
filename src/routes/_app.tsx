@@ -154,7 +154,6 @@ function AppLayout() {
   const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
   const navigate = useNavigate();
   const hadUser = useRef(false);
-  const pushInitedFor = useRef<string | null>(null);
 
   // Detect when an active session is invalidated (user deleted by admin)
   useEffect(() => {
@@ -165,21 +164,20 @@ function AppLayout() {
     }
   }, [user, loading, navigate]);
 
-  // Initialise native push notifications once per authenticated session,
-  // only when running inside the Capacitor shell. No-op on the web.
+  // Push notifications are disabled until Firebase / google-services.json is
+  // configured. To enable later: install @capacitor/push-notifications,
+  // drop google-services.json into android/app/, then uncomment below and
+  // set localStorage push_enabled=1 from a Settings toggle.
+  /*
   useEffect(() => {
     if (!user || pushInitedFor.current === user.id) return;
     pushInitedFor.current = user.id;
     void import("@/lib/push").then(({ initPushNotifications, isNativePlatform }) => {
       if (!isNativePlatform()) return;
-      void initPushNotifications((link) => {
-        // Deep-link from a tapped OS notification. Use direct location change
-        // so any path / query string from the server works without TanStack
-        // Router's compile-time path checks.
-        window.location.href = link;
-      });
+      void initPushNotifications((link) => { window.location.href = link; });
     });
   }, [user, navigate]);
+  */
 
   // Periodically verify the session is still valid (catches deleted users +
   // post-network-blip 401s faster). Run on visibilitychange too so a tab

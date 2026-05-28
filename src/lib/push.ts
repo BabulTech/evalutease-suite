@@ -35,6 +35,14 @@ export async function initPushNotifications(navigateToLink?: (link: string) => v
   const platform = getPlatform();
   if (!platform) return;
 
+  // GUARD: only run if explicitly enabled. We disable by default so the app
+  // doesn't crash on devices where Firebase / google-services.json isn't yet
+  // configured. Enable it from a Settings toggle once Firebase is set up by
+  // setting localStorage.setItem("push_enabled", "1").
+  if (typeof window !== "undefined" && window.localStorage?.getItem("push_enabled") !== "1") {
+    return;
+  }
+
   try {
     const { PushNotifications } = await import("@capacitor/push-notifications");
 
@@ -50,21 +58,32 @@ export async function initPushNotifications(navigateToLink?: (link: string) => v
       return;
     }
 
-    // 2. Register with FCM/APNs
-    await PushNotifications.register();
+    // 2. Wrap register in its own try/catch — this is where missing
+    //    google-services.json or FCM mis-configuration crashes the native
+    //    side. Fail soft instead of taking the app down.
+    try {
+      await PushNotifications.register();
+    } catch (regErr) {
+      console.warn("[push] register failed — likely missing google-services.json:", regErr);
+      return;
+    }
 
     // 3. Store the token server-side
     PushNotifications.addListener("registration", async (tk) => {
       lastToken = tk.value;
       const deviceName =
         typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 120) : null;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any).rpc("register_push_token", {
-        p_token: tk.value,
-        p_platform: platform,
-        p_device_name: deviceName,
-      });
-      if (error) console.warn("[push] register_push_token failed:", error.message);
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any).rpc("register_push_token", {
+          p_token: tk.value,
+          p_platform: platform,
+          p_device_name: deviceName,
+        });
+        if (error) console.warn("[push] register_push_token failed:", error.message);
+      } catch (e) {
+        console.warn("[push] RPC failed:", e);
+      }
     });
 
     PushNotifications.addListener("registrationError", (err) => {
@@ -76,9 +95,6 @@ export async function initPushNotifications(navigateToLink?: (link: string) => v
       const link = (action.notification?.data as { link?: string } | undefined)?.link;
       if (link && navigateToLink) navigateToLink(link);
     });
-
-    // (Optional) Foreground push handler — could show an in-app toast, but
-    // the realtime notification bell already does that, so we leave it.
   } catch (err) {
     console.warn("[push] init failed:", err);
   }
