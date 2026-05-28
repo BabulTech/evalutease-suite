@@ -253,7 +253,7 @@ function AdminPage() {
         <aside
           className={`${sidebarOpen ? "w-56" : "w-14"} hidden md:flex shrink-0 border-r border-border bg-card/40 transition-all duration-300 flex-col`}
         >
-          {/* Sidebar toggle header — matches app sidebar pattern */}
+          {/* Sidebar toggle header - matches app sidebar pattern */}
           <div className={`flex items-center border-b border-border/60 h-11 shrink-0 ${sidebarOpen ? "px-3 justify-between" : "justify-center"}`}>
             {sidebarOpen && (
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 select-none px-1">

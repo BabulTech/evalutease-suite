@@ -31,7 +31,7 @@ type AiUsageRow = {
   created_at: string;
 };
 
-// Cost per 1M tokens in USD — editable by admin in the UI
+// Cost per 1M tokens in USD - editable by admin in the UI
 type ModelPricing = { input: number; output: number };
 const DEFAULT_PRICING: Record<string, ModelPricing> = {
   "claude-haiku-4-5-20251001": { input: 0.8,  output: 4.0   },
@@ -54,7 +54,7 @@ export function AiUsageSection() {
   const [loading, setLoading] = useState(true);
   const [featureFilter, setFeatureFilter] = useState("all");
 
-  // Pricing state — editable
+  // Pricing state - editable
   const [pricing, setPricing] = useState<Record<string, ModelPricing>>(DEFAULT_PRICING);
   const [showPricing, setShowPricing] = useState(false);
 
@@ -120,7 +120,7 @@ export function AiUsageSection() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionHead title="AI Usage" sub="Token usage, credit burn, estimated AI cost by model — live pricing." />
+        <SectionHead title="AI Usage" aria-label="AI Usage" sub="Token usage, credit burn, estimated AI cost by model (live pricing)." />
         <div className="flex gap-2">
           <Select value={featureFilter} onValueChange={setFeatureFilter}>
             <SelectTrigger className="w-[190px]">
@@ -145,7 +145,7 @@ export function AiUsageSection() {
         <span className="font-medium text-foreground">USD → PKR</span>
         <input
           type="number"
-          title="USD to PKR rate"
+          title="USD to PKR rate" aria-label="USD to PKR rate"
           value={usdToPkr}
           onChange={(e) => setUsdToPkr(Number(e.target.value))}
           className="w-24 h-7 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -160,7 +160,7 @@ export function AiUsageSection() {
           <RefreshCw className={`size-3 ${rateLoading ? "animate-spin" : ""}`} />
           {rateLoading ? "Fetching…" : "Refresh rate"}
         </button>
-        {rateError && <span className="text-destructive">Could not fetch live rate — using manual value.</span>}
+        {rateError && <span className="text-destructive">Could not fetch live rate (using manual value).</span>}
         <span className="ml-auto text-[11px]">Source: open.er-api.com</span>
       </div>
 
@@ -169,7 +169,7 @@ export function AiUsageSection() {
         <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Per-model pricing (USD per 1M tokens)</p>
-            <button type="button" title="Close pricing" onClick={() => setShowPricing(false)} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
+            <button type="button" title="Close pricing" aria-label="Close pricing" onClick={() => setShowPricing(false)} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -209,13 +209,17 @@ export function AiUsageSection() {
                   </tr>
                 ))}
                 {/* Add rows for any models in data not yet in pricing table */}
-                {models.filter((m) => !(m in pricing)).map((model) => (
-                  <tr key={model} className="bg-warning/5">
-                    <td className="px-3 py-2 font-mono">{model} <span className="text-warning">(using default)</span></td>
-                    <td className="px-3 py-2 text-muted-foreground">{pricing._default.input}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{pricing._default.output}</td>
-                  </tr>
-                ))}
+                {models.flatMap((model) =>
+                  model in pricing
+                    ? []
+                    : [
+                        <tr key={model} className="bg-warning/5">
+                          <td className="px-3 py-2 font-mono">{model} <span className="text-warning">(using default)</span></td>
+                          <td className="px-3 py-2 text-muted-foreground">{pricing._default.input}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{pricing._default.output}</td>
+                        </tr>,
+                      ],
+                )}
               </tbody>
             </table>
           </div>

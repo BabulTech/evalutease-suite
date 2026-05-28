@@ -232,7 +232,7 @@ function EnterpriseRoleDetails({ role, form, setForm }: RoleDetailsProps) {
         </div>
       )}
 
-      {showTeamSize && (
+      {showTeamSize ? (
         <div>
           <Label className="mb-2 text-xs block">Team Size</Label>
           <div className="flex flex-wrap gap-2">
@@ -247,7 +247,7 @@ function EnterpriseRoleDetails({ role, form, setForm }: RoleDetailsProps) {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
 
       {showYearsExp && (
         <div>

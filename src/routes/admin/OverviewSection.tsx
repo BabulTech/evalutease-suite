@@ -330,23 +330,27 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string, 
           </div>
           <div className="divide-y divide-border/40">
             {filteredRecentUsers.map((u) => (
-              <button
-                type="button"
+              <div
                 key={u.id}
-                onClick={() => onNavigate("users", u.id)}
-                className="w-full text-left px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10 transition-colors cursor-pointer"
-                aria-label={`View ${u.name}`}
+                className="w-full px-4 py-3 flex items-start sm:items-center gap-3 hover:bg-muted/10 transition-colors"
               >
-                <div className="size-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-                  {u.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium truncate text-primary hover:underline">{u.name}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">{u.email}</div>
-                </div>
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onNavigate("plans", u.plan); }}
+                  onClick={() => onNavigate("users", u.id)}
+                  className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer"
+                  aria-label={`View ${u.name}`}
+                >
+                  <div className="size-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate text-primary hover:underline">{u.name}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">{u.email}</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("plans", u.plan)}
                   className="shrink-0 hover:scale-105 transition-transform cursor-pointer"
                   aria-label={`View ${u.plan} plan`}
                 >
@@ -355,7 +359,7 @@ export function OverviewSection({ onNavigate }: { onNavigate: (section: string, 
                 <span className="hidden sm:inline text-[11px] text-muted-foreground shrink-0">
                   {ago(u.joined)}
                 </span>
-              </button>
+              </div>
             ))}
           </div>
         </div>

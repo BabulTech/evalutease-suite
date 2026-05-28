@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { AppSidebar } from "@/components/AppSidebar";
 import { TopBar } from "@/components/TopBar";
+import { PageSkeleton } from "@/components/PageSkeleton";
 import { PlanProvider, usePlan } from "@/contexts/PlanContext";
 import { HostProvider, useHost } from "@/contexts/HostContext";
 import { useAuth } from "@/lib/auth";
@@ -20,15 +21,30 @@ export const Route = createFileRoute("/_app")({
 });
 
 function PlanBanners() {
-  const { isExpired, daysUntilExpiry, plan } = usePlan();
+  const { isExpired, plan, billingCycle, expiresAt, yearlyDiscountPercent } = usePlan();
   const { isHost, loading: hostLoading } = useHost();
-  const [dismissedExpiry, setDismissedExpiry] = useState(false);
-  const [dismissedWarning, setDismissedWarning] = useState(false);
+  const [dismissedFree, setDismissedFree] = useState(
+    () => typeof window !== "undefined" && sessionStorage.getItem("banner_free_dismissed") === "1",
+  );
+  const [dismissedMonthly, setDismissedMonthly] = useState(
+    () => typeof window !== "undefined" && sessionStorage.getItem("banner_monthly_dismissed") === "1",
+  );
+  const [dismissedYearly, setDismissedYearly] = useState(
+    () => typeof window !== "undefined" && sessionStorage.getItem("banner_yearly_dismissed") === "1",
+  );
 
   // Hosts never see plan banners; don't flash while we resolve
   if (hostLoading || isHost) return null;
 
   const isFree = plan?.slug === "individual_starter" || plan?.slug === "enterprise_free";
+  const isPaidActive = plan && !isFree && !isExpired;
+  const expiryLabel = expiresAt
+    ? new Date(expiresAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+    : null;
+  const monthlyPrice = plan?.price_pkr ?? 0;
+  const yearlySavings = monthlyPrice > 0 && yearlyDiscountPercent > 0
+    ? (monthlyPrice * 12) - Math.round(monthlyPrice * 12 * (1 - yearlyDiscountPercent / 100))
+    : 0;
 
   return (
     <>
@@ -50,9 +66,59 @@ function PlanBanners() {
         </div>
       )}
 
+      {/* Yearly subscriber: info banner with expiry month/year */}
+      {isPaidActive && billingCycle === "yearly" && expiryLabel && !dismissedYearly && (
+        <div className="bg-emerald-400/10 border-b border-emerald-400/20 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-3">
+          <Clock className="size-4 text-emerald-400 shrink-0" />
+          <div className="flex-1 text-xs text-emerald-400 font-medium leading-relaxed">
+            You're on the <strong>Yearly</strong> {plan.name} plan. Subscription expires{" "}
+            <strong>{expiryLabel}</strong>.
+          </div>
+          <button
+            type="button"
+            title="Dismiss"
+            onClick={() => {
+              setDismissedYearly(true);
+              sessionStorage.setItem("banner_yearly_dismissed", "1");
+            }}
+            className="shrink-0 rounded p-1 hover:bg-emerald-400/20 transition-colors text-emerald-400"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Monthly subscriber: upsell to yearly */}
+      {isPaidActive && billingCycle === "monthly" && yearlySavings > 0 && !dismissedMonthly && (
+        <div className="bg-primary/10 border-b border-primary/20 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-3">
+          <Zap className="size-4 text-primary shrink-0" />
+          <div className="flex-1 text-xs text-primary font-medium leading-relaxed">
+            You're on <strong>Monthly</strong> {plan.name}. Switch to yearly and save{" "}
+            <strong>PKR {yearlySavings.toLocaleString()}/year</strong> ({yearlyDiscountPercent}% off).
+          </div>
+          <Link
+            to="/billing"
+            search={{ plan: plan.slug, cycle: "yearly" }}
+            className="shrink-0 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 transition-colors"
+          >
+            Get Yearly
+          </Link>
+          <button
+            type="button"
+            title="Dismiss"
+            onClick={() => {
+              setDismissedMonthly(true);
+              sessionStorage.setItem("banner_monthly_dismissed", "1");
+            }}
+            className="shrink-0 rounded p-1 hover:bg-primary/20 transition-colors text-primary"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Free plan upsell, shown once, dismissible */}
-      {isFree && !isExpired && !dismissedExpiry && (
+      {isFree && !isExpired && !dismissedFree && (
         <div className="bg-primary/10 border-b border-primary/20 px-3 sm:px-4 py-2.5 flex items-start sm:items-center gap-3">
           <Zap className="size-4 text-primary shrink-0" />
           <div className="flex-1 text-xs text-primary font-medium leading-relaxed">
@@ -68,7 +134,10 @@ function PlanBanners() {
           <button
             type="button"
             title="Dismiss"
-            onClick={() => setDismissedExpiry(true)}
+            onClick={() => {
+              setDismissedFree(true);
+              sessionStorage.setItem("banner_free_dismissed", "1");
+            }}
             className="shrink-0 rounded p-1 hover:bg-primary/20 transition-colors text-primary"
           >
             <X className="size-3.5" />
@@ -76,21 +145,6 @@ function PlanBanners() {
         </div>
       )}
     </>
-  );
-}
-
-function PageSkeleton() {
-  return (
-    <div className="space-y-5 animate-pulse">
-      <div className="h-24 rounded-xl md:rounded-2xl bg-muted/40" />
-      <div className="grid grid-cols-3 gap-3">
-        <div className="h-20 rounded-xl bg-muted/30" />
-        <div className="h-20 rounded-xl bg-muted/30" />
-        <div className="h-20 rounded-xl bg-muted/30" />
-      </div>
-      <div className="h-64 rounded-xl md:rounded-2xl bg-muted/40" />
-      <div className="h-40 rounded-xl md:rounded-2xl bg-muted/30" />
-    </div>
   );
 }
 
@@ -110,17 +164,32 @@ function AppLayout() {
     }
   }, [user, loading, navigate]);
 
-  // Periodically verify the session is still valid (catches deleted users faster)
+  // Periodically verify the session is still valid (catches deleted users +
+  // post-network-blip 401s faster). Run on visibilitychange too so a tab
+  // resuming from sleep gets validated immediately.
   useEffect(() => {
-    const interval = setInterval(async () => {
+    let cancelled = false;
+    const verify = async () => {
+      if (cancelled) return;
       const { error } = await supabase.auth.getUser();
-      if (error) {
+      if (cancelled) return;
+      // Only treat AuthApiError (token expired/invalid) as terminal —
+      // ignore transient network failures so a flaky connection doesn't
+      // log the user out.
+      if (error && (error as { name?: string }).name === "AuthApiError") {
         await supabase.auth.signOut();
-        toast.error("Your session is no longer valid.");
+        toast.error("Your session is no longer valid. Please sign in again.");
         void navigate({ to: "/login" });
       }
-    }, 60_000); // check every 60 seconds
-    return () => clearInterval(interval);
+    };
+    const interval = setInterval(verify, 30_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void verify(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [navigate]);
 
   if (loading) {

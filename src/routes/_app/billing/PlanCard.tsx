@@ -1,9 +1,21 @@
 import { Zap } from "lucide-react";
 import type { PlanInfo } from "@/contexts/PlanContext";
+import { cyclePrice, type BillingCycle } from "./types";
 
-type Props = { plan: PlanInfo; isCurrent: boolean; onSelect: () => void };
+type Props = {
+  plan: PlanInfo;
+  isCurrent: boolean;
+  onSelect: () => void;
+  cycle?: BillingCycle;
+  discountPct?: number;
+};
 
-export function PlanCard({ plan, isCurrent, onSelect }: Props) {
+export function PlanCard({ plan, isCurrent, onSelect, cycle = "monthly", discountPct = 10 }: Props) {
+  const price = cyclePrice(plan.price_pkr, cycle, discountPct);
+  const showSavings = cycle === "yearly" && plan.price_pkr > 0;
+  const fullYear = plan.price_pkr * 12;
+  const saved = fullYear - price;
+
   return (
     <button
       type="button"
@@ -27,9 +39,14 @@ export function PlanCard({ plan, isCurrent, onSelect }: Props) {
         <p className="text-xs text-muted-foreground mb-3 leading-snug">{plan.description}</p>
       )}
       <div className="flex items-baseline gap-1 mb-1">
-        <span className="font-display text-2xl font-bold">PKR {plan.price_pkr}</span>
-        <span className="text-xs text-muted-foreground">/month</span>
+        <span className="font-display text-2xl font-bold">PKR {price.toLocaleString()}</span>
+        <span className="text-xs text-muted-foreground">/{cycle === "yearly" ? "year" : "month"}</span>
       </div>
+      {showSavings && saved > 0 && (
+        <div className="text-[11px] text-success font-semibold mb-2">
+          Save PKR {saved.toLocaleString()} ({discountPct}% off)
+        </div>
+      )}
       {plan.credits_per_month > 0 && (
         <div className="text-xs text-warning font-semibold flex items-center gap-1 mb-3">
           <Zap className="size-3" /> {plan.credits_per_month} credits/month

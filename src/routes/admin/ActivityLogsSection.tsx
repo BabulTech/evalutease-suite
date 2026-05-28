@@ -141,7 +141,7 @@ export function ActivityLogsSection() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <SectionHead title="Activity Logs" sub="Who did what, when, and on which record." />
+        <SectionHead title="Activity Logs" aria-label="Activity Logs" sub="Who did what, when, and on which record." />
         <Button variant="outline" size="sm" onClick={() => void load()} className="gap-2">
           <RefreshCw className="size-4" /> Refresh
         </Button>
@@ -195,20 +195,22 @@ export function ActivityLogsSection() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
+            <label htmlFor="activity-from-date" className="text-xs text-muted-foreground whitespace-nowrap">From</label>
             <input
+              id="activity-from-date"
               type="date"
-              title="From date"
+              title="From date" aria-label="From date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-muted-foreground whitespace-nowrap">To</label>
+            <label htmlFor="activity-to-date" className="text-xs text-muted-foreground whitespace-nowrap">To</label>
             <input
+              id="activity-to-date"
               type="date"
-              title="To date"
+              title="To date" aria-label="To date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -228,7 +230,7 @@ export function ActivityLogsSection() {
           <button type="button" onClick={() => setConfirmBulk(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-destructive/90">
             <Trash2 className="size-3.5" /> Delete Selected
           </button>
-          <button type="button" title="Clear selection" onClick={() => setSelected2(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
+          <button type="button" title="Clear selection" aria-label="Clear selection" onClick={() => setSelected2(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
         </div>
       )}
 
@@ -236,7 +238,7 @@ export function ActivityLogsSection() {
         <thead>
           <tr className="border-b border-border/60 bg-muted/20">
             <th className="px-3 py-2.5 text-left">
-              <input type="checkbox" title="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
+              <input type="checkbox" title="Select all" aria-label="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
             </th>
             {["When", "User", "Action", "Module", "Details", "Risk", ""].map((c) => (
               <th key={c} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{c}</th>
@@ -255,8 +257,8 @@ export function ActivityLogsSection() {
           ) : (
             filtered.map((row) => (
               <tr key={row.id} className="hover:bg-muted/20">
-                <td className="px-3 py-3">
-                  <input type="checkbox" title="Select" checked={selected2.has(row.id)} onChange={() => toggleSelect(row.id)} className="rounded" />
+                <td className="p-3">
+                  <input type="checkbox" title="Select" aria-label="Select" checked={selected2.has(row.id)} onChange={() => toggleSelect(row.id)} className="rounded" />
                 </td>
                 <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                   {new Date(row.created_at).toLocaleString()}
@@ -280,10 +282,10 @@ export function ActivityLogsSection() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1.5 justify-end">
-                    <button type="button" onClick={() => setSelected(row)} title="View" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+                    <button type="button" onClick={() => setSelected(row)} title="View" aria-label="View" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
                       <Eye className="size-3.5" />
                     </button>
-                    <button type="button" onClick={() => setConfirmDeleteId(row.id)} title="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
+                    <button type="button" onClick={() => setConfirmDeleteId(row.id)} title="Delete" aria-label="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
                       <Trash2 className="size-3.5" />
                     </button>
                   </div>

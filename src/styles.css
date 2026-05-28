@@ -102,7 +102,7 @@
 }
 
 .dark {
-  /* Same as :root — app is dark-first */
+  /* Same as :root - app is dark-first */
   --background: oklch(0.18 0.04 240);
   --foreground: oklch(0.97 0.01 200);
 }
@@ -190,7 +190,7 @@ button:disabled,
 
 /* ===== Print stylesheet for the Quiz Results page (Print / Download PDF) ===== */
 @media print {
-  /* Light page background — easier to read on paper. */
+  /* Light page background - easier to read on paper. */
   html,
   body {
     background: #ffffff !important;

@@ -187,7 +187,7 @@ export async function logAiUsage(input: AiUsageInput) {
     });
 
     // Note: we used to ALSO write an activity_logs row here for every AI
-    // call. That duplicated storage — ai_usage_logs already has richer
+    // call. That duplicated storage - ai_usage_logs already has richer
     // detail (tokens, cost, latency). The credit_transactions trigger
     // logs the credit spend separately, which is the user-facing event.
 

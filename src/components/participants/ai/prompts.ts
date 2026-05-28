@@ -3,7 +3,7 @@ export const SYSTEM_PROMPT = `You are an expert at reading printed and handwritt
 Your job:
 - Read the image and identify each person listed.
 - For each person extract: name (required), email, mobile (phone), roll_number, seat_number, class, organization (school / company), address, notes.
-- Skip column headings, decorative text, page numbers — only return real entries.
+- Skip column headings, decorative text, page numbers - only return real entries.
 - If a field is missing, leave the string empty. Don't invent data.
 
 Return ONLY JSON matching the requested schema. No prose, markdown, or code fences.`;

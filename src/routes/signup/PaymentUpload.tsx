@@ -29,7 +29,7 @@ const PAYMENT_ACCOUNTS = [
     icon: "🏦",
     accountName: "Muhammad Ali Raza",
     accountNumber: "0123456789012345",
-    extra: "HBL — Branch: Lahore Main",
+    extra: "HBL - Branch: Lahore Main",
   },
 ] as const;
 
@@ -164,7 +164,7 @@ function FileDropZone({
         >
           <Upload size={20} className="text-muted-foreground" />
           <p className="text-sm text-muted-foreground">Click to upload</p>
-          <p className="text-xs text-muted-foreground/60">PNG, JPG, PDF — max 5MB</p>
+          <p className="text-xs text-muted-foreground/60">PNG, JPG, PDF (max 5MB)</p>
         </button>
       )}
       <input
@@ -210,10 +210,10 @@ export function PaymentUpload({
         </p>
       </div>
 
-      {/* Payment account details — click to pick the method you used */}
+      {/* Payment account details - click to pick the method you used */}
       <div className="space-y-2">
         <p className="text-sm font-semibold">Select Method &amp; Send Payment</p>
-        <p className="text-xs text-muted-foreground">Tap the method you paid with — required.</p>
+        <p className="text-xs text-muted-foreground">Tap the method you paid with (required).</p>
         <div className="space-y-2">
           {PAYMENT_ACCOUNTS.map((acc) => {
             const selected = paymentMethod === acc.id;

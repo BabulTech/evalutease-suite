@@ -54,9 +54,16 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
     <label className="flex items-center gap-2.5 cursor-pointer select-none group">
       <div
         role="switch"
+        tabIndex={0}
         aria-checked={checked ? "true" : "false"}
         aria-label={label}
         onClick={() => onChange(!checked)}
+        onKeyDown={(e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            onChange(!checked);
+          }
+        }}
         className={`relative w-10 h-5.5 rounded-full transition-colors duration-200 cursor-pointer ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}
       >
         <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-4.5" : "translate-x-0"}`} />
@@ -116,6 +123,32 @@ export function PlansSection() {
   const [editing, setEditing] = useState<PlanRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [yearlyDiscount, setYearlyDiscount] = useState<number>(10);
+  const [savingDiscount, setSavingDiscount] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase as any)
+        .from("app_settings")
+        .select("yearly_discount_percent")
+        .eq("id", true)
+        .maybeSingle();
+      if (data?.yearly_discount_percent != null) setYearlyDiscount(data.yearly_discount_percent);
+    })();
+  }, []);
+
+  const saveYearlyDiscount = async () => {
+    setSavingDiscount(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from("app_settings")
+      .update({ yearly_discount_percent: yearlyDiscount })
+      .eq("id", true);
+    setSavingDiscount(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Yearly discount updated");
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -205,7 +238,7 @@ export function PlansSection() {
   if (editing) return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <button type="button" title="Cancel editing" onClick={() => setEditing(null)} className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40">
+        <button type="button" title="Cancel editing" aria-label="Cancel editing" onClick={() => setEditing(null)} className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40">
           <X className="size-4" />
         </button>
         <div className="flex items-center gap-2">
@@ -232,8 +265,8 @@ export function PlansSection() {
             <NumField label="Credits/month" value={editing.credits_per_month} onChange={(v) => setEditing((p) => ({ ...p!, credits_per_month: v }))} />
             <NumField label="Free AI Calls" value={editing.trial_ai_calls} onChange={(v) => setEditing((p) => ({ ...p!, trial_ai_calls: v }))} hint="Lifetime, enterprise free only" />
             <div className="space-y-1 sm:col-span-1 col-span-2">
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Description</label>
-              <Input value={editing.description ?? ""} onChange={(e) => setEditing((p) => ({ ...p!, description: e.target.value }))} className="h-8 text-sm" />
+              <label htmlFor="plan-edit-description" className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Description</label>
+              <Input id="plan-edit-description" value={editing.description ?? ""} onChange={(e) => setEditing((p) => ({ ...p!, description: e.target.value }))} className="h-8 text-sm" />
             </div>
           </div>
         </div>
@@ -314,7 +347,7 @@ export function PlansSection() {
                 />
                 <button
                   type="button"
-                  title="Remove feature"
+                  title="Remove feature" aria-label="Remove feature"
                   onClick={() => setEditing((p) => ({ ...p!, features_list: editing.features_list.filter((_, j) => j !== i) }))}
                   className="p-1.5 rounded-lg text-destructive/50 hover:text-destructive hover:bg-destructive/10 transition-colors"
                 >
@@ -346,9 +379,32 @@ export function PlansSection() {
   return (
     <div className="space-y-5">
       <SectionHead
-        title="Plan Management"
+        title="Plan Management" aria-label="Plan Management"
         sub={`${plans.length} plans · ${plans.filter((p) => p.is_active).length} active`}
       />
+
+      <div className="rounded-2xl border border-border bg-card/60 p-4 flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <label htmlFor="yearly-discount" className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+            Yearly Discount %
+          </label>
+          <Input
+            id="yearly-discount"
+            type="number"
+            min={0}
+            max={100}
+            value={yearlyDiscount}
+            onChange={(e) => setYearlyDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
+            className="h-9 w-28 text-sm"
+          />
+        </div>
+        <Button onClick={() => void saveYearlyDiscount()} disabled={savingDiscount} className="h-9">
+          {savingDiscount ? "Saving…" : "Save"}
+        </Button>
+        <p className="text-[11px] text-muted-foreground ml-auto max-w-sm">
+          Applied to yearly billing for all paid plans. Yearly price = monthly × 12 × (1 − discount%).
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {plans.map((plan) => {
@@ -516,8 +572,8 @@ export function PlansSection() {
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Marketing Features</span>
                       </div>
                       <ul className="space-y-1">
-                        {plan.features_list.map((f, i) => (
-                          <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {plan.features_list.map((f) => (
+                          <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
                             <CheckCircle className="size-3 text-success shrink-0" />
                             {f}
                           </li>

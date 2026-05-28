@@ -8,7 +8,8 @@ const dictionaries: Record<Language, Dict> = {
   en: {
     // â”€â”€ App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     "app.name": "Jancho",
-    "app.tagline": "Premium Live Quiz Platform",
+    "app.tagline": "AI-Powered Platform to Evaluate Your Knowledge & Skills",
+    "app.taglineShort": "Evaluate Smarter with AI",
 
     // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     "auth.signin": "Sign In",
@@ -499,7 +500,7 @@ const dictionaries: Record<Language, Dict> = {
     "rep.colScorePct": "Score %",
     "rep.colResult": "Result",
     "rep.colCorrect": "âœ“ Correct",
-    "rep.colWrong": "âœ— Wrong",
+    "rep.colWrong": "âœ- Wrong",
     "rep.colSkipped": "Skipped",
     "rep.colTimeTaken": "Time taken",
     "rep.noParticipantsMatch": "No participants match these filters",
@@ -1318,7 +1319,7 @@ const dictionaries: Record<Language, Dict> = {
     "rep.colScorePct": "Ø§Ø³Ú©ÙˆØ± %",
     "rep.colResult": "Ù†ØªÛŒØ¬Û",
     "rep.colCorrect": "âœ“ Ø¯Ø±Ø³Øª",
-    "rep.colWrong": "âœ— ØºÙ„Ø·",
+    "rep.colWrong": "âœ- ØºÙ„Ø·",
     "rep.colSkipped": "Ú†Ú¾ÙˆÚ‘Û’",
     "rep.colTimeTaken": "Ù„Ú¯Ø§ ÙˆÙ‚Øª",
     "rep.noParticipantsMatch": "Ú©ÙˆØ¦ÛŒ Ø´Ø±ÛŒÚ© ÙÙ„Ù¹Ø± Ø³Û’ Ù…ÛŒÙ„ Ù†ÛÛŒÚº Ú©Ú¾Ø§ØªØ§",

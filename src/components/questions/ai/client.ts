@@ -47,7 +47,7 @@ export async function consumeFreeAiCall(planOwnerId: string, freeLimit: number):
     .maybeSingle();
 
   if (usageErr) {
-    // Fail closed — don't let users generate AI for free if we can't read the limit.
+    // Fail closed - don't let users generate AI for free if we can't read the limit.
     throw new Error("Could not verify free AI quota: " + usageErr.message);
   }
   if (!usageRow) {

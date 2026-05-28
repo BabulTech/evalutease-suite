@@ -34,7 +34,6 @@ function FreeAiBadge() {
       if (error) {
         console.warn("[FreeAiBadge] fetch error:", error.message);
       }
-      console.log("[FreeAiBadge] used_calls =", data?.used_calls ?? 0);
       setUsed(data?.used_calls ?? 0);
     };
     void refresh();
@@ -59,7 +58,7 @@ function FreeAiBadge() {
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
 
-    // 4) Safety poll every 15 s — picks up any updates we missed
+    // 4) Safety poll every 15 s - picks up any updates we missed
     const interval = setInterval(() => void refresh(), 15000);
 
     return () => {
@@ -84,7 +83,7 @@ function FreeAiBadge() {
           ? "bg-destructive/10 text-destructive hover:bg-destructive/15"
           : "bg-success/10 text-success hover:bg-success/15"
       }`}
-      title="Free AI calls remaining — click to upgrade"
+      title="Free AI calls remaining - click to upgrade"
       aria-label={`${remaining} of ${limit} free AI calls remaining`}
     >
       <Sparkles size={12} />
@@ -120,7 +119,7 @@ export function TopBar(_props: Props) {
 
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         <FreeAiBadge />
-        <LanguageSwitcher />
+        {/* <LanguageSwitcher /> */}
         <NotificationBell />
         <UserDropdown
           name={name}

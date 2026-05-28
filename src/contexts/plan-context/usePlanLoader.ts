@@ -11,6 +11,8 @@ type Setters = {
   setUsage: (u: PlanUsage) => void;
   setExpiresAt: (v: string | null) => void;
   setLoading: (v: boolean) => void;
+  setYearlyDiscount: (v: number) => void;
+  setBillingCycle: (v: "monthly" | "yearly") => void;
 };
 
 type LoaderDeps = {
@@ -21,7 +23,7 @@ type LoaderDeps = {
 
 export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
   const { user, hostInfo, hostLoading } = deps;
-  const { setPlan, setAllPlans, setCredits, setUsage, setExpiresAt, setLoading } = setters;
+  const { setPlan, setAllPlans, setCredits, setUsage, setExpiresAt, setLoading, setYearlyDiscount, setBillingCycle } = setters;
 
   return useCallback(async () => {
     if (!user || hostLoading) return;
@@ -34,6 +36,7 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
       subRes,
       creditsRes,
       allPlansRes,
+      settingsRes,
       quizzesToday,
       questionsTotal,
       participantsTotal,
@@ -54,6 +57,8 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
         .maybeSingle(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any).from("plans").select("*").eq("is_active", true).order("sort_order"),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).from("app_settings").select("yearly_discount_percent").eq("id", true).maybeSingle(),
       supabase
         .from("quiz_sessions")
         .select("id", { count: "exact", head: true })
@@ -73,6 +78,10 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
         .eq("owner_id", user.id),
     ]);
 
+    if (settingsRes.data?.yearly_discount_percent != null) {
+      setYearlyDiscount(settingsRes.data.yearly_discount_percent);
+    }
+
     if (allPlansRes.data) {
       setAllPlans((allPlansRes.data as Record<string, unknown>[]).map(rowToPlan));
     }
@@ -88,7 +97,9 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
     const sub = subRes.data;
     const planRaw = sub?.plans as Record<string, unknown> | null;
     const expiry = (sub?.expires_at as string | null) ?? null;
+    const cycle = ((sub?.billing_cycle as string | null) ?? "monthly") as "monthly" | "yearly";
     setExpiresAt(hostInfo ? null : expiry);
+    setBillingCycle(hostInfo ? "monthly" : cycle);
     const isExpiredSub = hostInfo ? false : expiry ? new Date(expiry) < new Date() : false;
     setPlan(planRaw && !isExpiredSub ? rowToPlan(planRaw) : { ...FREE_PLAN });
 
@@ -155,5 +166,6 @@ export function usePlanLoader(deps: LoaderDeps, setters: Setters) {
     setExpiresAt,
     setUsage,
     setLoading,
+    setYearlyDiscount,
   ]);
 }

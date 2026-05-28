@@ -5,7 +5,7 @@ import type { PlanInfo } from "@/contexts/PlanContext";
 import { supabase } from "@/integrations/supabase/client";
 import { StepHeader } from "./StepHeader";
 import { METHOD_ICONS } from "./constants";
-import type { PaymentAccount } from "./types";
+import { cyclePrice, type BillingCycle, type PaymentAccount } from "./types";
 
 export type PromoResult = {
   id: string;
@@ -22,6 +22,8 @@ type Props = {
   onSelectMethod: (method: string, promo: PromoResult | null) => void;
   onFreePromo: (promo: PromoResult) => void;
   onBack: () => void;
+  cycle: BillingCycle;
+  yearlyDiscountPercent: number;
 };
 
 function applyDiscount(price: number, promo: PromoResult | null): number {
@@ -34,7 +36,7 @@ function applyDiscount(price: number, promo: PromoResult | null): number {
   return price;
 }
 
-export function PayStep({ selectedPlan, accounts, onSelectMethod, onFreePromo, onBack }: Props) {
+export function PayStep({ selectedPlan, accounts, onSelectMethod, onFreePromo, onBack, cycle, yearlyDiscountPercent }: Props) {
   const [promoInput, setPromoInput] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promo, setPromo] = useState<PromoResult | null>(null);
@@ -74,7 +76,10 @@ export function PayStep({ selectedPlan, accounts, onSelectMethod, onFreePromo, o
     setPromoError("");
   };
 
-  const originalPrice = selectedPlan.price_pkr;
+  const isCreditPackPrice = selectedPlan.id.startsWith("__credit_pack__");
+  const originalPrice = isCreditPackPrice
+    ? selectedPlan.price_pkr
+    : cyclePrice(selectedPlan.price_pkr, cycle, yearlyDiscountPercent);
   const finalPrice = applyDiscount(originalPrice, promo);
   const saving = originalPrice - finalPrice;
 
@@ -89,8 +94,8 @@ export function PayStep({ selectedPlan, accounts, onSelectMethod, onFreePromo, o
   return (
     <div className="max-w-lg mx-auto space-y-4">
       <StepHeader
-        title="How would you like to pay?"
-        sub={`${selectedPlan.name} · PKR ${finalPrice.toLocaleString()}`}
+        title="How would you like to pay?" aria-label="How would you like to pay?"
+        sub={`${selectedPlan.name}${isCreditPackPrice ? "" : ` · ${cycle}`} · PKR ${finalPrice.toLocaleString()}`}
         onBack={onBack}
       />
 
@@ -138,7 +143,7 @@ export function PayStep({ selectedPlan, accounts, onSelectMethod, onFreePromo, o
                 {discountLabel()}{promo.description ? ` · ${promo.description}` : ""}
               </p>
             </div>
-            <button type="button" title="Remove promo" onClick={clearPromo} className="p-1 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground">
+            <button type="button" title="Remove promo" aria-label="Remove promo" onClick={clearPromo} className="p-1 rounded-lg hover:bg-muted/40 text-muted-foreground hover:text-foreground">
               <X className="size-4" />
             </button>
           </div>
@@ -171,13 +176,13 @@ export function PayStep({ selectedPlan, accounts, onSelectMethod, onFreePromo, o
         )}
       </div>
 
-      {/* Free promo — skip payment */}
+      {/* Free promo - skip payment */}
       {promo?.discount_type === "free" ? (
         <div className="space-y-3">
           <div className="rounded-2xl border border-success/30 bg-success/5 px-5 py-4 text-center space-y-2">
             <p className="text-2xl">🎁</p>
             <p className="font-semibold text-success">This plan is FREE with your promo code!</p>
-            <p className="text-xs text-muted-foreground">Click below to activate it instantly — no payment required.</p>
+            <p className="text-xs text-muted-foreground">Click below to activate it instantly. No payment required.</p>
           </div>
           <button
             type="button"

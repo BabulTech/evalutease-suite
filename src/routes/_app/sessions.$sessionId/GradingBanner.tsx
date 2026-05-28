@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Coins, PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -120,9 +120,9 @@ export function GradingBanner({
           <p className="text-xs text-destructive flex items-center gap-1.5">
             <Coins className="size-3.5" />
             Not enough credits for AI grading.{" "}
-            <a href="/billing" className="underline font-semibold">
+            <Link to="/billing" search={{ plan: "" }} className="underline font-semibold">
               Buy more →
-            </a>{" "}
+            </Link>{" "}
             or grade manually.
           </p>
         )}

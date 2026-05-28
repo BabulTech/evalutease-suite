@@ -242,7 +242,7 @@ function UserDetailPanel({
         <div className="flex gap-2 shrink-0">
           <button
             type="button"
-            title="Edit profile"
+            title="Edit profile" aria-label="Edit profile"
             onClick={() => setEditMode((v) => !v)}
             className="p-2 rounded-xl border border-border hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -258,7 +258,7 @@ function UserDetailPanel({
           </button>
           <button
             type="button"
-            title="Delete user"
+            title="Delete user" aria-label="Delete user"
             onClick={() => setConfirm("delete")}
             className="p-2 rounded-xl border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors"
           >
@@ -591,7 +591,7 @@ export function UsersSection() {
       )
       .maybeSingle();
     if (!plan) return;
-    // admin_assign_plan is SECURITY DEFINER — it updates both user_subscriptions
+    // admin_assign_plan is SECURITY DEFINER - it updates both user_subscriptions
     // AND profiles.selected_plan in one atomic call, bypassing RLS.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any).rpc("admin_assign_plan", {
@@ -755,7 +755,7 @@ export function UsersSection() {
   return (
     <div className="space-y-4">
       <SectionHead
-        title="Hosts & Teachers"
+        title="Hosts & Teachers" aria-label="Hosts & Teachers"
         sub={`${rows.length} registered hosts on the platform.`}
       />
       <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-3">
@@ -786,7 +786,7 @@ export function UsersSection() {
           size="icon"
           onClick={() => void load()}
           className="size-11 sm:h-8 sm:w-8 shrink-0"
-          title="Refresh"
+          title="Refresh" aria-label="Refresh"
         >
           <RefreshCw className="size-4" />
         </Button>

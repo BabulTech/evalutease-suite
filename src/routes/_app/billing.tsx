@@ -13,11 +13,14 @@ import { PickStep } from "./billing/PickStep";
 import { PayStep, type PromoResult } from "./billing/PayStep";
 import { UploadStep } from "./billing/UploadStep";
 import { DoneStep } from "./billing/DoneStep";
-import type { BillingStep, PickMode, CreditPackage } from "./billing/types";
+import { cyclePrice, type BillingStep, type PickMode, type CreditPackage, type BillingCycle } from "./billing/types";
 
 // react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/_app/billing")({
-  validateSearch: (s: Record<string, unknown>) => ({ plan: (s.plan as string) ?? "" }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    plan: (s.plan as string) ?? "",
+    cycle: (s.cycle as "monthly" | "yearly" | undefined) ?? undefined,
+  }),
   component: BillingPage,
 });
 
@@ -25,8 +28,8 @@ export const Route = createFileRoute("/_app/billing")({
 // react-doctor-disable-next-line react-doctor/prefer-useReducer
 function BillingPage() {
   const { user } = useAuth();
-  const { plan: currentPlan, credits, allPlans, reload } = usePlan();
-  const { plan: planSearch } = Route.useSearch();
+  const { plan: currentPlan, credits, allPlans, reload, yearlyDiscountPercent } = usePlan();
+  const { plan: planSearch, cycle: cycleSearch } = Route.useSearch();
   const navigate = useNavigate();
   const { isHost, hostInfo, loading: hostLoading } = useHost();
 
@@ -64,6 +67,8 @@ function BillingPage() {
   const [copied, setCopied] = useState<string | null>(null);
   // react-doctor-disable-next-line react-doctor/no-event-handler
   const [appliedPromo, setAppliedPromo] = useState<PromoResult | null>(null);
+  // react-doctor-disable-next-line react-doctor/no-event-handler
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(cycleSearch ?? "monthly");
 
   const isFreeUser = !currentPlan || currentPlan.slug === "individual_starter";
   const canBuyCredits = currentPlan?.can_buy_credits ?? false;
@@ -71,7 +76,7 @@ function BillingPage() {
   const enterprisePlans = allPlans.filter((p) => p.tier === "enterprise" && p.price_pkr > 0);
 
   // Free users with no active plan selection → send them to the plan picker in settings.
-  // If they arrived with ?plan=... they're in the middle of upgrading — let them through.
+  // If they arrived with ?plan=... they're in the middle of upgrading - let them through.
   if (
     !hostLoading &&
     !isHost &&
@@ -135,20 +140,25 @@ function BillingPage() {
       setUploading(false);
       return;
     }
+    const isCreditPack = selectedPlan.id.startsWith("__credit_pack__");
+    const basePrice = isCreditPack
+      ? selectedPlan.price_pkr
+      : cyclePrice(selectedPlan.price_pkr, billingCycle, yearlyDiscountPercent);
     const discountedPrice = appliedPromo
       ? appliedPromo.discount_type === "percent" && appliedPromo.discount_percent
-        ? Math.max(0, Math.round(selectedPlan.price_pkr * (1 - appliedPromo.discount_percent / 100)))
+        ? Math.max(0, Math.round(basePrice * (1 - appliedPromo.discount_percent / 100)))
         : appliedPromo.discount_type === "fixed" && appliedPromo.discount_fixed_pkr
-          ? Math.max(0, selectedPlan.price_pkr - appliedPromo.discount_fixed_pkr)
-          : selectedPlan.price_pkr
-      : selectedPlan.price_pkr;
+          ? Math.max(0, basePrice - appliedPromo.discount_fixed_pkr)
+          : basePrice
+      : basePrice;
 
     const promoNote = appliedPromo ? `Promo: ${appliedPromo.code}` : null;
     const fullNotes = [notes.trim() || null, promoNote].filter(Boolean).join(" | ");
 
-    const { error } = await supabase.from("manual_payments").insert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from("manual_payments").insert({
       user_id: user.id,
-      plan_id: selectedPlan.id.startsWith("__credit_pack__") ? null : selectedPlan.id,
+      plan_id: isCreditPack ? null : selectedPlan.id,
       amount_pkr: discountedPrice,
       payment_method: selectedMethod as "easypaisa" | "jazzcash" | "bank_transfer" | "other",
       transaction_ref: txRef.trim() || null,
@@ -156,6 +166,7 @@ function BillingPage() {
       status: "pending" as "pending" | "approved" | "rejected" | "refunded",
       credits_to_add: 0,
       notes: fullNotes || null,
+      billing_cycle: isCreditPack ? "monthly" : billingCycle,
     });
     setUploading(false);
     if (error) {
@@ -212,6 +223,9 @@ function BillingPage() {
         }}
         onUpgradePlan={() => setPickMode("plan")}
         onBack={() => setStep("overview")}
+        cycle={billingCycle}
+        onCycleChange={setBillingCycle}
+        yearlyDiscountPercent={yearlyDiscountPercent}
       />
     );
 
@@ -233,6 +247,8 @@ function BillingPage() {
             setStep("pick");
           }
         }}
+        cycle={billingCycle}
+        yearlyDiscountPercent={yearlyDiscountPercent}
       />
     );
 
@@ -240,6 +256,12 @@ function BillingPage() {
     return (
       <UploadStep
         selectedPlan={selectedPlan}
+        displayPrice={
+          selectedPlan.id.startsWith("__credit_pack__")
+            ? selectedPlan.price_pkr
+            : cyclePrice(selectedPlan.price_pkr, billingCycle, yearlyDiscountPercent)
+        }
+        cycle={billingCycle}
         selectedMethod={selectedMethod}
         accounts={accounts}
         txRef={txRef}

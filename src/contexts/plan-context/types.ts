@@ -83,9 +83,12 @@ export type PlanContextValue = {
   isAiAllowed: boolean;
   isExpired: boolean;
   daysUntilExpiry: number | null;
+  expiresAt: string | null;
+  billingCycle: "monthly" | "yearly";
   isLocked: (key: keyof PlanLimits) => boolean;
   remaining: (key: keyof PlanLimits) => number;
   usedPct: (key: keyof PlanLimits) => number;
   reload: () => void;
   allPlans: PlanInfo[];
+  yearlyDiscountPercent: number;
 };

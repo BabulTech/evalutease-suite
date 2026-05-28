@@ -93,7 +93,7 @@ export function parseStructuredQuestions(
 
 /**
  * Generate a deterministic batch of skeleton MCQ drafts for a topic.
- * No external AI call — produces editable templates the teacher fills in.
+ * No external AI call - produces editable templates the teacher fills in.
  */
 export function generateSkeletonDrafts(opts: {
   topic: string;
@@ -104,7 +104,7 @@ export function generateSkeletonDrafts(opts: {
   const out: DraftQuestion[] = [];
   for (let i = 0; i < opts.count; i++) {
     const d = emptyDraft("mcq", opts.difficulty);
-    d.text = `Q${i + 1}. About ${topic} — ${prompts[i % prompts.length]}`.slice(
+    d.text = `Q${i + 1}. About ${topic} - ${prompts[i % prompts.length]}`.slice(
       0,
       MAX_QUESTION_LENGTH,
     );

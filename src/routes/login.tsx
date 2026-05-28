@@ -98,9 +98,12 @@ function LoginPage() {
   return (
     <AuthShell>
       <div className="text-center mb-7">
-        <div className="flex justify-center mb-5">
-          <img src="/jancho_logo_512.svg" alt="Jancho" className="h-28 w-28 object-contain" />
+        <div className="flex justify-center mb-3">
+          <img src="/jancho_logo_512.svg" alt="Jancho" className="size-28 object-contain" />
         </div>
+        <p className="text-sm text-muted-foreground">
+          AI-Powered Platform to Evaluate Your Knowledge &amp; Skills
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mb-6 p-1.5 bg-secondary/50 rounded-2xl">

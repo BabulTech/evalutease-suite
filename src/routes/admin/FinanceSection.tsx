@@ -36,10 +36,21 @@ function ScreenshotThumb({
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // Legacy rows stored the full https://... URL in screenshot_url. Modern
+    // rows store just the path. Detect which we have.
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      setUrl(path);
+      return;
+    }
+    // Strip any accidental bucket prefix the path may carry.
+    const cleanPath = path.replace(/^uploads\//, "");
     supabase.storage
       .from("uploads")
-      .createSignedUrl(path, 600)
-      .then(({ data }) => { if (data?.signedUrl) setUrl(data.signedUrl); });
+      .createSignedUrl(cleanPath, 600)
+      .then(({ data, error }) => {
+        if (data?.signedUrl) setUrl(data.signedUrl);
+        else if (error) console.warn("[ScreenshotThumb] sign error:", error.message, "path:", cleanPath);
+      });
   }, [path]);
 
   if (!url) {
@@ -74,6 +85,7 @@ export function FinanceSection() {
     ngo_certificate_url: string | null;
     credits_to_add: number;
     notes: string | null;
+    billing_cycle: string;
     created_at: string;
     reviewed_at: string | null;
   };
@@ -132,6 +144,7 @@ export function FinanceSection() {
         ngo_certificate_url: p.ngo_certificate_url ?? null,
         credits_to_add: p.credits_to_add,
         notes: p.notes ?? null,
+        billing_cycle: p.billing_cycle ?? "monthly",
         created_at: p.created_at,
         reviewed_at: p.reviewed_at ?? null,
       })),
@@ -217,10 +230,10 @@ export function FinanceSection() {
 
   const exportCSV = () => {
     const csv = [
-      "Date,User,Email,Plan,Amount PKR,Method,Status,Credits",
+      "Date,User,Email,Plan,Cycle,Amount PKR,Method,Status,Credits",
       ...filtered.map(
         (p) =>
-          `${fmtDate(p.created_at)},${p.user_name},${p.user_email},${p.plan_name},${p.amount_pkr},${p.payment_method},${p.status},${p.credits_to_add}`,
+          `${fmtDate(p.created_at)},${p.user_name},${p.user_email},${p.plan_name},${p.billing_cycle},${p.amount_pkr},${p.payment_method},${p.status},${p.credits_to_add}`,
       ),
     ].join("\n");
     const a = document.createElement("a");
@@ -265,7 +278,7 @@ export function FinanceSection() {
   return (
     <div className="space-y-5">
       <SectionHead
-        title="Payments"
+        title="Payments" aria-label="Payments"
         sub="Manual payment verification, approve or reject screenshot-based payments."
       />
 
@@ -337,7 +350,20 @@ export function FinanceSection() {
                   <div className="text-xs font-medium">{p.user_name}</div>
                   <div className="text-[11px] text-muted-foreground">{p.user_email}</div>
                 </td>
-                <td className="px-4 py-3 text-xs">{p.plan_name}</td>
+                <td className="px-4 py-3 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>{p.plan_name}</span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                        p.billing_cycle === "yearly"
+                          ? "bg-emerald-400/15 text-emerald-400 border border-emerald-400/30"
+                          : "bg-muted/40 text-muted-foreground border border-border"
+                      }`}
+                    >
+                      {p.billing_cycle === "yearly" ? "Yearly" : "Monthly"}
+                    </span>
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-right text-xs font-semibold whitespace-nowrap">
                   PKR {p.amount_pkr.toLocaleString()}
                 </td>
@@ -428,7 +454,12 @@ export function FinanceSection() {
               <div className="text-xs text-muted-foreground">
                 Rejecting <strong className="text-foreground">{rejectTarget.user_name}</strong>'s payment of{" "}
                 <strong className="text-foreground">PKR {rejectTarget.amount_pkr.toLocaleString()}</strong> for{" "}
-                <strong className="text-foreground">{rejectTarget.plan_name}</strong>.
+                <strong className="text-foreground">{rejectTarget.plan_name}</strong>{" "}
+                <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  rejectTarget.billing_cycle === "yearly"
+                    ? "bg-emerald-400/15 text-emerald-400"
+                    : "bg-muted/40 text-muted-foreground"
+                }`}>{rejectTarget.billing_cycle === "yearly" ? "Yearly" : "Monthly"}</span>.
               </div>
               <div>
                 <label className="text-xs font-semibold block mb-1.5" htmlFor="reject-reason">

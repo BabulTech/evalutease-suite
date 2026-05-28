@@ -7,7 +7,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-[100dvh] flex flex-col relative bg-[#050c14]">
       <QuizBackground />
       <header className="relative z-10 flex items-center justify-between px-5 py-4 shrink-0">
-        <img src="/jancho_logo_512.svg" alt="Jancho" className="h-20 w-20 object-contain" />
+        <img src="/jancho_logo_512.svg" alt="Jancho" className="size-20 object-contain" />
         {/* <LanguageSwitcher /> */}
       </header>
       <div className="relative z-10 flex-1 flex items-start sm:items-center justify-center p-4 sm:py-8 overflow-y-auto">

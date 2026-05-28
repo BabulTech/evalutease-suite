@@ -185,14 +185,14 @@ export function QuizzesSection() {
         </div>
       )}
 
-      <SectionHead title="Quiz Sessions" sub={`${rows.length} sessions created across all hosts.`} />
+      <SectionHead title="Quiz Sessions" aria-label="Quiz Sessions" sub={`${rows.length} sessions created across all hosts.`} />
       {selected.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30">
           <span className="text-sm font-medium text-destructive">{selected.size} selected</span>
           <button type="button" onClick={() => setConfirmBulk(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-destructive/90">
             <Trash2 className="size-3.5" /> Delete Selected
           </button>
-          <button type="button" title="Clear selection" onClick={() => setSelected(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
+          <button type="button" title="Clear selection" aria-label="Clear selection" onClick={() => setSelected(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
@@ -222,7 +222,7 @@ export function QuizzesSection() {
         <thead>
           <tr className="border-b border-border/60 bg-muted/20">
             <th className="px-3 py-2.5 text-left">
-              <input type="checkbox" title="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
+              <input type="checkbox" title="Select all" aria-label="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
             </th>
             {["Quiz Title","Host","Type","Status","Questions","Attempts","Avg Score","Created",""].map((c) => (
               <th key={c} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{c}</th>
@@ -240,18 +240,18 @@ export function QuizzesSection() {
             paged.map((r) =>
               editId === r.id ? (
                 <tr key={r.id} className="bg-primary/5">
-                  <td className="px-3 py-2"><input type="checkbox" title="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
+                  <td className="px-3 py-2"><input type="checkbox" title="Select" aria-label="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
                   <td className="px-4 py-2" colSpan={3}>
                     <div className="flex flex-col gap-1.5">
                       <input
-                        title="Title"
+                        title="Title" aria-label="Title"
                         placeholder="Quiz title"
                         value={editData.title}
                         onChange={(e) => setEditData((d) => ({ ...d, title: e.target.value }))}
                         className="w-full h-8 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
                       />
                       <input
-                        title="Topic"
+                        title="Topic" aria-label="Topic"
                         placeholder="Topic (optional)"
                         value={editData.topic}
                         onChange={(e) => setEditData((d) => ({ ...d, topic: e.target.value }))}
@@ -261,7 +261,7 @@ export function QuizzesSection() {
                   </td>
                   <td className="px-4 py-2">
                     <select
-                      title="Status"
+                      title="Status" aria-label="Status"
                       value={editData.status}
                       onChange={(e) => setEditData((d) => ({ ...d, status: e.target.value }))}
                       className="h-8 rounded-lg border border-input bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -274,10 +274,10 @@ export function QuizzesSection() {
                   <td colSpan={4} />
                   <td className="px-4 py-2">
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={saveEdit} disabled={saving} title="Save" className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+                      <button type="button" onClick={saveEdit} disabled={saving} title="Save" aria-label="Save" className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
                         <Save className="size-3.5" />
                       </button>
-                      <button type="button" onClick={() => setEditId(null)} title="Cancel" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40">
+                      <button type="button" onClick={() => setEditId(null)} title="Cancel" aria-label="Cancel" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40">
                         <X className="size-3.5" />
                       </button>
                     </div>
@@ -285,7 +285,7 @@ export function QuizzesSection() {
                 </tr>
               ) : (
                 <tr key={r.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="px-3 py-3"><input type="checkbox" title="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
+                  <td className="p-3"><input type="checkbox" title="Select" aria-label="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
                   <td className="px-4 py-3">
                     <div className="text-xs font-medium max-w-[180px] truncate">{r.title}</div>
                     <div className="text-[11px] text-muted-foreground capitalize">{r.mode.replace("_", " ")}</div>
@@ -313,10 +313,10 @@ export function QuizzesSection() {
                   <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDateShort(r.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => startEdit(r)} title="Edit" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+                      <button type="button" onClick={() => startEdit(r)} title="Edit" aria-label="Edit" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
                         <Pencil className="size-3.5" />
                       </button>
-                      <button type="button" onClick={() => setConfirmDeleteId(r.id)} title="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
+                      <button type="button" onClick={() => setConfirmDeleteId(r.id)} title="Delete" aria-label="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
                         <Trash2 className="size-3.5" />
                       </button>
                     </div>

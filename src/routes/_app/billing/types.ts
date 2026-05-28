@@ -37,3 +37,10 @@ export type CreditPackage = {
 
 export type BillingStep = "overview" | "pick" | "pay" | "upload" | "done";
 export type PickMode = "pack" | "plan";
+export type BillingCycle = "monthly" | "yearly";
+
+export function cyclePrice(monthlyPkr: number, cycle: BillingCycle, discountPct: number): number {
+  if (cycle === "monthly") return monthlyPkr;
+  const full = monthlyPkr * 12;
+  return Math.max(0, Math.round(full * (1 - discountPct / 100)));
+}

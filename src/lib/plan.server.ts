@@ -96,7 +96,7 @@ export const ensureSelectedPlan = createServerFn({ method: "POST" })
     );
     if (subErr) throw subErr;
 
-    // For enterprise free plan — initialise the lifetime free AI calls tracker (10 calls, no expiry)
+    // For enterprise free plan - initialise the lifetime free AI calls tracker (10 calls, no expiry)
     if (data.planSlug === "enterprise_free") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (supabaseAdmin as any).from("trial_ai_usage").upsert(

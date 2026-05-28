@@ -409,9 +409,9 @@ export function ProfileForm({ userId }: { userId: string }) {
               ))}
             </optgroup>
             <optgroup label="Enterprise / Organisation">
-              {ENTERPRISE_ROLES_OPTS.filter((r) => r !== "Other").map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
+              {ENTERPRISE_ROLES_OPTS.flatMap((r) =>
+                r === "Other" ? [] : [<option key={r} value={r}>{r}</option>],
+              )}
             </optgroup>
           </select>
         </div>

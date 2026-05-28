@@ -2,7 +2,7 @@ import { Zap, Building2, Coins } from "lucide-react";
 import type { PlanInfo } from "@/contexts/PlanContext";
 import { StepHeader } from "./StepHeader";
 import { PlanCard } from "./PlanCard";
-import type { CreditPackage, PickMode } from "./types";
+import type { CreditPackage, PickMode, BillingCycle } from "./types";
 
 type Props = {
   pickMode: PickMode;
@@ -15,6 +15,9 @@ type Props = {
   onSelectPlan: (plan: PlanInfo) => void;
   onUpgradePlan: () => void;
   onBack: () => void;
+  cycle: BillingCycle;
+  onCycleChange: (c: BillingCycle) => void;
+  yearlyDiscountPercent: number;
 };
 
 export function PickStep({
@@ -28,6 +31,9 @@ export function PickStep({
   onSelectPlan,
   onUpgradePlan,
   onBack,
+  cycle,
+  onCycleChange,
+  yearlyDiscountPercent,
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -36,10 +42,42 @@ export function PickStep({
         sub={
           pickMode === "pack"
             ? "Credits never expire and stack with your monthly allocation"
-            : "Billed monthly · cancel anytime"
+            : `Billed ${cycle} · cancel anytime`
         }
         onBack={onBack}
       />
+
+      {pickMode === "plan" && (
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border bg-card/50">
+            <button
+              type="button"
+              onClick={() => onCycleChange("monthly")}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                cycle === "monthly" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => onCycleChange("yearly")}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors flex items-center gap-1.5 ${
+                cycle === "yearly" ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+              }`}
+            >
+              Yearly
+              {yearlyDiscountPercent > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  cycle === "yearly" ? "bg-primary-foreground/20" : "bg-success/15 text-success"
+                }`}>
+                  -{yearlyDiscountPercent}%
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {pickMode === "pack" ? (
         <div className="grid grid-cols-2 gap-3">
@@ -102,6 +140,8 @@ export function PickStep({
                     plan={p}
                     isCurrent={currentPlanSlug === p.slug}
                     onSelect={() => onSelectPlan(p)}
+                    cycle={cycle}
+                    discountPct={yearlyDiscountPercent}
                   />
                 ))}
               </div>
@@ -119,6 +159,8 @@ export function PickStep({
                     plan={p}
                     isCurrent={currentPlanSlug === p.slug}
                     onSelect={() => onSelectPlan(p)}
+                    cycle={cycle}
+                    discountPct={yearlyDiscountPercent}
                   />
                 ))}
               </div>

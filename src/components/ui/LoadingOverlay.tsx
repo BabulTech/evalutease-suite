@@ -187,7 +187,7 @@ export function LoadingOverlay({
           <p className="text-center text-xs text-muted-foreground">
             {isDriven
               ? "Please don't close this tab while the operation completes."
-              : "Feel free to leave this open — we'll show your questions as soon as they're ready."}
+              : "Feel free to leave this open - we'll show your questions as soon as they're ready."}
           </p>
         </div>
       </div>

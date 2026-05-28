@@ -9,8 +9,10 @@ interface TierSelectorProps {
   category: string;
   selectedTier: string;
   isNgo: boolean;
+  cycle: "monthly" | "yearly";
   onSelect: (tier: string) => void;
   onNgoChange: (v: boolean) => void;
+  onCycleChange: (c: "monthly" | "yearly") => void;
   onContinue: () => void;
   onBack: () => void;
 }
@@ -21,12 +23,15 @@ export function TierSelector({
   category,
   selectedTier,
   isNgo,
+  cycle,
   onSelect,
   onNgoChange,
+  onCycleChange,
   onContinue,
   onBack,
 }: TierSelectorProps) {
   const [allPlans, setAllPlans] = useState<PlanInfo[]>([]);
+  const [yearlyDiscountPercent, setYearlyDiscountPercent] = useState(10);
 
   useEffect(() => {
     void supabase
@@ -37,10 +42,20 @@ export function TierSelector({
       .then(({ data }) => {
         if (data) setAllPlans((data as Record<string, unknown>[]).map(rowToPlan));
       });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any)
+      .from("app_settings")
+      .select("yearly_discount_percent")
+      .eq("id", true)
+      .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: any) => {
+        if (data?.yearly_discount_percent != null) setYearlyDiscountPercent(data.yearly_discount_percent);
+      });
   }, []);
 
   const tier = category === "enterprise" ? "enterprise" : "individual";
-  // Only show the canonical free + pro slugs — exclude legacy slugs like enterprise_free
+  // Only show the canonical free + pro slugs - exclude legacy slugs like enterprise_free
   const ALLOWED_SLUGS =
     category === "enterprise"
       ? ["enterprise_free", "enterprise_pro"]
@@ -50,7 +65,17 @@ export function TierSelector({
   const isFree = plan ? plan.price_pkr === 0 : true;
   const isPopular = plan ? POPULAR_SLUGS.includes(plan.slug) : false;
   const ngoDiscountActive = isNgo && plan && !isFree;
-  const displayPrice = ngoDiscountActive ? Math.floor(plan.price_pkr / 2) : plan?.price_pkr ?? 0;
+  const ngoMonthlyPrice = ngoDiscountActive && plan ? Math.floor(plan.price_pkr / 2) : plan?.price_pkr ?? 0;
+  const yearlyTotal = !isFree && plan
+    ? Math.round(ngoMonthlyPrice * 12 * (1 - yearlyDiscountPercent / 100))
+    : 0;
+  const yearlyEffectiveMonthly = !isFree ? Math.round(yearlyTotal / 12) : 0;
+  const yearlySavings = !isFree && plan ? (ngoMonthlyPrice * 12) - yearlyTotal : 0;
+  const displayPrice = isFree
+    ? 0
+    : cycle === "yearly"
+      ? yearlyEffectiveMonthly
+      : ngoMonthlyPrice;
 
   if (plans.length === 0) {
     return (
@@ -97,6 +122,33 @@ export function TierSelector({
         })}
       </div>
 
+      {/* Billing cycle toggle (hidden if selected plan is free) */}
+      {!isFree && (
+        <div className="flex justify-center">
+          <div className="inline-flex p-1 rounded-full bg-secondary/50 border border-border">
+            {(["monthly", "yearly"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onCycleChange(c)}
+                className={`relative px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  cycle === c
+                    ? "bg-primary text-primary-foreground shadow-glow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {c === "monthly" ? "Monthly" : "Yearly"}
+                {c === "yearly" && yearlyDiscountPercent > 0 && (
+                  <span className="ml-1.5 inline-block rounded-full bg-emerald-400/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 align-middle">
+                    -{yearlyDiscountPercent}%
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Selected plan detail card */}
       {plan && (
         <div
@@ -113,30 +165,39 @@ export function TierSelector({
               </span>
               {!isFree && <span className="text-xs text-muted-foreground">/month</span>}
               {ngoDiscountActive && (
-                <>
-                  <span className="text-xs line-through text-muted-foreground/70">
-                    PKR {plan.price_pkr.toLocaleString()}
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/15 text-emerald-400">
-                    NGO 50% off
-                  </span>
-                </>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-400/15 text-emerald-400">
+                  NGO 50% off
+                </span>
               )}
             </div>
+            {!isFree && cycle === "yearly" && (
+              <p className="text-[11px] text-muted-foreground mt-1">
+                <span className="line-through">PKR {ngoMonthlyPrice.toLocaleString()}/mo</span>
+                {" · billed yearly: "}
+                <span className="font-semibold text-foreground">PKR {yearlyTotal.toLocaleString()}</span>
+              </p>
+            )}
+            {!isFree && cycle === "yearly" && yearlySavings > 0 && (
+              <p className="text-[11px] mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-400/15 text-emerald-400 px-2 py-0.5 font-semibold">
+                💰 Save PKR {yearlySavings.toLocaleString()} / year
+              </p>
+            )}
             {plan.description && (
               <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
             )}
           </div>
 
-          {plan.credits_per_month > 0 && (
+          {plan.credits_per_month > 0 && !isFree && (
             <div className="flex items-center gap-1.5 text-xs font-semibold text-warning mb-3 bg-warning/10 rounded-xl px-3 py-2">
-              <Zap size={12} /> {plan.credits_per_month} credits/month included
+              <Zap size={12} />
+              {plan.credits_per_month} credits / month
+              {cycle === "yearly" && " · auto-refilled each month"}
             </div>
           )}
 
           {plan.trial_ai_calls > 0 && isFree && (
             <div className="flex items-center gap-1.5 text-xs font-semibold text-success mb-3 bg-success/10 rounded-xl px-3 py-2">
-              <Zap size={12} /> {plan.trial_ai_calls} free AI calls — lifetime gift
+              <Zap size={12} /> {plan.trial_ai_calls} free AI calls (lifetime gift)
             </div>
           )}
 
@@ -151,13 +212,13 @@ export function TierSelector({
 
           {!isFree && (
             <p className="text-[11px] text-yellow-400/80 flex items-center gap-1.5 bg-yellow-400/5 rounded-xl px-3 py-2">
-              <Zap size={10} /> Payment screenshot required — activated within 24 hours
+              <Zap size={10} /> Payment screenshot required, activated within 24 hours
             </p>
           )}
         </div>
       )}
 
-      {/* NGO toggle — enterprise only */}
+      {/* NGO toggle - enterprise only */}
       {category === "enterprise" && (
         <button
           type="button"
@@ -180,7 +241,7 @@ export function TierSelector({
               <Sparkles size={13} /> We are an NGO / Non-profit
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              50% off on Pro · PKR 2,499/month — requires certificate verification
+              50% off on Pro · PKR 2,499/month (requires certificate verification)
             </p>
           </div>
         </button>

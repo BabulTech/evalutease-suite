@@ -190,14 +190,14 @@ export function ParticipantsSection() {
         </div>
       )}
 
-      <SectionHead title="Participants" sub={`${total} participants across all hosts.`} />
+      <SectionHead title="Participants" aria-label="Participants" sub={`${total} participants across all hosts.`} />
       {selected.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30">
           <span className="text-sm font-medium text-destructive">{selected.size} selected</span>
           <button type="button" onClick={() => setConfirmBulk(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-destructive/90">
             <Trash2 className="size-3.5" /> Delete Selected
           </button>
-          <button type="button" title="Clear selection" onClick={() => setSelected(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
+          <button type="button" title="Clear selection" aria-label="Clear selection" onClick={() => setSelected(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3">
@@ -225,7 +225,7 @@ export function ParticipantsSection() {
         <thead>
           <tr className="border-b border-border/60 bg-muted/20">
             <th className="px-3 py-2.5 text-left">
-              <input type="checkbox" title="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
+              <input type="checkbox" title="Select all" aria-label="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
             </th>
             {["Participant","Host","Group","Quizzes Taken","Avg Score","Added",""].map((c) => (
               <th key={c} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{c}</th>
@@ -245,11 +245,11 @@ export function ParticipantsSection() {
             rows.map((r) =>
               editId === r.id ? (
                 <tr key={r.id} className="bg-primary/5">
-                  <td className="px-3 py-2"><input type="checkbox" title="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
+                  <td className="px-3 py-2"><input type="checkbox" title="Select" aria-label="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
                   <td className="px-4 py-2" colSpan={2}>
                     <div className="flex flex-col gap-1.5">
                       <input
-                        title="Name"
+                        title="Name" aria-label="Name"
                         placeholder="Name"
                         value={editData.name}
                         onChange={(e) => setEditData((d) => ({ ...d, name: e.target.value }))}
@@ -257,7 +257,7 @@ export function ParticipantsSection() {
                       />
                       <input
                         
-                        title="Email"
+                        title="Email" aria-label="Email"
                         placeholder="Email"
                         value={editData.email}
                         onChange={(e) => setEditData((d) => ({ ...d, email: e.target.value }))}
@@ -265,7 +265,7 @@ export function ParticipantsSection() {
                       />
                       <input
                         
-                        title="Mobile"
+                        title="Mobile" aria-label="Mobile"
                         placeholder="Mobile"
                         value={editData.mobile}
                         onChange={(e) => setEditData((d) => ({ ...d, mobile: e.target.value }))}
@@ -276,10 +276,10 @@ export function ParticipantsSection() {
                   <td colSpan={4} />
                   <td className="px-4 py-2">
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={saveEdit} disabled={saving} title="Save" className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+                      <button type="button" onClick={saveEdit} disabled={saving} title="Save" aria-label="Save" className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
                         <Save className="size-3.5" />
                       </button>
-                      <button type="button" onClick={() => setEditId(null)} title="Cancel" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40">
+                      <button type="button" onClick={() => setEditId(null)} title="Cancel" aria-label="Cancel" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40">
                         <X className="size-3.5" />
                       </button>
                     </div>
@@ -287,7 +287,7 @@ export function ParticipantsSection() {
                 </tr>
               ) : (
                 <tr key={r.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="px-3 py-3"><input type="checkbox" title="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
+                  <td className="p-3"><input type="checkbox" title="Select" aria-label="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
                   <td className="px-4 py-3">
                     <div className="text-xs font-medium">{r.name}</div>
                     <div className="text-[11px] text-muted-foreground">{r.email ?? r.mobile ?? "-"}</div>
@@ -306,10 +306,10 @@ export function ParticipantsSection() {
                   <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDateShort(r.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => startEdit(r)} title="Edit" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
+                      <button type="button" onClick={() => startEdit(r)} title="Edit" aria-label="Edit" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">
                         <Pencil className="size-3.5" />
                       </button>
-                      <button type="button" onClick={() => setConfirmDeleteId(r.id)} title="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
+                      <button type="button" onClick={() => setConfirmDeleteId(r.id)} title="Delete" aria-label="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
                         <Trash2 className="size-3.5" />
                       </button>
                     </div>

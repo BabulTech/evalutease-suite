@@ -34,6 +34,7 @@ function SignupPage() {
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [ngoFile, setNgoFile] = useState<File | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId | null>(null);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
@@ -145,7 +146,6 @@ function SignupPage() {
     // Upload payment screenshot (+ NGO certificate if applicable) for paid plans
     if (paymentFile) {
       const uid = signUpData?.user?.id ?? (await supabase.auth.getSession()).data.session?.user?.id;
-      console.log("[signup] payment upload — uid:", uid, "plan:", selectedPlan, "ngo:", isNgo);
       if (!uid) {
         validationError("Could not resolve user id for payment upload.");
       } else {
@@ -179,15 +179,14 @@ function SignupPage() {
             p_plan_slug:       selectedPlan,
             p_method:          paymentMethod ?? "other",
             p_screenshot:      payPath,
-            p_notes:           `Signup: ${selectedPlan}${isNgo ? " (NGO — 50% discount claim)" : ""}`,
+            p_notes:           `Signup: ${selectedPlan} · ${billingCycle}${isNgo ? " (NGO - 50% discount claim)" : ""}`,
             p_ngo_certificate: ngoPath,
             p_is_ngo:          isNgo,
+            p_billing_cycle:   billingCycle,
           });
           if (rpcErr) {
             console.error("[signup] submit_payment_on_signup RPC failed:", rpcErr);
             validationError("Payment record failed: " + rpcErr.message);
-          } else {
-            console.log("[signup] payment submitted — screenshot:", payPath, "ngo:", ngoPath);
           }
         }
       }
@@ -214,8 +213,11 @@ function SignupPage() {
     <AuthShell>
       {loading && <LoadingOverlay loadingStep={loadingStep} />}
 
-      <div className="flex justify-center mb-5">
-        <img src="/jancho_logo_512.svg" alt="Jancho" className="h-28 w-28 object-contain" />
+      <div className="flex flex-col items-center mb-5">
+        <img src="/jancho_logo_512.svg" alt="Jancho" className="size-28 object-contain" />
+        <p className="text-sm text-muted-foreground text-center mt-2">
+          AI-Powered Platform to Evaluate Your Knowledge &amp; Skills
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-1.5 mb-5 p-1 bg-secondary/50 rounded-2xl">
@@ -251,8 +253,10 @@ function SignupPage() {
           category={category}
           selectedTier={selectedPlan}
           isNgo={isNgo}
+          cycle={billingCycle}
           onSelect={setSelectedPlan}
           onNgoChange={setIsNgo}
+          onCycleChange={setBillingCycle}
           onBack={() => setStep(1)}
           onContinue={() => setStep(3)}
         />

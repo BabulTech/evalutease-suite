@@ -23,11 +23,14 @@ const PlanContext = createContext<PlanContextValue>({
   isAiAllowed: false,
   isExpired: false,
   daysUntilExpiry: null,
+  expiresAt: null,
+  billingCycle: "monthly",
   isLocked: () => false,
   remaining: () => 0,
   usedPct: () => 0,
   reload: () => {},
   allPlans: [],
+  yearlyDiscountPercent: 10,
 });
 
 // react-doctor-disable-next-line react-doctor/prefer-useReducer
@@ -49,10 +52,12 @@ export function PlanProvider({ children }: { children: ReactNode }) {
   });
   const [loading, setLoading] = useState(true);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [yearlyDiscountPercent, setYearlyDiscount] = useState(10);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
   const load = usePlanLoader(
     { user, hostInfo, hostLoading },
-    { setPlan, setAllPlans, setCredits, setUsage, setExpiresAt, setLoading },
+    { setPlan, setAllPlans, setCredits, setUsage, setExpiresAt, setLoading, setYearlyDiscount, setBillingCycle },
   );
 
   useEffect(() => {
@@ -64,7 +69,7 @@ export function PlanProvider({ children }: { children: ReactNode }) {
 
   const isPaidPlan = !["free", "individual_starter", "enterprise_free"].includes(currentPlan.slug);
   // enterprise_free gets a lifetime allocation (plan.trial_ai_calls). Let them
-  // into the AI tab — the server-side consumeFreeAiCall() guard enforces the cap.
+  // into the AI tab - the server-side consumeFreeAiCall() guard enforces the cap.
   const hasFreeAiAllowance = (currentPlan.trial_ai_calls ?? 0) > 0;
   const isAiAllowed = !!hostInfo || currentPlan.ai_enabled || isPaidPlan || hasFreeAiAllowance;
   const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
@@ -81,11 +86,14 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       isAiAllowed,
       isExpired,
       daysUntilExpiry,
+      expiresAt,
+      billingCycle,
       isLocked,
       remaining,
       usedPct,
       reload: load,
       allPlans,
+      yearlyDiscountPercent,
     }),
     [
       currentPlan,
@@ -95,11 +103,14 @@ export function PlanProvider({ children }: { children: ReactNode }) {
       isAiAllowed,
       isExpired,
       daysUntilExpiry,
+      expiresAt,
+      billingCycle,
       isLocked,
       remaining,
       usedPct,
       load,
       allPlans,
+      yearlyDiscountPercent,
     ],
   );
 

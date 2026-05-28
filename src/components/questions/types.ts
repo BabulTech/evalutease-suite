@@ -1,5 +1,5 @@
 // ============================================================
-// Question type system (Phase 1 — multi-type plumbing).
+// Question type system (Phase 1 - multi-type plumbing).
 // Supported: mcq | true_false | short_answer | long_answer.
 // Existing MCQ flow stays the default and is unchanged.
 // ============================================================
@@ -78,7 +78,7 @@ export type GradingMode = "auto" | "ai" | "manual";
 export type ShortAnswerDraft = BaseDraft & {
   type: "short_answer";
   acceptableAnswers: string[];
-  requiresManualGrading: boolean; // kept for backward compat — derived from gradingMode
+  requiresManualGrading: boolean; // kept for backward compat - derived from gradingMode
   gradingMode: GradingMode;
 };
 
@@ -174,7 +174,7 @@ export function validateDraft(d: DraftQuestion): DraftValidation {
       return { ok: true };
     }
     case "true_false": {
-      // correctValue is boolean — always valid
+      // correctValue is boolean - always valid
       return { ok: true };
     }
     case "short_answer": {
@@ -192,7 +192,7 @@ export function validateDraft(d: DraftQuestion): DraftValidation {
       return { ok: true };
     }
     case "long_answer": {
-      // Model answer and rubric are optional — host can grade purely from the question text.
+      // Model answer and rubric are optional - host can grade purely from the question text.
       return { ok: true };
     }
   }
@@ -202,7 +202,7 @@ export function labelFor(i: number) {
   return String.fromCharCode(65 + i);
 }
 
-// Type guards — let consumers narrow the discriminated union.
+// Type guards - let consumers narrow the discriminated union.
 export const isMcqDraft = (d: DraftQuestion): d is McqDraft => d.type === "mcq";
 export const isTrueFalseDraft = (d: DraftQuestion): d is TrueFalseDraft => d.type === "true_false";
 export const isShortAnswerDraft = (d: DraftQuestion): d is ShortAnswerDraft =>

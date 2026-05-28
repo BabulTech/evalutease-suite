@@ -80,8 +80,11 @@ export function CategoriesSection() {
 
   useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const subjects = useMemo(() => [...new Set(rows.map((r) => r.subject).filter(Boolean))] as string[], [rows]);
-  const owners = useMemo(() => [...new Set(rows.map((r) => r.owner_name))].sort(), [rows]);
+  const subjects = useMemo(
+    () => [...new Set(rows.flatMap((r) => (r.subject ? [r.subject] : [])))] as string[],
+    [rows],
+  );
+  const owners = useMemo(() => [...new Set(rows.map((r) => r.owner_name))].toSorted(), [rows]);
 
   const filtered = useMemo(() => {
     let r = rows;
@@ -163,7 +166,7 @@ export function CategoriesSection() {
         </div>
       )}
 
-      <SectionHead title="Question Categories" sub={`${rows.length} categories created by hosts.`} />
+      <SectionHead title="Question Categories" aria-label="Question Categories" sub={`${rows.length} categories created by hosts.`} />
 
       {selected.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30">
@@ -171,7 +174,7 @@ export function CategoriesSection() {
           <button type="button" onClick={() => setConfirmBulk(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-destructive/90">
             <Trash2 className="size-3.5" /> Delete Selected
           </button>
-          <button type="button" title="Clear selection" onClick={() => setSelected(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
+          <button type="button" title="Clear selection" aria-label="Clear selection" onClick={() => setSelected(new Set())} className="p-1 rounded-lg text-muted-foreground hover:text-foreground"><X className="size-4" /></button>
         </div>
       )}
 
@@ -215,7 +218,7 @@ export function CategoriesSection() {
         <thead>
           <tr className="border-b border-border/60 bg-muted/20">
             <th className="px-3 py-2.5 text-left">
-              <input type="checkbox" title="Select all" checked={allSelected} onChange={toggleAll} className="rounded" />
+              <input type="checkbox" title="Select all" aria-label="Select all categories" checked={allSelected} onChange={toggleAll} className="rounded" />
             </th>
             {["Category", "Subject", "Owner", "Subcategories", "Questions", "Created", ""].map((c) => (
               <th key={c} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{c}</th>
@@ -233,19 +236,19 @@ export function CategoriesSection() {
             filtered.map((r) =>
               editId === r.id ? (
                 <tr key={r.id} className="bg-primary/5">
-                  <td className="px-3 py-2"><input type="checkbox" title="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
+                  <td className="px-3 py-2"><input type="checkbox" title="Select" aria-label="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
                   <td className="px-4 py-2" colSpan={3}>
                     <div className="flex flex-col gap-1.5">
                       <div className="flex gap-2">
                         <input
-                          title="Icon"
+                          title="Icon" aria-label="Icon"
                           placeholder="Icon (emoji)"
                           value={editData.icon}
                           onChange={(e) => setEditData((d) => ({ ...d, icon: e.target.value }))}
                           className="w-16 h-8 rounded-lg border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/50"
                         />
                         <input
-                          title="Name"
+                          title="Name" aria-label="Name"
                           placeholder="Category name"
                           value={editData.name}
                           onChange={(e) => setEditData((d) => ({ ...d, name: e.target.value }))}
@@ -253,7 +256,7 @@ export function CategoriesSection() {
                         />
                       </div>
                       <input
-                        title="Subject"
+                        title="Subject" aria-label="Subject"
                         placeholder="Subject (optional)"
                         value={editData.subject}
                         onChange={(e) => setEditData((d) => ({ ...d, subject: e.target.value }))}
@@ -264,14 +267,14 @@ export function CategoriesSection() {
                   <td colSpan={3} />
                   <td className="px-4 py-2">
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={saveEdit} disabled={saving} title="Save" className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"><Save className="size-3.5" /></button>
-                      <button type="button" onClick={() => setEditId(null)} title="Cancel" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40"><X className="size-3.5" /></button>
+                      <button type="button" onClick={saveEdit} disabled={saving} title="Save" aria-label="Save" className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"><Save className="size-3.5" /></button>
+                      <button type="button" onClick={() => setEditId(null)} title="Cancel" aria-label="Cancel" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted/40"><X className="size-3.5" /></button>
                     </div>
                   </td>
                 </tr>
               ) : (
                 <tr key={r.id} className="hover:bg-muted/10 transition-colors">
-                  <td className="px-3 py-3"><input type="checkbox" title="Select" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
+                  <td className="p-3"><input type="checkbox" title="Select" aria-label="Select category" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" /></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <span className="text-base">{r.icon ?? "📁"}</span>
@@ -285,8 +288,8 @@ export function CategoriesSection() {
                   <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDateShort(r.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1.5">
-                      <button type="button" onClick={() => startEdit(r)} title="Edit" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"><Pencil className="size-3.5" /></button>
-                      <button type="button" onClick={() => setConfirmDeleteId(r.id)} title="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="size-3.5" /></button>
+                      <button type="button" onClick={() => startEdit(r)} title="Edit" aria-label="Edit" className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"><Pencil className="size-3.5" /></button>
+                      <button type="button" onClick={() => setConfirmDeleteId(r.id)} title="Delete" aria-label="Delete" className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="size-3.5" /></button>
                     </div>
                   </td>
                 </tr>

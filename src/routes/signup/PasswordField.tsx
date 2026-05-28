@@ -74,7 +74,7 @@ export function PasswordField({
           </div>
         )}
 
-        {/* Rules — always shown when field has value or focused */}
+        {/* Rules - always shown when field has value or focused */}
         {(focused || value.length > 0) && (
           <ul className="mt-2 grid grid-cols-1 gap-1 p-3 rounded-xl bg-secondary/40 border border-border">
             {PW_RULES.map((rule) => {

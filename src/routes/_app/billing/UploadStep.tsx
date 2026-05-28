@@ -6,10 +6,12 @@ import { Label } from "@/components/ui/label";
 import type { PlanInfo } from "@/contexts/PlanContext";
 import { StepHeader } from "./StepHeader";
 import { METHOD_ICONS } from "./constants";
-import type { PaymentAccount } from "./types";
+import type { PaymentAccount, BillingCycle } from "./types";
 
 type Props = {
   selectedPlan: PlanInfo;
+  displayPrice: number;
+  cycle: BillingCycle;
   selectedMethod: string;
   accounts: PaymentAccount[];
   txRef: string;
@@ -27,6 +29,8 @@ type Props = {
 
 export function UploadStep({
   selectedPlan,
+  displayPrice,
+  cycle,
   selectedMethod,
   accounts,
   txRef,
@@ -59,7 +63,12 @@ export function UploadStep({
               <span className="text-2xl">{METHOD_ICONS[acc.method]}</span>
               {acc.title}
             </div>
-            <div className="font-display text-xl font-bold">PKR {selectedPlan.price_pkr}</div>
+            <div className="text-right">
+              <div className="font-display text-xl font-bold">PKR {displayPrice.toLocaleString()}</div>
+              {!selectedPlan.id.startsWith("__credit_pack__") && (
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{cycle}</div>
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             {[

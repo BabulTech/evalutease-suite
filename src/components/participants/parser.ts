@@ -38,7 +38,7 @@ export function parseParticipantsCsv(input: string): ParticipantDraft[] {
   };
 
   if (cols.name === -1) {
-    // No "name" column — assume the first column is name.
+    // No "name" column - assume the first column is name.
     cols.name = 0;
   }
 

@@ -20,7 +20,25 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+// Guard so we only attempt the profile self-heal once per page load,
+// regardless of how many auth events fire (token refresh, tab focus, etc.).
+const ensuredProfileFor = new Set<string>();
+
 async function ensureProfile(user: import("@supabase/supabase-js").User) {
+  if (ensuredProfileFor.has(user.id)) return;
+  ensuredProfileFor.add(user.id);
+
+  // Only INSERT when the row is genuinely missing. Never UPDATE an existing
+  // profile here — a blind upsert fires an UPDATE on every load and spams the
+  // activity feed with "Updated profiles" noise.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (existing) return; // row already there — nothing to do, no audit noise
+
   const meta = user.user_metadata ?? {};
   const fullName =
     [meta.first_name, meta.last_name].filter(Boolean).join(" ").trim() ||
@@ -28,19 +46,14 @@ async function ensureProfile(user: import("@supabase/supabase-js").User) {
     user.email?.split("@")[0] ||
     "User";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any).from("profiles").upsert(
-    {
-      id: user.id,
-      email: user.email,
-      full_name: fullName,
-      selected_plan: meta.selected_plan ?? "individual_starter",
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "id", ignoreDuplicates: false },
-  );
+  await (supabase as any).from("profiles").insert({
+    id: user.id,
+    email: user.email,
+    full_name: fullName,
+    selected_plan: meta.selected_plan ?? "individual_starter",
+  });
   // Note: user_credits / user_roles / user_subscriptions are created by the
-  // handle_new_user DB trigger on signup. Don't upsert client-side — RLS
-  // forbids INSERT for non-admins and the row already exists from the trigger.
+  // handle_new_user DB trigger on signup.
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

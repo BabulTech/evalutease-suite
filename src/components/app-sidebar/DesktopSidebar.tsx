@@ -49,7 +49,7 @@ export function DesktopSidebar({ open, onToggle, groups, pathname, logoUrl }: Pr
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 space-y-4 px-2">
         {groups.map((group, gi) => (
           <div key={group.label}>
-            {/* Section label — hidden when collapsed */}
+            {/* Section label - hidden when collapsed */}
             {open && gi > 0 && (
               <p className="px-3 mb-1 text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/35 select-none">
                 {group.label}

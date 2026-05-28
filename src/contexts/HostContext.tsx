@@ -59,7 +59,6 @@ export function HostProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any).rpc("get_my_host_context");
 
-    console.warn("[HostContext] RPC result", { userId: user.id, data, error });
     if (error || !data || data.length === 0) {
       setHostInfo(null);
     } else {

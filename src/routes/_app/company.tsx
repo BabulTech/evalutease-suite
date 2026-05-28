@@ -55,10 +55,10 @@ function CompanyPage() {
         if (!m.user_id) return { ...m, balance: 0 };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: wallet } = await (supabase as any)
-          .from("credit_wallets")
+          .from("user_credits")
           .select("balance")
           .eq("user_id", m.user_id)
-          .single();
+          .maybeSingle();
         return { ...m, balance: wallet?.balance ?? 0 };
       }),
     );

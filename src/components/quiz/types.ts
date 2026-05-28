@@ -72,7 +72,7 @@ export function computeClock(
   if (Number.isNaN(started)) return { index: -1, secondsLeft: 0, done: false };
   if (questions.length === 0) return { index: 0, secondsLeft: 0, done: true };
 
-  // While paused, freeze the clock at paused_at — otherwise use now().
+  // While paused, freeze the clock at paused_at - otherwise use now().
   // The cumulative pause_offset_seconds from previous pause/resume cycles is
   // always subtracted from elapsed.
   const reference = pausedAtIso ? new Date(pausedAtIso).getTime() : now;

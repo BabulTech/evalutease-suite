@@ -82,7 +82,7 @@ export function DraftReview({ drafts, setDrafts, onSave, onClear, source, saving
       <div className="space-y-3">
         {drafts.map((d, i) => (
           <DraftEditorRouter
-            key={`${i}-${d.text.slice(0, 20)}`}
+            key={`${d.type}:${d.difficulty}:${d.text.slice(0, 50)}`}
             draft={d}
             index={i}
             onChange={(next) => updateAt(i, next)}

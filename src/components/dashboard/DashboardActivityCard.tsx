@@ -45,7 +45,8 @@ export function DashboardActivityCard({ limit = 20 }: Props) {
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let active = true;
-    (async () => {
+
+    const subscribe = async () => {
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id ?? null;
       if (!userId || !active) return;
@@ -62,7 +63,9 @@ export function DashboardActivityCard({ limit = 20 }: Props) {
           () => { void load(); },
         )
         .subscribe();
-    })();
+    };
+    void subscribe();
+
     return () => {
       active = false;
       if (channel) {

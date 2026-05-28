@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Building2, Clock, CreditCard, Crown, Wallet, Zap, Check } from "lucide-react";
+import { Building2, ChevronRight, Clock, CreditCard, Crown, Wallet, Zap, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -135,9 +135,10 @@ function HostWorkspaceSection({ host, userId }: { host: HostInfo; userId: string
 }
 
 export function PlanSection({ userId }: { userId: string }) {
-  const { plan: ctxPlan, credits, usage, usedPct, allPlans, loading: planLoading } = usePlan();
+  const { plan: ctxPlan, credits, usage, usedPct, allPlans, loading: planLoading, expiresAt, daysUntilExpiry, yearlyDiscountPercent, billingCycle: activeCycle } = usePlan();
   const { isHost, hostInfo, loading: hostLoading, reload: reloadHost } = useHost();
   const [tierFilter, setTierFilter] = useState<"individual" | "enterprise">("individual");
+  const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
 
   // Auto-switch tier tab to match user's current plan
   useEffect(() => {
@@ -211,6 +212,37 @@ export function PlanSection({ userId }: { userId: string }) {
                   </span>
                 )}
               </p>
+              {/* Billing cycle + expiry row */}
+              {ctxPlan && !["individual_starter", "enterprise_free"].includes(ctxPlan.slug) && (
+                <div className="mt-2 flex items-center flex-wrap gap-1.5">
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
+                      activeCycle === "yearly"
+                        ? "bg-emerald-400/15 text-emerald-400 border border-emerald-400/30"
+                        : "bg-primary/10 text-primary border border-primary/20"
+                    }`}
+                  >
+                    {activeCycle === "yearly" ? "Yearly Subscription" : "Monthly Subscription"}
+                  </span>
+                  {expiresAt && daysUntilExpiry !== null && (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                        daysUntilExpiry <= 7
+                          ? "bg-destructive/10 text-destructive"
+                          : daysUntilExpiry <= 30
+                            ? "bg-warning/10 text-warning"
+                            : "bg-muted/40 text-muted-foreground"
+                      }`}
+                      title={new Date(expiresAt).toLocaleString()}
+                    >
+                      <Clock className="size-3" />
+                      {daysUntilExpiry > 0
+                        ? `Expires ${new Date(expiresAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`
+                        : `Expired ${new Date(expiresAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           {ctxPlan &&
@@ -280,10 +312,41 @@ export function PlanSection({ userId }: { userId: string }) {
         </div>
       </div>
 
-      {/* Compare plans header + tier toggle */}
+      {/* Upsell: monthly subscribers can switch to yearly and save */}
+      {ctxPlan
+        && activeCycle === "monthly"
+        && !["individual_starter", "enterprise_free"].includes(ctxPlan.slug)
+        && yearlyDiscountPercent > 0 && (
+        <div className="rounded-2xl border border-emerald-400/30 bg-gradient-to-r from-emerald-400/10 via-emerald-400/5 to-transparent p-4 md:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="rounded-xl bg-emerald-400/20 border border-emerald-400/30 p-2.5 shrink-0">
+              <Zap className="size-5 text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-sm text-emerald-400">Switch to yearly and save {yearlyDiscountPercent}%</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                You're on monthly. Pay yearly for {ctxPlan.name} and save{" "}
+                <span className="font-semibold text-foreground">
+                  PKR {((ctxPlan.price_pkr * 12) - Math.round(ctxPlan.price_pkr * 12 * (1 - yearlyDiscountPercent / 100))).toLocaleString()}
+                </span>{" "}
+                a year.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/billing"
+            search={{ plan: ctxPlan.slug, cycle: "yearly" }}
+            className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-400 text-emerald-950 px-5 py-2.5 text-sm font-bold hover:bg-emerald-300 transition-colors"
+          >
+            Upgrade to Yearly <ChevronRight className="size-4" />
+          </Link>
+        </div>
+      )}
+
+      {/* Compare plans header + tier toggle + cycle toggle */}
       <div className="text-center space-y-3">
         <h3 className="font-display text-2xl font-bold">Choose your plan</h3>
-        <p className="text-sm text-muted-foreground">Switch tier to compare. All plans use the same credit system.</p>
+        <p className="text-sm text-muted-foreground">Switch tier and billing cycle to compare.</p>
         <div className="inline-flex p-1 rounded-full bg-muted/40 border border-border">
           {(["individual", "enterprise"] as const).map((tier) => (
             <button
@@ -299,6 +362,29 @@ export function PlanSection({ userId }: { userId: string }) {
               {tier === "individual" ? "Personal" : "Enterprise / Education"}
             </button>
           ))}
+        </div>
+        <div className="flex justify-center">
+          <div className="inline-flex p-1 rounded-full bg-muted/40 border border-border">
+            {(["monthly", "yearly"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCycle(c)}
+                className={`relative px-5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  cycle === c
+                    ? "bg-primary text-primary-foreground shadow"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {c === "monthly" ? "Monthly" : "Yearly"}
+                {c === "yearly" && yearlyDiscountPercent > 0 && (
+                  <span className="ml-1.5 inline-block rounded-full bg-success/20 text-success text-[9px] font-bold px-1.5 py-0.5 align-middle">
+                    Save {yearlyDiscountPercent}%
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -353,21 +439,49 @@ export function PlanSection({ userId }: { userId: string }) {
                 <div className="border-y border-border/60 py-4">
                   {isFree ? (
                     <div className="font-display text-4xl font-bold text-primary">Free</div>
-                  ) : (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-sm text-muted-foreground">PKR</span>
-                      <span className="font-display text-4xl font-bold">{plan.price_pkr.toLocaleString()}</span>
-                      <span className="text-sm text-muted-foreground ml-1">/month</span>
-                    </div>
-                  )}
-                  {plan.credits_per_month > 0 && (
+                  ) : (() => {
+                    const yearlyTotal = Math.round(plan.price_pkr * 12 * (1 - yearlyDiscountPercent / 100));
+                    const yearlyEffectiveMonthly = Math.round(yearlyTotal / 12);
+                    const monthlyTotal = plan.price_pkr;
+                    const savePerYear = (plan.price_pkr * 12) - yearlyTotal;
+                    if (cycle === "yearly") {
+                      return (
+                        <>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-sm text-muted-foreground">PKR</span>
+                            <span className="font-display text-4xl font-bold">{yearlyEffectiveMonthly.toLocaleString()}</span>
+                            <span className="text-sm text-muted-foreground ml-1">/month</span>
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            <span className="line-through">PKR {monthlyTotal.toLocaleString()}/mo</span>
+                            <span className="ml-2">billed yearly: <span className="font-semibold text-foreground">PKR {yearlyTotal.toLocaleString()}</span></span>
+                          </div>
+                          {savePerYear > 0 && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-success/15 text-success px-3 py-1 text-xs font-semibold">
+                              💰 Save PKR {savePerYear.toLocaleString()} / year
+                            </div>
+                          )}
+                        </>
+                      );
+                    }
+                    return (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-sm text-muted-foreground">PKR</span>
+                        <span className="font-display text-4xl font-bold">{monthlyTotal.toLocaleString()}</span>
+                        <span className="text-sm text-muted-foreground ml-1">/month</span>
+                      </div>
+                    );
+                  })()}
+                  {plan.credits_per_month > 0 && !isFree && (
                     <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-warning/10 text-warning px-3 py-1 text-xs font-semibold">
-                      <Zap className="size-3" /> {plan.credits_per_month.toLocaleString()} credits/month
+                      <Zap className="size-3" />
+                      {plan.credits_per_month.toLocaleString()} credits / month
+                      {cycle === "yearly" && " · auto-refilled each month"}
                     </div>
                   )}
                   {isFree && tierFilter === "enterprise" && (
                     <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-success/10 text-success px-3 py-1 text-xs font-semibold">
-                      <Zap className="size-3" /> 10 free AI calls — lifetime
+                      <Zap className="size-3" /> 10 free AI calls (lifetime)
                     </div>
                   )}
                 </div>
@@ -390,7 +504,7 @@ export function PlanSection({ userId }: { userId: string }) {
                 ) : (
                   <Link
                     to="/billing"
-                    search={{ plan: plan.slug }}
+                    search={{ plan: plan.slug, cycle }}
                     className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold transition-all ${
                       isPopular
                         ? "bg-gradient-primary text-primary-foreground shadow-glow hover:opacity-90"
@@ -398,6 +512,7 @@ export function PlanSection({ userId }: { userId: string }) {
                     }`}
                   >
                     <Zap className="size-4" /> {isFree ? "Switch to" : "Upgrade to"} {plan.name}
+                    {!isFree && cycle === "yearly" && " · Yearly"}
                   </Link>
                 )}
               </div>
@@ -409,7 +524,9 @@ export function PlanSection({ userId }: { userId: string }) {
       <p className="text-center text-xs text-muted-foreground">
         Pay via EasyPaisa, JazzCash, or Bank Transfer.{" "}
         <a
-          href="mailto:support@jancho.app"
+          href="https://www.babultech.com/contact"
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-primary underline-offset-4 hover:underline"
         >
           Contact support
