@@ -1,4 +1,5 @@
 // react-doctor-disable-next-line react-doctor/tanstack-start-missing-head-content
+import { useEffect } from "react";
 import { Outlet, createRootRoute } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
@@ -57,6 +58,7 @@ function RootComponent() {
       <AuthProvider>
         <ProfileProvider>
           <NotificationProvider>
+            <NativeAuthBridge />
             <Outlet />
             <Toaster />
           </NotificationProvider>
@@ -64,4 +66,25 @@ function RootComponent() {
       </AuthProvider>
     </I18nProvider>
   );
+}
+
+/**
+ * Mounts once at app root. On the Capacitor native shell it listens for the
+ * jancho://auth/callback deep link that Supabase + Google OAuth bounce back to
+ * after the user completes sign-in in the in-app browser.
+ */
+function NativeAuthBridge() {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    let disposed = false;
+    void import("@/lib/native-auth").then(({ initNativeAuthDeepLink }) => {
+      if (disposed) return;
+      void initNativeAuthDeepLink(() => {
+        // Bounce to dashboard after a successful OAuth round-trip
+        window.location.href = "/dashboard";
+      });
+    });
+    return () => { disposed = true; };
+  }, []);
+  return null;
 }

@@ -28,10 +28,22 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "cap:sync": "cap sync android",
+    "cap:open": "cap open android",
+    "cap:run": "cap run android"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@cloudflare/vite-plugin": "^1.25.5",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -87,6 +99,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.32.0",
     "@lhci/cli": "^0.15.1",
     "@lovable.dev/vite-tanstack-config": "^1.4.0",

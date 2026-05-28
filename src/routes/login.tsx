@@ -85,10 +85,8 @@ function LoginPage() {
 
   const onGoogle = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin + "/dashboard" },
-    });
+    const { signInWithGoogleNativeAware } = await import("@/lib/native-auth");
+    const { error } = await signInWithGoogleNativeAware();
     if (error) {
       setLoading(false);
       toast.error(error.message);
