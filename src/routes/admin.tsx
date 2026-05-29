@@ -78,14 +78,15 @@ const NAV: NavItem[] = [
 ];
 
 const NAV_GROUPS = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard, sections: ["overview"] },
-  { key: "people", label: "People", icon: Users, sections: ["users", "participants"] },
-  { key: "content", label: "Content", icon: PlayCircle, sections: ["quizzes", "categories"] },
-  { key: "feedback", label: "Feedback", icon: MessageSquare, sections: ["reviews", "appfeedback"] },
-  { key: "monitor", label: "Monitor", icon: Activity, sections: ["activity", "aiusage", "alerts"] },
+  { key: "overview", label: "Overview", shortLabel: "Home",   icon: LayoutDashboard, sections: ["overview"] },
+  { key: "people",   label: "People",   shortLabel: "People", icon: Users,           sections: ["users", "participants"] },
+  { key: "content",  label: "Content",  shortLabel: "Quiz",   icon: PlayCircle,      sections: ["quizzes", "categories"] },
+  { key: "feedback", label: "Feedback", shortLabel: "Feed",   icon: MessageSquare,   sections: ["reviews", "appfeedback"] },
+  { key: "monitor",  label: "Monitor",  shortLabel: "Audit",  icon: Activity,        sections: ["activity", "aiusage", "alerts"] },
   {
     key: "money",
     label: "Money",
+    shortLabel: "Money",
     icon: Wallet,
     sections: ["plans", "credits", "packages", "domains", "promocodes", "finance"],
   },
@@ -373,7 +374,7 @@ function AdminPage() {
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-border bg-card/95 backdrop-blur px-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
         <div className="grid grid-cols-5 gap-0.5">
-          {NAV_GROUPS.slice(0, 4).map(({ key, label, icon: Icon, sections }) => {
+          {NAV_GROUPS.slice(0, 4).map(({ key, label, shortLabel, icon: Icon, sections }) => {
             const selected = (sections as readonly string[]).includes(section);
             const target = sections[0];
             const groupBadge = (sections as readonly string[]).includes("appfeedback")
@@ -389,6 +390,8 @@ function AdminPage() {
                   handleSetSection(target);
                   setMoreOpen(false);
                 }}
+                aria-label={label}
+                title={label}
                 className={`relative min-h-14 rounded-xl px-1 py-1.5 text-[10px] font-semibold transition-colors flex flex-col items-center justify-center gap-1 ${
                   selected
                     ? "bg-primary/15 text-primary"
@@ -396,7 +399,7 @@ function AdminPage() {
                 }`}
               >
                 <Icon className="size-5" />
-                <span className="leading-none truncate max-w-full">{label}</span>
+                <span className="leading-none truncate max-w-full">{shortLabel ?? label}</span>
                 {groupBadge > 0 && (
                   <span className="absolute right-2 top-1.5 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1.5 py-0.5">
                     {groupBadge}

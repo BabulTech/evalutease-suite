@@ -75,35 +75,35 @@ export function AppSidebar({ open, onToggle }: Props) {
     {
       label: "Home",
       items: [
-        { to: "/dashboard", icon: LayoutDashboard, label: t("nav.dashboard") },
+        { to: "/dashboard", icon: LayoutDashboard, label: t("nav.dashboard"), shortLabel: "Home" },
       ],
     },
     {
       label: "Manage",
       items: [
-        { to: "/categories", icon: FolderTree, label: t("nav.manageCategories") },
-        { to: "/participant-types", icon: UsersRound, label: t("nav.manageParticipants") },
-        { to: "/sessions", icon: PlayCircle, label: t("nav.sessions") },
+        { to: "/categories", icon: FolderTree, label: t("nav.manageCategories"), shortLabel: "Quizzes" },
+        { to: "/participant-types", icon: UsersRound, label: t("nav.manageParticipants"), shortLabel: "People" },
+        { to: "/sessions", icon: PlayCircle, label: t("nav.sessions"), shortLabel: "Live" },
       ],
     },
     {
       label: "Track",
       items: [
-        { to: "/quiz-history", icon: Archive, label: t("nav.quizHistory") },
-        { to: "/reports", icon: BarChart3, label: t("nav.reports") },
-        { to: "/reviews", icon: Star, label: "Reviews" },
+        { to: "/quiz-history", icon: Archive, label: t("nav.quizHistory"), shortLabel: "Past" },
+        { to: "/reports", icon: BarChart3, label: t("nav.reports"), shortLabel: "Stats" },
+        { to: "/reviews", icon: Star, label: "Reviews", shortLabel: "Stars" },
       ],
     },
     {
       label: "Account",
       items: [
         ...(!["individual_starter", "enterprise_free"].includes(plan?.slug ?? "") || isHost
-          ? [{ to: "/billing", icon: Coins, label: isHost ? "Credits" : "Billing" }]
+          ? [{ to: "/billing", icon: Coins, label: isHost ? "Credits" : "Billing", shortLabel: isHost ? "Credit" : "Bill" }]
           : []),
         ...(isEnterpriseAdmin
-          ? [{ to: "/company", icon: Building2, label: "Org", badge: pendingReqCount }]
+          ? [{ to: "/company", icon: Building2, label: "Org", shortLabel: "Org", badge: pendingReqCount }]
           : []),
-        ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin", special: true }] : []),
+        ...(isAdmin ? [{ to: "/admin", icon: Shield, label: "Admin", shortLabel: "Admin", special: true }] : []),
       ],
     },
   ].filter((g) => g.items.length > 0);

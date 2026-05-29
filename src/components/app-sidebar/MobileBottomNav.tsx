@@ -25,8 +25,11 @@ export function MobileBottomNav({
   return (
     <nav className="md:hidden fixed inset-x-0 bottom-0 z-50 border-t border-sidebar-border bg-sidebar/95 backdrop-blur px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
       <div className="grid grid-cols-5 gap-1">
-        {primary.map(({ to, icon: Icon, label, badge = 0 }) => {
+        {primary.map(({ to, icon: Icon, label, shortLabel, badge = 0 }) => {
           const active = pathname === to || pathname.startsWith(to + "/");
+          // Mobile shows the short label (≤6 chars, first word). Falls back to
+          // the first word of the full label, truncated.
+          const compact = shortLabel ?? label.split(" ")[0].slice(0, 6);
           return (
             <Link
               key={to}
@@ -37,9 +40,11 @@ export function MobileBottomNav({
                   ? "bg-primary/15 text-primary"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               }`}
+              aria-label={label}
+              title={label}
             >
               <Icon className="size-5" />
-              <span className="leading-none truncate max-w-full">{label}</span>
+              <span className="leading-none truncate max-w-full">{compact}</span>
               {badge > 0 && (
                 <span className="absolute right-2 top-1.5 size-2 rounded-full bg-destructive" />
               )}

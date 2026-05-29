@@ -6,6 +6,8 @@ export type NavItem = {
   to: string;
   icon: React.ElementType;
   label: string;
+  /** Short label (max 6 chars) shown on mobile bottom-nav. Falls back to `label`. */
+  shortLabel?: string;
   badge?: number;
   special?: boolean;
 };
