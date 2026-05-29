@@ -293,7 +293,7 @@ function AdminPage() {
               {
                 label: "Monitor",
                 color: "text-warning",
-                items: navItems.filter((n) => ["activity", "aiusage", "alerts"].includes(n.key)),
+                items: navItems.filter((n) => ["analytics", "activity", "aiusage", "alerts"].includes(n.key)),
               },
               {
                 label: "Monetize",
