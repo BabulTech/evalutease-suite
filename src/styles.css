@@ -140,6 +140,38 @@
   [dir="rtl"] {
     font-family: "Noto Naskh Arabic", "Inter", system-ui, sans-serif;
   }
+
+  /* MOBILE SAFETY NETS — prevent the entire page from horizontal-scrolling
+     because of one runaway flex child / long word. Individual components can
+     still opt-out by setting their own overflow-x: visible. */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+  /* Force long unbreakable strings (URLs, hashes, dna-of-words) to wrap
+     instead of pushing the layout wider than the viewport. Applies inside
+     paragraphs, list items, table cells, etc. */
+  p,
+  li,
+  td,
+  dd,
+  dt {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
+@layer utilities {
+  /* Use on flex children that need to truncate inside a flex row.
+     `min-width: 0` overrides the default `min-content` so flex shrink works. */
+  .min-w-0-imp {
+    min-width: 0 !important;
+  }
+  /* Aggressive word breaking for content blocks (question text, answers, etc.) */
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 /* Tailwind v4 preflight removes the cursor:pointer default on buttons.

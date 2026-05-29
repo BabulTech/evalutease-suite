@@ -91,22 +91,22 @@ export function ParticipantTableRow({
       className={`cursor-pointer transition-colors min-h-[52px] ${selected ? "bg-primary/10 hover:bg-primary/15" : "hover:bg-muted/30"}`}
       onClick={onSelect}
     >
-      <TableCell className="py-3">
-        <div className="flex items-center gap-2">
+      <TableCell className="py-3 max-w-[180px] sm:max-w-none">
+        <div className="flex items-center gap-2 min-w-0">
           {selected ? (
             <ChevronUp className="size-3.5 text-primary shrink-0" />
           ) : (
             <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
           )}
-          <div>
+          <div className="min-w-0 flex-1">
             <div
-              className={`font-medium flex items-center gap-1 text-sm ${selected ? "text-primary" : ""}`}
+              className={`font-medium flex items-center gap-1 text-sm truncate ${selected ? "text-primary" : ""}`}
             >
-              {typeEmoji && <span>{typeEmoji}</span>}
-              {p.name}
+              {typeEmoji && <span className="shrink-0">{typeEmoji}</span>}
+              <span className="truncate">{p.name}</span>
             </div>
             {(p.metadata.class || p.metadata.grade) && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground truncate">
                 {p.metadata.class || p.metadata.grade}
               </div>
             )}
@@ -118,7 +118,7 @@ export function ParticipantTableRow({
           {p.email && (
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <Mail className="size-3 shrink-0" />
-              <span className="truncate max-w-[180px]">{p.email}</span>
+              <span className="truncate max-w-[120px] sm:max-w-[180px]">{p.email}</span>
             </div>
           )}
           {p.mobile && (

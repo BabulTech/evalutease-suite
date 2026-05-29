@@ -43,13 +43,13 @@ export function QuestionsTab({
   const { t } = useI18n();
   return (
     <div className="space-y-4">
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground break-anywhere">
         {selectedCatName} <span className="px-1">›</span>
         <span className="text-foreground font-semibold">{selectedSubName}</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 w-full sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
             value={search}
@@ -70,14 +70,14 @@ export function QuestionsTab({
         </div>
         <Button
           onClick={onAddQuestion}
-          className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow shrink-0"
+          className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow shrink-0 w-full sm:w-auto"
         >
           <Plus className="size-4" /> {t("cat.addQuestion")}
         </Button>
       </div>
 
       {questionTotal > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 sm:gap-3">
           <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
             <div className="font-display text-xl font-bold">{questionTotal}</div>
             <div className="text-xs text-muted-foreground">{t("cat.totalQuestions")}</div>

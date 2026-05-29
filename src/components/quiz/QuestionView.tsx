@@ -63,7 +63,7 @@ export function QuestionView({
         quizSecondsLeft={quizSecondsLeft}
       />
 
-      <h2 className="mt-6 font-display text-xl sm:text-2xl font-semibold leading-snug">
+      <h2 className="mt-6 font-display text-lg sm:text-xl md:text-2xl font-semibold leading-snug break-anywhere">
         {question.text}
       </h2>
 

@@ -79,8 +79,8 @@ export function RosterTab({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
           <Input
             value={search}
@@ -99,7 +99,7 @@ export function RosterTab({
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:shrink-0">
           <UploadParticipantsDialog
             onSave={onImport}
             trigger={
@@ -142,7 +142,7 @@ export function RosterTab({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {t("pt.totalParticipants")}
@@ -192,14 +192,15 @@ export function RosterTab({
             </div>
           ) : (
             <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
-              <Table>
+              <div className="overflow-x-auto">
+                <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("pt.colName")}</TableHead>
-                    <TableHead>{t("pt.colContact")}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t("pt.colDetails")}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t("pt.colOrg")}</TableHead>
-                    <TableHead className="w-[100px] text-right">{t("pt.colActions")}</TableHead>
+                    <TableHead className="whitespace-nowrap">{t("pt.colName")}</TableHead>
+                    <TableHead className="whitespace-nowrap">{t("pt.colContact")}</TableHead>
+                    <TableHead className="hidden md:table-cell whitespace-nowrap">{t("pt.colDetails")}</TableHead>
+                    <TableHead className="hidden lg:table-cell whitespace-nowrap">{t("pt.colOrg")}</TableHead>
+                    <TableHead className="w-[100px] text-right whitespace-nowrap">{t("pt.colActions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -214,7 +215,8 @@ export function RosterTab({
                     />
                   ))}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
               <div className="px-4 py-3 border-t border-border">
                 <PaginationControls
                   page={page}

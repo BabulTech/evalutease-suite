@@ -45,11 +45,13 @@ export function Lobby({ session, onScheduledTimeReached }: Props) {
   const isScheduled = !!scheduledFor;
 
   return (
-    <div className="rounded-3xl border border-border bg-card/60 backdrop-blur p-6 sm:p-10 max-w-md w-full text-center shadow-card">
+    <div className="rounded-3xl border border-border bg-card/60 backdrop-blur p-5 sm:p-10 max-w-md w-full text-center shadow-card min-w-0">
       <div className="mx-auto size-16 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center">
         <Loader2 className="size-7 text-primary animate-spin" />
       </div>
-      <h1 className="mt-5 font-display text-2xl font-semibold">{session.title}</h1>
+      <h1 className="mt-5 font-display text-xl sm:text-2xl font-semibold break-anywhere">
+        {session.title}
+      </h1>
       <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
         {isScheduled
           ? `You're in the lobby. The quiz will start automatically at the scheduled time${".".repeat(dots)}`

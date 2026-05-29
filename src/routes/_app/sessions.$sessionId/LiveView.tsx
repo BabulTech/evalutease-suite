@@ -105,15 +105,16 @@ export function LiveView({
             </span>
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-[200px] flex-1">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+          <div className="w-full sm:min-w-[200px] sm:flex-1">
             <Input
               placeholder="Search participants..."
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
+              className="w-full"
             />
           </div>
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex gap-1 flex-wrap w-full sm:w-auto">
             {(
               [
                 ["score", "Score"],

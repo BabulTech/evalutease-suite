@@ -89,13 +89,13 @@ export function CategoryStep({
                   setSubcategoryId("");
                   setErrors((p) => ({ ...p, category: undefined }));
                 }}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] max-w-full ${
                   categoryId === c.id
                     ? "border-primary bg-primary/15 text-primary"
                     : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
                 }`}
               >
-                {c.name}
+                <span className="truncate">{c.name}</span>
               </button>
             ))
           )}
@@ -125,13 +125,13 @@ export function CategoryStep({
                           setSubcategoryId(s.id === subcategoryId ? "" : s.id);
                           setErrors((p) => ({ ...p, category: undefined }));
                         }}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] ${
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 sm:px-3 py-1.5 text-xs font-medium transition-colors min-h-[32px] max-w-full ${
                           subcategoryId === s.id
                             ? "border-primary bg-primary/15 text-primary"
                             : "border-border bg-card/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"
                         }`}
                       >
-                        {s.name}
+                        <span className="truncate">{s.name}</span>
                       </button>,
                     ],
               )

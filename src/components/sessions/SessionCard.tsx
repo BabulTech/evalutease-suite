@@ -19,7 +19,7 @@ export function SessionCard({ session, onDelete }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-5 transition-colors hover:border-primary/30 space-y-4">
+    <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5 transition-colors hover:border-primary/30 space-y-4 min-w-0">
       <div className="flex items-start justify-between gap-3">
         <Link
           to="/sessions/$sessionId"

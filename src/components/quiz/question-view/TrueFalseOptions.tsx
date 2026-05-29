@@ -21,7 +21,7 @@ export function TrueFalseOptions({ chosen, isAnswered, disabled, onLock }: Props
             type="button"
             disabled={disabled}
             onClick={() => onLock(value)}
-            className={`flex items-center justify-center gap-3 rounded-2xl border-2 px-6 py-8 transition-all ${
+            className={`flex items-center justify-center gap-2 sm:gap-3 rounded-2xl border-2 px-3 sm:px-6 py-6 sm:py-8 transition-all min-w-0 ${
               isChosen
                 ? color === "success"
                   ? "border-success bg-success/15 text-success shadow-glow"

@@ -45,14 +45,14 @@ export function QuestionCard({ q, index, onUpdate, onDelete, usageCount, lastUse
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left px-4 py-3 flex items-start gap-3 min-h-[56px]"
+        className="w-full text-left px-3 sm:px-4 py-3 flex items-start gap-2 sm:gap-3 min-h-[56px] min-w-0"
         aria-expanded={expanded ? "true" : "false"}
       >
         <span className="shrink-0 mt-0.5 size-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold text-muted-foreground">
           {index}
         </span>
         <span
-          className={`flex-1 min-w-0 text-sm font-medium leading-snug ${expanded ? "" : "line-clamp-2"}`}
+          className={`flex-1 min-w-0 text-sm font-medium leading-snug break-anywhere ${expanded ? "" : "line-clamp-2"}`}
         >
           {q.text}
         </span>
@@ -82,8 +82,8 @@ export function QuestionCard({ q, index, onUpdate, onDelete, usageCount, lastUse
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <div className="px-3 sm:px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
+          <div className="flex flex-wrap items-center gap-1.5 max-w-full">
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                 q.difficulty === "easy"
@@ -102,16 +102,19 @@ export function QuestionCard({ q, index, onUpdate, onDelete, usageCount, lastUse
               <Timer className="size-3" /> {q.time_seconds}s
             </span>
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
                 usageCount === 0
                   ? "bg-muted/50 text-muted-foreground"
                   : "bg-primary/10 text-primary"
               }`}
             >
-              Used {usageCount}×
-              {lastUsedAt ? ` · ${new Date(lastUsedAt).toLocaleDateString()}` : ""}
+              <span className="sm:hidden">Used {usageCount}×</span>
+              <span className="hidden sm:inline">
+                Used {usageCount}×
+                {lastUsedAt ? ` · ${new Date(lastUsedAt).toLocaleDateString()}` : ""}
+              </span>
             </span>
-            <div className="ml-auto flex gap-1">
+            <div className="ml-auto flex gap-1 shrink-0">
               <EditQuestionDialog q={q} onSave={onUpdate} />
               <DeleteQuestionButton q={q} onConfirm={onDelete} />
             </div>
@@ -139,7 +142,7 @@ export function QuestionCard({ q, index, onUpdate, onDelete, usageCount, lastUse
                     >
                       {isCorrect ? <CheckCircle2 className="size-3" /> : labelFor(i)}
                     </span>
-                    <span className="break-words min-w-0">{opt}</span>
+                    <span className="break-anywhere min-w-0 flex-1">{opt}</span>
                   </li>
                 );
               })}
@@ -149,12 +152,12 @@ export function QuestionCard({ q, index, onUpdate, onDelete, usageCount, lastUse
           {!hasOptions && q.correct_answer && (
             <div className="rounded-xl border border-success/30 bg-success/5 px-3 py-2 text-sm">
               <span className="text-xs font-semibold text-success block mb-1">Correct Answer</span>
-              <span className="text-foreground break-words">{q.correct_answer}</span>
+              <span className="text-foreground break-anywhere block">{q.correct_answer}</span>
             </div>
           )}
 
           {q.explanation && (
-            <div className="rounded-xl bg-muted/30 px-3 py-2 text-xs text-muted-foreground break-words">
+            <div className="rounded-xl bg-muted/30 px-3 py-2 text-xs text-muted-foreground break-anywhere">
               <span className="font-semibold text-foreground">Explanation: </span>
               {q.explanation}
             </div>
