@@ -67,22 +67,22 @@ function QuizHistoryPage() {
   return (
     <div className="space-y-4">
       {/* Hero header */}
-      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
-            <Archive className="size-6" />
+      <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="size-10 sm:size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <Archive className="size-5 sm:size-6" />
           </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">
               {t("hist.title")}
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{t("hist.desc")}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{t("hist.desc")}</p>
           </div>
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 print:hidden shrink-0"
+          className="gap-1.5 print:hidden shrink-0 w-full sm:w-auto"
           onClick={() => printAll(sessions, expandedAttempts, sessionMaxPts, profile, user?.email)}
         >
           <Printer className="size-3.5" /> {t("hist.printAll")}
@@ -91,7 +91,7 @@ function QuizHistoryPage() {
 
       {/* Stats strip */}
       {sessionTotal > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 sm:gap-3">
           <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
             <div className="font-display text-2xl font-bold text-primary">{sessionTotal}</div>
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">

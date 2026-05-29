@@ -22,21 +22,21 @@ function SessionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
-            <QrCode className="size-6" />
+      <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="size-10 sm:size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <QrCode className="size-5 sm:size-6" />
           </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">
               {t("nav.sessions")}
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{t("sess.description")}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{t("sess.description")}</p>
           </div>
         </div>
         <Button
           asChild
-          className="h-10 gap-2 bg-gradient-primary text-primary-foreground shadow-glow shrink-0"
+          className="h-10 gap-2 bg-gradient-primary text-primary-foreground shadow-glow shrink-0 w-full sm:w-auto"
         >
           <Link to="/sessions/new">
             <Zap className="size-4" /> {t("sess.generateQR")}

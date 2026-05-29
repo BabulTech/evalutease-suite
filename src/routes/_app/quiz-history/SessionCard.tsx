@@ -115,9 +115,9 @@ export function SessionCard({
             >
               <ChevronRight className="size-4 text-muted-foreground" />
             </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-display text-base font-bold truncate">{s.title}</span>
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="font-display text-base font-bold truncate min-w-0 max-w-full">{s.title}</span>
                 {s.status === "grading" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 text-warning border border-warning/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shrink-0">
                     <Clock className="size-3" /> Needs Grading

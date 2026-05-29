@@ -54,11 +54,11 @@ function AddQuestionPage() {
       </div>
 
       {/* Title */}
-      <div>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">
+      <div className="min-w-0">
+        <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-semibold tracking-tight break-anywhere">
           {t("add.title")}
         </h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t("add.desc")}</p>
+        <p className="text-muted-foreground mt-1 text-xs sm:text-sm break-anywhere">{t("add.desc")}</p>
       </div>
 
       <DestinationStep

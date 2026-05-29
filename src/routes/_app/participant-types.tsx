@@ -100,22 +100,24 @@ function ParticipantsIndex() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="font-display text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <Users className="size-6 text-primary" /> {t("pt.manageTitle")}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
+        <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight flex items-center gap-2 min-w-0">
+          <Users className="size-5 sm:size-6 text-primary shrink-0" />
+          <span className="truncate">{t("pt.manageTitle")}</span>
         </h1>
         {canAddToGroup && (
           <Button
             onClick={() => navigate({ to: "/participant-types/add" })}
-            className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow"
+            className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow w-full sm:w-auto shrink-0"
           >
-            <UserPlus className="size-4" /> Add to {selectedGroupName}
+            <UserPlus className="size-4 shrink-0" />
+            <span className="truncate">Add to {selectedGroupName}</span>
           </Button>
         )}
       </div>
 
       {/* Tab bar */}
-      <div className="rounded-2xl border border-border bg-card/50 p-1.5 flex gap-1.5">
+      <div className="rounded-2xl border border-border bg-card/50 p-1.5 flex flex-col sm:flex-row gap-1.5 w-full max-w-full overflow-hidden">
         {tabDefs.map((tab) => {
           const isActive = activeTab === tab.n;
           return (
@@ -126,7 +128,8 @@ function ParticipantsIndex() {
                 if (!tab.locked) setActiveTab(tab.n);
               }}
               disabled={tab.locked}
-              className={`flex-1 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all min-h-[56px] ${
+              title={tab.value || tab.label}
+              className={`w-full sm:flex-1 sm:min-w-0 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all min-h-[56px] ${
                 isActive
                   ? "bg-gradient-primary text-primary-foreground shadow-glow"
                   : tab.locked
@@ -151,14 +154,14 @@ function ParticipantsIndex() {
                   tab.n
                 )}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <div
                   className={`text-sm font-semibold leading-tight ${isActive ? "" : "text-foreground"}`}
                 >
                   {tab.label}
                 </div>
                 <div
-                  className={`text-[11px] truncate leading-tight mt-0.5 ${isActive ? "opacity-80" : "text-muted-foreground"}`}
+                  className={`text-[11px] truncate leading-tight mt-0.5 max-w-full ${isActive ? "opacity-80" : "text-muted-foreground"}`}
                 >
                   {tab.value || (tab.locked ? "Locked" : "Tap to choose")}
                 </div>
@@ -170,15 +173,15 @@ function ParticipantsIndex() {
 
       {/* Tab 1: Type */}
       {activeTab === 1 && (
-        <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-foreground">
+        <div className="rounded-2xl border border-border bg-card/50 p-4 sm:p-5 space-y-4 min-w-0 overflow-hidden">
+          <div className="flex items-start sm:items-center justify-between gap-2 min-w-0">
+            <div className="text-sm font-semibold text-foreground min-w-0 flex-1">
               {types.length === 0 ? "Start by creating a type" : "Choose a participant type"}
             </div>
             <button
               type="button"
               onClick={() => setCreateTypeOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all shrink-0 whitespace-nowrap"
             >
               <FolderPlus size={13} /> New Type
             </button>
@@ -215,9 +218,9 @@ function ParticipantsIndex() {
 
       {/* Tab 2: Group */}
       {activeTab === 2 && selectedTypeId !== "__all__" && (
-        <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm">
+        <div className="rounded-2xl border border-border bg-card/50 p-4 sm:p-5 space-y-4 min-w-0 overflow-hidden">
+          <div className="flex items-start sm:items-center justify-between gap-2 min-w-0">
+            <div className="text-sm min-w-0 flex-1 break-anywhere">
               <span className="text-muted-foreground">{selectedTypeName} · </span>
               <span className="font-semibold">Choose a group</span>
             </div>
@@ -225,7 +228,7 @@ function ParticipantsIndex() {
               type="button"
               onClick={() => setCreateSubOpen(true)}
               disabled={!canAddSub}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all disabled:opacity-40 shrink-0 whitespace-nowrap"
             >
               <Plus size={13} /> New Group
             </button>

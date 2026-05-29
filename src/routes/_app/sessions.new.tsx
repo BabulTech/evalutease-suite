@@ -106,15 +106,15 @@ function NewSessionPage() {
         <span className="text-foreground font-medium">{t("newSess.title")}</span>
       </nav>
 
-      <div className="rounded-2xl border border-border bg-card/60 p-5 flex items-center gap-4">
-        <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
-          <QrCode className="size-6" />
+      <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5 flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="size-10 sm:size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+          <QrCode className="size-5 sm:size-6" />
         </div>
-        <div>
-          <h1 className="font-display text-xl font-semibold tracking-tight">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-lg sm:text-xl font-semibold tracking-tight truncate">
             {t("newSess.title")}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{t("newSess.desc")}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{t("newSess.desc")}</p>
         </div>
       </div>
 

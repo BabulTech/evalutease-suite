@@ -30,20 +30,20 @@ function ReviewsPage() {
   return (
     <div className="space-y-4">
       {/* Hero header */}
-      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center gap-4">
-        <div className="size-12 rounded-2xl bg-warning/15 border border-warning/25 flex items-center justify-center text-warning shadow-glow shrink-0">
-          <Star className="size-6" />
+      <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5 flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="size-10 sm:size-12 rounded-2xl bg-warning/15 border border-warning/25 flex items-center justify-center text-warning shadow-glow shrink-0">
+          <Star className="size-5 sm:size-6" />
         </div>
-        <div className="min-w-0">
-          <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">
             {t("rev.title")}
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{t("rev.desc")}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{t("rev.desc")}</p>
         </div>
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-2xl border border-border bg-card/50 p-4 text-center">
           <div className="font-display text-2xl font-bold text-foreground">{totalReviews}</div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1 flex items-center justify-center gap-1">

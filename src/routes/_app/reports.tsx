@@ -96,35 +96,36 @@ function ReportsPage() {
   return (
     <div className="space-y-4">
       {/* Hero header */}
-      <div className="rounded-2xl border border-border bg-card/60 p-5 flex flex-wrap items-center justify-between gap-4 print:hidden">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
-            <BarChart3 className="size-6" />
+      <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 min-w-0 print:hidden">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="size-10 sm:size-12 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shadow-glow shrink-0">
+            <BarChart3 className="size-5 sm:size-6" />
           </div>
-          <div className="min-w-0">
-            <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">
               {t("rep.title")}
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">{t("rep.desc")}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{t("rep.desc")}</p>
           </div>
         </div>
         {selected && reportMode === "quiz" && (
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 shrink-0 w-full sm:w-auto">
             <Button
               variant="outline"
               onClick={async () => {
                 if (await deductExportCredit()) window.print();
               }}
-              className="gap-1.5 h-10"
+              className="gap-1.5 h-10 flex-1 sm:flex-none"
             >
               <FileText className="size-4" /> PDF
               {plan?.credit_cost_export ? ` (${plan.credit_cost_export} cr)` : ""}
             </Button>
             <Button
               onClick={() => void exportCsv()}
-              className="gap-1.5 h-10 bg-gradient-primary text-primary-foreground shadow-glow"
+              className="gap-1.5 h-10 bg-gradient-primary text-primary-foreground shadow-glow flex-1 sm:flex-none"
             >
-              <Download className="size-4" /> Excel ({filteredRows.length})
+              <Download className="size-4" />
+              <span className="truncate">Excel ({filteredRows.length})</span>
               {plan?.credit_cost_export ? ` · ${plan.credit_cost_export} cr` : ""}
             </Button>
           </div>
