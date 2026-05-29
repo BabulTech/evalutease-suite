@@ -49,7 +49,7 @@ export function StepTabBar({
   ];
 
   return (
-    <div className="rounded-2xl border border-border bg-card/50 p-1.5 flex gap-1.5">
+    <div className="rounded-2xl border border-border bg-card/50 p-1.5 flex flex-col sm:flex-row gap-1.5 w-full max-w-full overflow-hidden">
       {tabDefs.map((tab) => {
         const isActive = activeTab === tab.n;
         return (
@@ -60,7 +60,9 @@ export function StepTabBar({
               if (!tab.locked) onTabChange(tab.n);
             }}
             disabled={tab.locked}
-            className={`flex-1 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all min-h-[56px] ${
+            aria-label={`${tab.label}${tab.value ? `: ${tab.value}` : ""}`}
+            title={tab.value || tab.label}
+            className={`w-full sm:flex-1 sm:min-w-0 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all min-h-[56px] ${
               isActive
                 ? "bg-gradient-primary text-primary-foreground shadow-glow"
                 : tab.locked
@@ -85,14 +87,14 @@ export function StepTabBar({
                 tab.n
               )}
             </span>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-hidden">
               <div
                 className={`text-sm font-semibold leading-tight ${isActive ? "" : "text-foreground"}`}
               >
                 {tab.label}
               </div>
               <div
-                className={`text-[11px] truncate leading-tight mt-0.5 ${isActive ? "opacity-80" : "text-muted-foreground"}`}
+                className={`text-[11px] truncate leading-tight mt-0.5 max-w-full ${isActive ? "opacity-80" : "text-muted-foreground"}`}
               >
                 {tab.value || (tab.locked ? "Locked" : "Tap to choose")}
               </div>

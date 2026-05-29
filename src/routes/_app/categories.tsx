@@ -93,14 +93,15 @@ function QuestionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="font-display text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <BookOpen className="size-6 text-primary" /> {t("cat.manageQuestions")}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0">
+        <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight flex items-center gap-2 min-w-0">
+          <BookOpen className="size-5 sm:size-6 text-primary shrink-0" />
+          <span className="truncate">{t("cat.manageQuestions")}</span>
         </h1>
         {canAddQuestion && (
           <Button
             onClick={openAddQuestion}
-            className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer"
+            className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer w-full sm:w-auto shrink-0"
           >
             <Plus className="size-4" /> {t("cat.addQuestion")}
           </Button>

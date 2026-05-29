@@ -21,16 +21,16 @@ export function TopicTab({
   onNewSub,
 }: Props) {
   return (
-    <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm">
+    <div className="rounded-2xl border border-border bg-card/50 p-4 sm:p-5 space-y-4 min-w-0 overflow-hidden">
+      <div className="flex items-start sm:items-center justify-between gap-2 min-w-0">
+        <div className="text-sm min-w-0 flex-1 break-anywhere">
           <span className="text-muted-foreground">{selectedCatName} · </span>
           <span className="font-semibold">Choose a topic</span>
         </div>
         <button
           type="button"
           onClick={onNewSub}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all shrink-0 whitespace-nowrap"
         >
           <Plus size={13} /> New Topic
         </button>

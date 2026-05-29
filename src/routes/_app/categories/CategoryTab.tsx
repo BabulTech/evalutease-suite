@@ -24,15 +24,15 @@ export function CategoryTab({
 }: Props) {
   return (
     <>
-      <div className="rounded-2xl border border-border bg-card/50 p-5 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-semibold text-foreground">
+      <div className="rounded-2xl border border-border bg-card/50 p-4 sm:p-5 space-y-4 min-w-0 overflow-hidden">
+        <div className="flex items-start sm:items-center justify-between gap-2 min-w-0">
+          <div className="text-sm font-semibold text-foreground min-w-0 flex-1">
             {cats.length === 0 ? "Start by creating a category" : "Choose a category"}
           </div>
           <button
             type="button"
             onClick={onNewCat}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary transition-all shrink-0 whitespace-nowrap"
           >
             <FolderPlus size={13} /> New Category
           </button>
