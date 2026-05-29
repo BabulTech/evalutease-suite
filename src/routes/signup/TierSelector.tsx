@@ -34,13 +34,14 @@ export function TierSelector({
   const [yearlyDiscountPercent, setYearlyDiscountPercent] = useState(10);
 
   useEffect(() => {
-    void supabase
-      .from("plans")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data }) => {
-        if (data) setAllPlans((data as Record<string, unknown>[]).map(rowToPlan));
+    // Signup runs anonymously — read plans through the curated RPC, which
+    // returns marketing fields only (no internal credit_cost_* economics).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any)
+      .rpc("get_public_plans")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: { data: Record<string, unknown>[] | null }) => {
+        if (data) setAllPlans(data.map(rowToPlan));
       });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     void (supabase as any)
