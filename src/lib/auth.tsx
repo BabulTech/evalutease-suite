@@ -65,10 +65,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // CRITICAL: set up listener FIRST then check existing session
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, sess) => {
+    } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess);
       setUser(sess?.user ?? null);
       if (sess?.user) void ensureProfile(sess.user);
+      // Keep the biometric fallback token current as Supabase rotates it.
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        void import("@/lib/biometric").then((m) => m.syncStoredToken());
+      }
     });
 
     supabase.auth.getSession().then(({ data: { session: sess } }) => {

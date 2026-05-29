@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { AppSidebar } from "@/components/AppSidebar";
 import { TopBar } from "@/components/TopBar";
 import { PushOptInPrompt } from "@/components/PushOptInPrompt";
+import { BiometricLock } from "@/components/BiometricLock";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { PlanProvider, usePlan } from "@/contexts/PlanContext";
 import { HostProvider, useHost } from "@/contexts/HostContext";
@@ -228,6 +229,7 @@ function AppLayout() {
                 {isNavigating ? <PageSkeleton /> : <Outlet />}
               </main>
               <PushOptInPrompt />
+              <BiometricLock />
             </div>
           </div>
         </div>
