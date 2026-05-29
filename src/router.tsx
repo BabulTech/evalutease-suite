@@ -1,9 +1,16 @@
 import { createRouter, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import { routeTree } from "./routeTree.gen";
 
 // eslint-disable-next-line react-refresh/only-export-components -- router-level error boundary must live alongside createRouter
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
+  const [showDetails, setShowDetails] = useState(false);
+
+  // Surface to the JS console so we can grab it via chrome://inspect / adb logcat
+  if (typeof console !== "undefined") {
+    console.error("[ErrorBoundary]", error);
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -30,10 +37,22 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
         <p className="mt-2 text-sm text-muted-foreground">
           An unexpected error occurred. Please try again.
         </p>
-        {import.meta.env.DEV && error.message && (
-          <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-xs text-destructive">
-            {error.message}
-          </pre>
+        {error.message && (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => setShowDetails((v) => !v)}
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            >
+              {showDetails ? "Hide error details" : "Show error details"}
+            </button>
+            {showDetails && (
+              <pre className="mt-2 max-h-60 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-[11px] text-destructive whitespace-pre-wrap break-all">
+                {error.message}
+                {error.stack && `\n\n${error.stack}`}
+              </pre>
+            )}
+          </div>
         )}
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
