@@ -8,6 +8,7 @@ import { ProfileProvider } from "@/contexts/ProfileContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RootShell } from "./root/RootShell";
 import { NotFoundComponent } from "./root/NotFoundComponent";
+import { SplashScreen } from "@/components/SplashScreen";
 
 import appCss from "../styles.css?url";
 
@@ -59,6 +60,7 @@ function RootComponent() {
         <ProfileProvider>
           <NotificationProvider>
             <NativeAuthBridge />
+            <SplashScreen />
             <Outlet />
             <Toaster />
           </NotificationProvider>

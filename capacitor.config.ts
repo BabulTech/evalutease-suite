@@ -31,10 +31,16 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1200,
+      // Native splash stays up until our React SplashScreen component calls
+      // .hide() (see src/components/SplashScreen.tsx). High upper bound so
+      // it never flashes the white-screen-of-death on slow devices.
+      launchShowDuration: 3000,
+      launchAutoHide: false,
       backgroundColor: "#0b1220",
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
+      splashFullScreen: true,
+      splashImmersive: true,
     },
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
