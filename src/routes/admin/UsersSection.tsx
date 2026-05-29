@@ -659,26 +659,26 @@ export function UsersSection() {
       className="hover:bg-muted/10 transition-colors cursor-pointer"
       onClick={() => setDetail(u)}
     >
-      <td className="px-4 py-3">
-        <div className={`flex items-center gap-2.5 ${indent === "host" ? "pl-8" : ""}`}>
+      <td className="px-4 py-3 min-w-[160px] max-w-[220px]">
+        <div className={`flex items-center gap-2.5 min-w-0 ${indent === "host" ? "pl-4 sm:pl-8" : ""}`}>
           <div className="size-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
             {(u.full_name ?? u.email ?? "?").charAt(0).toUpperCase()}
           </div>
-          <div>
-            <div className="text-xs font-medium flex items-center gap-1.5">
-              {u.full_name ?? "-"}
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="text-xs font-medium flex items-center gap-1.5 min-w-0">
+              <span className="truncate">{u.full_name ?? "-"}</span>
               {indent === "host" && (
-                <Badge className="bg-blue-500/10 text-blue-600 border-0 text-[9px] px-1.5 py-0">
+                <Badge className="bg-blue-500/10 text-blue-600 border-0 text-[9px] px-1.5 py-0 shrink-0 whitespace-nowrap">
                   Host
                 </Badge>
               )}
             </div>
-            <div className="text-[11px] text-muted-foreground">{u.email ?? "-"}</div>
+            <div className="text-[11px] text-muted-foreground truncate">{u.email ?? "-"}</div>
           </div>
         </div>
       </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
-        {[u.organization, u.country].filter(Boolean).join(" · ") || "-"}
+      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[180px]">
+        <div className="truncate">{[u.organization, u.country].filter(Boolean).join(" · ") || "-"}</div>
       </td>
       <td className="px-4 py-3">
         {indent === "host" ? (
@@ -692,34 +692,6 @@ export function UsersSection() {
       <td className="px-4 py-3 text-xs font-medium text-center">{u.participant_count}</td>
       <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
         {fmtDate(u.created_at)}
-      </td>
-      <td className="px-4 py-3">
-        {indent === "host" ? (
-          <span className="text-[10px] text-muted-foreground italic">managed by org</span>
-        ) : (
-          <div
-            role="presentation"
-            className="flex gap-1"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            {[
-              { s: "individual_starter", label: "Free" },
-              { s: "individual_pro", label: "Pro" },
-              { s: "enterprise_pro", label: "Org" },
-            ].map(({ s, label }) => (
-              <button
-                key={s}
-                type="button"
-                title={`Set ${s}`}
-                onClick={() => void changePlan(u.id, s)}
-                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${u.plan_slug === s ? "bg-primary/20 border-primary/30 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
       </td>
     </tr>
   );
@@ -804,15 +776,14 @@ export function UsersSection() {
             "Questions",
             "Participants",
             "Joined",
-            "",
           ]}
         />
         <tbody className="divide-y divide-border/40">
           {loading ? (
-            <SkeletonRows cols={8} />
+            <SkeletonRows cols={7} />
           ) : filtered.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+              <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
                 No users found.
               </td>
             </tr>
@@ -826,7 +797,7 @@ export function UsersSection() {
                       className="bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer"
                       onClick={() => toggleGroup(g.company_id)}
                     >
-                      <td colSpan={8} className="px-4 py-2">
+                      <td colSpan={7} className="px-4 py-2">
                         <div className="flex items-center gap-2 text-xs font-semibold text-primary">
                           {isCollapsed ? (
                             <ChevronRight className="size-3.5" />
@@ -850,7 +821,7 @@ export function UsersSection() {
               {grouped.independent.length > 0 && (
                 <>
                   <tr className="bg-muted/30">
-                    <td colSpan={8} className="px-4 py-2">
+                    <td colSpan={7} className="px-4 py-2">
                       <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                         <Users className="size-3.5" />
                         <span>Individual Users</span>
