@@ -53,15 +53,15 @@ export function ManualTab({ disabled, onSave, allowedTypes = DEFAULT_ALLOWED }: 
   return (
     <div className="space-y-4">
       {/* Language selector */}
-      <div className="flex items-center justify-between rounded-xl border border-border bg-card/30 px-4 py-3">
-        <p className="text-sm text-muted-foreground flex-1">{t("q.manualHint")}</p>
-        <div className="flex items-center gap-2 ml-4 shrink-0">
-          <Globe className="size-4 text-muted-foreground" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border bg-card/30 px-3 sm:px-4 py-3">
+        <p className="text-xs sm:text-sm text-muted-foreground sm:flex-1">{t("q.manualHint")}</p>
+        <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto sm:ml-4">
+          <Globe className="size-4 text-muted-foreground shrink-0" />
           <Label className="text-xs text-muted-foreground whitespace-nowrap">
             {t("q.aiLanguage")}
           </Label>
           <Select value={lang} onValueChange={(v) => setLang(v as "en" | "ur")}>
-            <SelectTrigger className="w-36 h-8 text-xs">
+            <SelectTrigger className="flex-1 sm:flex-none sm:w-36 h-8 text-xs min-w-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

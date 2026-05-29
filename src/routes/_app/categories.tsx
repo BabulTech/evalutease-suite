@@ -101,7 +101,7 @@ function QuestionsPage() {
         {canAddQuestion && (
           <Button
             onClick={openAddQuestion}
-            className="h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer w-full sm:w-auto shrink-0"
+            className="hidden sm:inline-flex h-11 gap-2 bg-gradient-primary text-primary-foreground shadow-glow cursor-pointer shrink-0"
           >
             <Plus className="size-4" /> {t("cat.addQuestion")}
           </Button>
