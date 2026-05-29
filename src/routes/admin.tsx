@@ -24,6 +24,7 @@ import {
   Coins,
   Wallet,
   Star,
+  TrendingUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationBell } from "@/components/NotificationBell";
 
 import { OverviewSection } from "./admin/OverviewSection";
+import { AnalyticsSection } from "./admin/AnalyticsSection";
 import { UsersSection } from "./admin/UsersSection";
 import { ParticipantsSection } from "./admin/ParticipantsSection";
 import { QuizzesSection } from "./admin/QuizzesSection";
@@ -60,6 +62,7 @@ type NavItem = { key: string; label: string; icon: React.ElementType; badge?: nu
 
 const NAV: NavItem[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
+  { key: "analytics", label: "Analytics", icon: TrendingUp },
   { key: "users", label: "Users", icon: Users },
   { key: "participants", label: "Participants", icon: UsersRound },
   { key: "quizzes", label: "Quizzes", icon: PlayCircle },
@@ -82,7 +85,7 @@ const NAV_GROUPS = [
   { key: "people",   label: "People",   shortLabel: "People", icon: Users,           sections: ["users", "participants"] },
   { key: "content",  label: "Content",  shortLabel: "Quiz",   icon: PlayCircle,      sections: ["quizzes", "categories"] },
   { key: "feedback", label: "Feedback", shortLabel: "Feed",   icon: MessageSquare,   sections: ["reviews", "appfeedback"] },
-  { key: "monitor",  label: "Monitor",  shortLabel: "Audit",  icon: Activity,        sections: ["activity", "aiusage", "alerts"] },
+  { key: "monitor",  label: "Monitor",  shortLabel: "Audit",  icon: Activity,        sections: ["analytics", "activity", "aiusage", "alerts"] },
   {
     key: "money",
     label: "Money",
@@ -351,6 +354,7 @@ function AdminPage() {
           ) : (
             <>
               {section === "overview" && <OverviewSection onNavigate={handleSetSection} />}
+              {section === "analytics" && <AnalyticsSection />}
               {section === "users" && <UsersSection />}
               {section === "participants" && <ParticipantsSection />}
               {section === "quizzes" && <QuizzesSection />}
