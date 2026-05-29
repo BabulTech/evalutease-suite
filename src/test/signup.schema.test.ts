@@ -4,6 +4,7 @@ import { signupSchema, initialForm } from "@/routes/signup/-schema";
 const validData = {
   firstName: "Ali",
   lastName: "Khan",
+  mobile: "03001234567",
   email: "ali@example.com",
   password: "Secret123!",
   role: "teacher",
