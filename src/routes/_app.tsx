@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { AppSidebar } from "@/components/AppSidebar";
 import { TopBar } from "@/components/TopBar";
+import { PushOptInPrompt } from "@/components/PushOptInPrompt";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { PlanProvider, usePlan } from "@/contexts/PlanContext";
 import { HostProvider, useHost } from "@/contexts/HostContext";
@@ -226,6 +227,7 @@ function AppLayout() {
               <main className="flex-1 px-3 py-4 pb-24 sm:p-5 md:p-8 md:pb-8">
                 {isNavigating ? <PageSkeleton /> : <Outlet />}
               </main>
+              <PushOptInPrompt />
             </div>
           </div>
         </div>
