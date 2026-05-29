@@ -17,9 +17,17 @@ import { useEffect, useState } from "react";
 
 const SHOWN_KEY = "splash_shown_v1";
 
+function isNativePlatform(): boolean {
+  if (typeof window === "undefined") return false;
+  // @ts-expect-error injected by Capacitor at runtime
+  return !!window.Capacitor?.isNativePlatform?.();
+}
+
 export function SplashScreen() {
   const [visible, setVisible] = useState(() => {
     if (typeof window === "undefined") return false;
+    // Only show inside the Capacitor native shell. Web/PWA gets nothing.
+    if (!isNativePlatform()) return false;
     return sessionStorage.getItem(SHOWN_KEY) !== "1";
   });
   const [exiting, setExiting] = useState(false);
