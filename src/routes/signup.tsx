@@ -88,7 +88,11 @@ function SignupPage() {
           last_name: parsed.data.lastName,
           full_name: `${parsed.data.firstName} ${parsed.data.lastName}`,
           mobile: parsed.data.mobile,
-          role: parsed.data.role,
+          // Sent as profile_role (not "role") so it can never be confused
+          // with an authorization claim. Authz is resolved server-side from
+          // public.user_roles, never from JWT metadata. A DB trigger also
+          // strips any privilege-shaped keys from metadata as defense in depth.
+          profile_role: parsed.data.role,
           use_cases: parsed.data.useCases,
           referral: parsed.data.referral,
           selected_plan: selectedPlan,

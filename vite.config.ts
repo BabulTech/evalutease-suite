@@ -112,6 +112,9 @@ export default defineConfig({
       host: "0.0.0.0",
     },
     build: {
+      // Don't ship source maps to production — keeps the compiled bundle from
+      // being trivially reconstructed (pentest: source-map exposure).
+      sourcemap: false,
       rollupOptions: {
         output: {
           manualChunks,
