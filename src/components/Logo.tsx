@@ -13,11 +13,6 @@ export function Logo({
           alt="Logo"
           className={`object-contain ${size === "sm" ? "h-12 max-w-[96px]" : size === "lg" ? "h-16 max-w-[180px]" : "h-14 max-w-[140px]"}`}
         />
-        {size !== "sm" && (
-          <span className="font-display text-lg font-bold text-foreground leading-tight">
-            Jan<span className="text-primary">cho</span>
-          </span>
-        )}
       </div>
     );
   }
@@ -29,11 +24,6 @@ export function Logo({
         alt="Jancho"
         className={`object-contain ${size === "sm" ? "h-12 w-12" : size === "lg" ? "h-18 w-18" : "h-16 w-16"}`}
       />
-      {size !== "sm" && (
-        <span className="font-display text-lg font-bold text-foreground leading-tight">
-          Jan<span className="text-primary">cho</span>
-        </span>
-      )}
     </div>
   );
 }
