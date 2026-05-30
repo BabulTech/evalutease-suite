@@ -15,7 +15,11 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * `webDir` is a tiny offline fallback page shown if the device has no network
  * on first launch.
  */
-const SERVER_URL = process.env.CAP_SERVER_URL ?? "https://evalutease-suite.vercel.app";
+// Must be the CANONICAL production domain. If this points at a URL that
+// 301-redirects to a different origin (e.g. the raw *.vercel.app redirecting to
+// the custom domain), the Capacitor WebView treats that cross-origin redirect
+// as an external link and kicks the user out to the system browser on launch.
+const SERVER_URL = process.env.CAP_SERVER_URL ?? "https://jancho.babultech.com";
 
 const config: CapacitorConfig = {
   appId: "com.babultech.jancho",
@@ -25,6 +29,9 @@ const config: CapacitorConfig = {
     url: SERVER_URL,
     cleartext: SERVER_URL.startsWith("http://"), // allow http only for LAN dev
     androidScheme: "https",
+    // Keep navigation to these hosts INSIDE the WebView instead of bouncing to
+    // the system browser (covers the raw-vercel → custom-domain redirect path).
+    allowNavigation: ["jancho.babultech.com", "*.babultech.com", "evalutease-suite.vercel.app"],
   },
   android: {
     allowMixedContent: false,
