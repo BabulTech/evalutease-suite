@@ -29,7 +29,7 @@ export function CompletionRateChart({ data }: Props) {
       subtitle="% of students who submitted before time ran out"
       insight={data.length >= 1 ? `Best month: ${peak}% · Target: ≥80%` : undefined}
       trend={trendDir(values)}
-      sparse={data.length < 2}
+      sparse={data.length < 1}
     >
       <ResponsiveContainer width="100%" height={180}>
         <AreaChart data={data} margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>

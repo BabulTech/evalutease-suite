@@ -32,7 +32,7 @@ export function ParticipantsChart({ data }: Props) {
           : undefined
       }
       trend={trendDir(values)}
-      sparse={data.length < 2}
+      sparse={data.length < 1}
     >
       <ResponsiveContainer width="100%" height={180}>
         <BarChart data={data} margin={{ top: 16, right: 4, left: -8, bottom: 0 }}>
