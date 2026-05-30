@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Registration } from "@/components/quiz/Registration";
 import { Lobby } from "@/components/quiz/Lobby";
 import { QuestionView } from "@/components/quiz/QuestionView";
 import { computeClock } from "@/components/quiz/types";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 import { Wrapper } from "./q/Wrapper";
 import { useQuizSession } from "./q/useQuizSession";
 
@@ -12,8 +13,11 @@ import { useQuizSession } from "./q/useQuizSession";
 export const Route = createFileRoute("/q/$code")({ component: PublicQuizPage });
 
 // react-doctor-disable-next-line react-doctor/only-export-components
-const LazyCompletion = lazy(() =>
-  import("@/components/quiz/Completion").then((module) => ({ default: module.Completion })),
+// Auto-recovers from a redeploy: if the old hashed chunk is gone (403/404),
+// reload once to fetch the new one so the student always reaches results.
+const LazyCompletion = lazyWithReload(
+  () => import("@/components/quiz/Completion").then((module) => ({ default: module.Completion })),
+  "quiz-completion",
 );
 
 // react-doctor-disable-next-line react-doctor/only-export-components

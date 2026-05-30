@@ -1,10 +1,12 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import type { SessionPublic } from "./types";
 import { ScoreDisplay } from "./completion/ScoreDisplay";
 import { FeedbackForm } from "./completion/FeedbackForm";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 
-const ShareResultCard = lazy(() =>
-  import("@/components/ShareResultCard").then((module) => ({ default: module.ShareResultCard })),
+const ShareResultCard = lazyWithReload(
+  () => import("@/components/ShareResultCard").then((module) => ({ default: module.ShareResultCard })),
+  "share-result-card",
 );
 
 type Props = {
