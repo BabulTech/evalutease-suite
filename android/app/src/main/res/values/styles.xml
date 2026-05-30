@@ -21,11 +21,12 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
-        <!-- Android 12+ system splash: dark background + invisible icon, so the
-             OS launch screen is just a dark screen. The only branded logo the
-             user sees is the in-app animated SVG splash (no pixelated icon). -->
+        <!-- Android 12+ splash: dark brand background + the clean (text-free)
+             logo. This splash covers the whole remote-site load, so showing the
+             logo here means the user sees a branded screen during the 2-3s load
+             instead of a black/empty screen. -->
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_no_icon</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
