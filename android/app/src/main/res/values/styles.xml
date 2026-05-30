@@ -26,7 +26,10 @@
              logo here means the user sees a branded screen during the 2-3s load
              instead of a black/empty screen. -->
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <!-- Dedicated 1024px crisp logo (not the 432px launcher foreground, which
+             the splash had to upscale → blurry "burst" look). Android scales
+             this down to the splash icon size, which stays sharp. -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
