@@ -109,3 +109,9 @@ ehthumbs.db
 
 # ─── Misc ─────────────────────────────────────────────────────────────────────
 *.local
+
+# ─── Android signing (NEVER commit) ──────────────────────────────────────────
+android/keystore.properties
+*.jks
+*.keystore
+*.apk
