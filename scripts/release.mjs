@@ -136,12 +136,21 @@ if (!exists("android/keystore.properties")) {
   log("  Create it (see README) to enable automatic signing.");
 } else {
   step("Building signed release APK (gradlew assembleRelease)");
-  const gradlew = isWin ? "gradlew.bat" : "./gradlew";
+  const androidDir = path.join(root, "android");
+  const gradlew = path.join(androidDir, isWin ? "gradlew.bat" : "gradlew");
+  // Gradle needs a JDK. Prefer an existing JAVA_HOME; else fall back to the JBR
+  // that ships with Android Studio (its keytool we already use).
+  const env = { ...process.env };
+  if (!env.JAVA_HOME) {
+    const jbr = "C:/Program Files/Android/Android Studio/jbr";
+    if (isWin && fs.existsSync(jbr)) env.JAVA_HOME = jbr;
+  }
   try {
-    execFileSync(gradlew, ["assembleRelease"], {
-      cwd: path.join(root, "android"),
+    execFileSync(`"${gradlew}"`, ["assembleRelease"], {
+      cwd: androidDir,
       stdio: "inherit",
-      shell: isWin,
+      shell: true, // run through the shell so .bat resolves on Windows
+      env,
     });
   } catch {
     console.error("✖ Gradle build failed.");

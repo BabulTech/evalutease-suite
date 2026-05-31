@@ -1,9 +1,9 @@
 {
-  "latestVersionCode": 2,
-  "latestVersionName": "1.1.0",
+  "latestVersionCode": 4,
+  "latestVersionName": "1.2.0",
   "minSupportedVersionCode": 2,
-  "apkUrl": "https://jfwnyktkzhnblpmtamke.supabase.co/storage/v1/object/public/app-releases/jancho-1.1.0.apk",
-  "releaseNotes": "What changed",
+  "apkUrl": "https://jfwnyktkzhnblpmtamke.supabase.co/storage/v1/object/public/app-releases/jancho-1.2.0.apk",
+  "releaseNotes": "Auto-update system + crisp logo + faster launch",
   "mandatory": false,
   "publishedAt": "2026-05-31"
 }
