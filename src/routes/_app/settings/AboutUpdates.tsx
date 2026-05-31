@@ -126,6 +126,11 @@ export function AboutUpdates() {
           onClick={() => void openBabulTech()}
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
+          <img
+            src="/babultech_logo.svg"
+            alt="BabulTech"
+            className="size-6 object-contain"
+          />
           Owned &amp; developed by <span className="font-semibold">BabulTech</span>
           <ExternalLink className="size-3.5" />
         </button>
