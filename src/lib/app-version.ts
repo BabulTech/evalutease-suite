@@ -7,5 +7,5 @@
  *
  * Do NOT edit these by hand — run `npm run release -- <x.y.z>`.
  */
-export const VERSION_CODE = 1;
-export const VERSION_NAME = "1.0";
+export const VERSION_CODE = 2;
+export const VERSION_NAME = "1.1.0";

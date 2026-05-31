@@ -1,9 +1,9 @@
 {
-  "latestVersionCode": 1,
-  "latestVersionName": "1.0",
-  "minSupportedVersionCode": 1,
-  "apkUrl": "",
-  "releaseNotes": "Initial release.",
+  "latestVersionCode": 2,
+  "latestVersionName": "1.1.0",
+  "minSupportedVersionCode": 2,
+  "apkUrl": "https://jfwnyktkzhnblpmtamke.supabase.co/storage/v1/object/public/app-releases/jancho-1.1.0.apk",
+  "releaseNotes": "What changed",
   "mandatory": false,
   "publishedAt": "2026-05-31"
 }
