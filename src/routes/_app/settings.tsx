@@ -7,6 +7,7 @@ import {
   MessageSquare,
   CreditCard,
   Building2,
+  Info,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/lib/auth";
@@ -18,6 +19,7 @@ import { BiometricToggle } from "@/components/BiometricToggle";
 import { HostSettingsForm } from "./settings/HostSettingsForm";
 import { MessagesForm } from "./settings/MessagesForm";
 import { PlanSection } from "./settings/PlanSection";
+import { AboutUpdates } from "./settings/AboutUpdates";
 
 // react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/_app/settings")({
@@ -88,6 +90,12 @@ function SettingsPage() {
               )}
               <span className="truncate">{isHost ? "Workspace" : t("settings.plan")}</span>
             </TabsTrigger>
+            <TabsTrigger
+              value="about"
+              className="min-h-11 min-w-[104px] gap-1.5 rounded-lg px-3 text-xs sm:text-sm"
+            >
+              <Info className="size-4 shrink-0" /> <span className="truncate">About</span>
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -107,6 +115,9 @@ function SettingsPage() {
         </TabsContent>
         <TabsContent value="plan" className="mt-4">
           {user && <PlanSection userId={user.id} />}
+        </TabsContent>
+        <TabsContent value="about" className="mt-4">
+          <AboutUpdates />
         </TabsContent>
       </Tabs>
     </div>

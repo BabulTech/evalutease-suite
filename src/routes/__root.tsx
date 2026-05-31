@@ -9,6 +9,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { RootShell } from "./root/RootShell";
 import { NotFoundComponent } from "./root/NotFoundComponent";
 import { SplashScreen } from "@/components/SplashScreen";
+import { ForceUpdateGate } from "@/components/ForceUpdateGate";
 
 import appCss from "../styles.css?url";
 
@@ -61,6 +62,7 @@ function RootComponent() {
           <NotificationProvider>
             <NativeAuthBridge />
             <SplashScreen />
+            <ForceUpdateGate />
             <Outlet />
             <Toaster />
           </NotificationProvider>
