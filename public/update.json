@@ -1,9 +1,9 @@
 {
-  "latestVersionCode": 4,
-  "latestVersionName": "1.2.0",
+  "latestVersionCode": 5,
+  "latestVersionName": "1.2.1",
   "minSupportedVersionCode": 2,
-  "apkUrl": "https://jfwnyktkzhnblpmtamke.supabase.co/storage/v1/object/public/app-releases/jancho-1.2.0.apk",
-  "releaseNotes": "Auto-update system + crisp logo + faster launch",
+  "apkUrl": "https://jfwnyktkzhnblpmtamke.supabase.co/storage/v1/object/public/app-releases/jancho-1.2.1.apk",
+  "releaseNotes": "Fix update check (fetch manifest from Supabase, not Vercel)",
   "mandatory": false,
   "publishedAt": "2026-05-31"
 }

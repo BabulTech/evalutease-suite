@@ -14,6 +14,16 @@
 import { Capacitor } from "@capacitor/core";
 import { VERSION_CODE, VERSION_NAME } from "./app-version";
 
+/**
+ * update.json is served from the Supabase "app-releases" bucket (same place as
+ * the APKs), NOT from the web app. The deployed site sits behind Vercel's bot
+ * "Security Checkpoint", which returns a 403 HTML challenge to plain fetches —
+ * so fetching /update.json from the site fails. Supabase storage has no such
+ * challenge, so the in-app check is reliable there.
+ */
+const UPDATE_MANIFEST_URL =
+  "https://jfwnyktkzhnblpmtamke.supabase.co/storage/v1/object/public/app-releases/update.json";
+
 export type UpdateManifest = {
   latestVersionCode: number;
   latestVersionName: string;
@@ -81,7 +91,7 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
   if (!isAndroidNative()) return base;
 
   try {
-    const res = await fetch(`/update.json?t=${Date.now()}`, { cache: "no-store" });
+    const res = await fetch(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return { ...base, error: `update.json ${res.status}` };
     const manifest = (await res.json()) as UpdateManifest;
 

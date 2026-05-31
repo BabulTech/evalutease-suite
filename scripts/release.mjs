@@ -175,25 +175,34 @@ if (apkPath) {
     log("\n⚠ SUPABASE_SERVICE_ROLE_KEY missing in .env — skipping upload.");
     log(`  Upload ${path.relative(root, apkPath)} to the "${BUCKET}" bucket manually.`);
   } else {
-    step(`Uploading ${apkObjectName(versionName)} to Supabase bucket "${BUCKET}"`);
-    const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${BUCKET}/${apkObjectName(versionName)}`;
-    const body = fs.readFileSync(apkPath);
-    const res = await fetch(uploadUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/vnd.android.package-archive",
-        "x-upsert": "true", // overwrite if re-releasing the same version
-      },
-      body,
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(`✖ Upload failed (${res.status}): ${text}`);
-      console.error(`  Is the "${BUCKET}" bucket created and public?`);
-      process.exit(1);
-    }
+    step(`Uploading to Supabase bucket "${BUCKET}"`);
+    const upload = async (objectName, contentType, data) => {
+      const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET}/${objectName}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": contentType,
+          "x-upsert": "true", // overwrite if re-releasing
+        },
+        body: data,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error(`✖ Upload of ${objectName} failed (${res.status}): ${text}`);
+        console.error(`  Is the "${BUCKET}" bucket created and public?`);
+        process.exit(1);
+      }
+    };
+    // APK + the manifest (the app reads update.json from here, not the website,
+    // to dodge Vercel's bot checkpoint).
+    await upload(
+      apkObjectName(versionName),
+      "application/vnd.android.package-archive",
+      fs.readFileSync(apkPath),
+    );
+    await upload("update.json", "application/json", fs.readFileSync(path.join(root, manifestPath)));
     log(`  ✔ ${apkPublicUrl(versionName)}`);
+    log(`  ✔ ${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/update.json`);
   }
 }
 
