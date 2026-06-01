@@ -193,7 +193,7 @@ export function TierSelector({
                 💰 Save PKR {yearlySavings.toLocaleString()} / year
               </p>
             )}
-            {plan.description && (
+            {plan.description && !isFree && (
               <p className="text-xs text-muted-foreground mt-1">{plan.description}</p>
             )}
           </div>
@@ -227,7 +227,7 @@ export function TierSelector({
 
           {!isFree && (
             <p className="text-[11px] text-yellow-400/80 flex items-center gap-1.5 bg-yellow-400/5 rounded-xl px-3 py-2">
-              <Zap size={10} /> Payment screenshot required, activated within 24 hours
+              <Zap size={10} /> Payment screenshot required — activated within a moment
             </p>
           )}
         </div>
