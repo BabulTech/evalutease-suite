@@ -207,7 +207,11 @@ export function TierSelector({
           )}
 
           <ul className="space-y-2 mb-4">
-            {plan.features_list.map((f) => (
+            {plan.features_list
+              // Drop the "complimentary AI calls" line — it duplicates the
+              // "free AI calls (lifetime gift)" badge shown above.
+              .filter((f) => !/complimentary ai calls/i.test(f))
+              .map((f) => (
               <li key={f} className="flex items-start gap-2 text-sm text-muted-foreground">
                 <Check size={13} className={`mt-0.5 shrink-0 ${isPopular ? "text-emerald-400" : "text-primary"}`} />
                 {f}

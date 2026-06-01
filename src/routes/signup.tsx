@@ -35,7 +35,8 @@ function SignupPage() {
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [ngoFile, setNgoFile] = useState<File | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId | null>(null);
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  // Default to annual billing (better value) for both Personal and Enterprise.
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("yearly");
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
