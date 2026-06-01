@@ -144,7 +144,13 @@ export function TierSelector({
               >
                 {c === "monthly" ? "Monthly" : "Yearly"}
                 {c === "yearly" && yearlyDiscountPercent > 0 && (
-                  <span className="ml-1.5 inline-block rounded-full bg-emerald-400/20 text-emerald-400 text-[9px] font-bold px-1.5 py-0.5 align-middle">
+                  <span
+                    className={`ml-1.5 inline-block rounded-full text-[9px] font-bold px-1.5 py-0.5 align-middle ${
+                      cycle === "yearly"
+                        ? "bg-white/25 text-white"
+                        : "bg-emerald-400/20 text-emerald-400"
+                    }`}
+                  >
                     -{yearlyDiscountPercent}%
                   </span>
                 )}
