@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 
 const LABELS: Record<number, string> = {
   1: "Account Type",
-  2: "Choose Plan",
+  2: "",
   3: "Personal Info",
   4: "Account",
   5: "Preferences",

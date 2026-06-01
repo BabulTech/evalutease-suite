@@ -99,7 +99,11 @@ export function TierSelector({
             <button
               key={p.slug}
               type="button"
-              onClick={() => onSelect(p.slug)}
+              onClick={() => {
+                onSelect(p.slug);
+                // Free has no NGO discount — clear any stale NGO selection.
+                if (p.price_pkr === 0 && isNgo) onNgoChange(false);
+              }}
               className={`relative flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 active
                   ? isPop
@@ -219,8 +223,8 @@ export function TierSelector({
         </div>
       )}
 
-      {/* NGO toggle - enterprise only */}
-      {category === "enterprise" && (
+      {/* NGO toggle - enterprise paid only (50% off makes no sense on Free) */}
+      {category === "enterprise" && !isFree && (
         <button
           type="button"
           onClick={() => onNgoChange(!isNgo)}

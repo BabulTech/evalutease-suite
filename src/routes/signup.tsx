@@ -29,7 +29,8 @@ function SignupPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [category, setCategory] = useState("personal");
-  const [selectedPlan, setSelectedPlan] = useState("individual_starter");
+  // Default to the paid (Pro) tier so the popular plan is pre-selected.
+  const [selectedPlan, setSelectedPlan] = useState("individual_pro");
   const [isNgo, setIsNgo] = useState(false);
   const [paymentFile, setPaymentFile] = useState<File | null>(null);
   const [ngoFile, setNgoFile] = useState<File | null>(null);
@@ -246,7 +247,8 @@ function SignupPage() {
           selectedCategory={category}
           onSelect={(c) => {
             setCategory(c);
-            setSelectedPlan(c === "enterprise" ? "enterprise_free" : "individual_starter");
+            // Pre-select the paid (Pro) tier for whichever category is chosen.
+            setSelectedPlan(c === "enterprise" ? "enterprise_pro" : "individual_pro");
           }}
           onContinue={() => setStep(2)}
         />
