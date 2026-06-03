@@ -8,7 +8,7 @@ import { AuthShell } from "./login";
 import { ensureSelectedPlan } from "@/lib/plan.server";
 import { logClientActivity } from "@/lib/audit";
 
-import { SIGNUP_STEPS } from "./signup/constants";
+import { SIGNUP_STEPS, isFreeEmailDomain, requiresWorkEmail } from "./signup/constants";
 import { signupSchema, initialForm, type FieldErrors } from "./signup/-schema";
 import { LoadingOverlay } from "./signup/LoadingOverlay";
 import { StepIndicator } from "./signup/StepIndicator";
@@ -62,6 +62,12 @@ function SignupPage() {
       validationError("This email is already registered. Please sign in instead.");
       return;
     }
+    if (requiresWorkEmail(category, form.enterpriseType) && isFreeEmailDomain(form.email)) {
+      setErrors((p) => ({ ...p, email: "Company accounts must use a work email." }));
+      validationError("Please use your work email — personal providers like Gmail aren't allowed for company accounts.");
+      setStep(4);
+      return;
+    }
     const parsed = signupSchema.safeParse(form);
     if (!parsed.success) {
       const fe: FieldErrors = {};
@@ -109,6 +115,7 @@ function SignupPage() {
           team_size: parsed.data.teamSize,
           other_details: parsed.data.otherDetails,
           department: parsed.data.department,
+          enterprise_type: parsed.data.enterpriseType,
         },
       },
     });

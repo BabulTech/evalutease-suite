@@ -21,6 +21,7 @@ export const signupSchema = z.object({
   teamSize: z.string().trim().max(20).optional(),
   otherDetails: z.string().trim().max(300).optional(),
   department: z.string().trim().max(120).optional(),
+  enterpriseType: z.string().trim().max(40).optional(),
 });
 
 export type SignupFormData = z.infer<typeof signupSchema>;
@@ -46,4 +47,5 @@ export const initialForm: SignupFormData & { useCases: string[] } = {
   teamSize: "",
   otherDetails: "",
   department: "",
+  enterpriseType: "",
 };

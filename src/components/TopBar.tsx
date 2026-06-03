@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { NotificationBell } from "./NotificationBell";
 import { UserDropdown } from "./top-bar/UserDropdown";
+import { BetaBadge } from "./top-bar/BetaBadge";
 
 function FreeAiBadge() {
   const { user } = useAuth();
@@ -119,6 +120,7 @@ export function TopBar(_props: Props) {
 
       <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         <FreeAiBadge />
+        <BetaBadge />
         {/* <LanguageSwitcher /> */}
         <NotificationBell />
         <UserDropdown

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { RoleDetails } from "./RoleDetails";
 import { EmailField } from "./EmailField";
 import { PasswordField } from "./PasswordField";
+import { isFreeEmailDomain, requiresWorkEmail } from "./constants";
 import type { SignupFormData, FieldErrors } from "./-schema";
 
 type FormState = SignupFormData & { useCases: string[] };
@@ -42,6 +43,13 @@ export function ProfileStep2({
     }
     if (!form.email.trim()) {
       setErrors((p) => ({ ...p, email: "Email is required" }));
+      return;
+    }
+    if (requiresWorkEmail(category, form.enterpriseType) && isFreeEmailDomain(form.email)) {
+      setErrors((p) => ({
+        ...p,
+        email: "Please use your work email — personal providers like Gmail or Yahoo aren't allowed for company accounts.",
+      }));
       return;
     }
     if (!form.password || form.password.length < 8) {

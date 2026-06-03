@@ -87,6 +87,34 @@ export const INDUSTRIES = [
   "Other",
 ] as const;
 export const TEAM_SIZES = ["Just me", "2–10", "11–50", "51–200", "200+"] as const;
+
+// Enterprise account types. Schools/universities may use any email; every
+// other organisation type must register with a work (organisation) email.
+export const ENTERPRISE_TYPES = [
+  { value: "school", label: "School / University" },
+  { value: "company", label: "Company / Business" },
+  { value: "other", label: "Other organisation" },
+] as const;
+
+// Common free / personal email providers. Non-school enterprise accounts are
+// blocked from using these so company workspaces map to a real organisation.
+export const FREE_EMAIL_DOMAINS = [
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "ymail.com",
+  "rocketmail.com", "hotmail.com", "hotmail.co.uk", "outlook.com", "live.com",
+  "msn.com", "icloud.com", "me.com", "mac.com", "aol.com", "proton.me",
+  "protonmail.com", "gmx.com", "gmx.net", "mail.com", "yandex.com", "zoho.com",
+];
+
+export function isFreeEmailDomain(email: string): boolean {
+  const domain = email.trim().toLowerCase().split("@")[1] ?? "";
+  return FREE_EMAIL_DOMAINS.includes(domain);
+}
+
+// True when a work email is required: enterprise accounts whose type is set and
+// is anything other than a school.
+export function requiresWorkEmail(category: string, enterpriseType?: string): boolean {
+  return category === "enterprise" && !!enterpriseType && enterpriseType !== "school";
+}
 export const GRADE_YEARS = [
   "Grade 1–5",
   "Grade 6–8",

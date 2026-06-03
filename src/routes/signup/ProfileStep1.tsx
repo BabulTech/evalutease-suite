@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { RoleButton, FieldError } from "./-components";
-import { ROLES } from "./constants";
+import { ROLES, ENTERPRISE_TYPES } from "./constants";
 import type { SignupFormData, FieldErrors } from "./-schema";
 
 type FormState = SignupFormData & { useCases: string[] };
@@ -36,6 +36,10 @@ export function ProfileStep1({ form, setForm, errors, setErrors, firstNameRef, c
     }
     if (!form.lastName.trim()) {
       setErrors((p) => ({ ...p, lastName: "Last name is required" }));
+      return;
+    }
+    if (category === "enterprise" && !form.enterpriseType) {
+      setErrors((p) => ({ ...p, enterpriseType: "Please select your organisation type" }));
       return;
     }
     if (!form.role) {
@@ -78,6 +82,29 @@ export function ProfileStep1({ form, setForm, errors, setErrors, firstNameRef, c
           <FieldError msg={errors.lastName} />
         </div>
       </div>
+
+      {category === "enterprise" && (
+        <div>
+          <Label className="mb-2 text-xs block">Organisation type</Label>
+          <div className="flex gap-2 flex-wrap">
+            {ENTERPRISE_TYPES.map((et) => (
+              <RoleButton
+                key={et.value}
+                active={form.enterpriseType === et.value}
+                onClick={() => { setForm((f) => ({ ...f, enterpriseType: et.value })); clearError("enterpriseType"); }}
+              >
+                {et.label}
+              </RoleButton>
+            ))}
+          </div>
+          {form.enterpriseType && form.enterpriseType !== "school" && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              You'll need to sign up with your work email (personal providers like Gmail aren't accepted for company accounts).
+            </p>
+          )}
+          <FieldError msg={errors.enterpriseType} />
+        </div>
+      )}
 
       <div>
         <Label className="mb-2 text-xs block">{category === "enterprise" ? "My role in the organisation" : t("signup.iAm")}</Label>
