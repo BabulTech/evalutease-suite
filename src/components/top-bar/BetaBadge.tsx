@@ -1,27 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { FlaskConical, MessageSquarePlus, Info } from "lucide-react";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
-import { FeedbackPanel } from "@/components/feedback-button/FeedbackPanel";
 
 // Beta indicator shown in the top bar (web + mobile). Tapping it explains that
-// the app is in beta and offers a shortcut to send feedback. The feedback form
-// reuses the shared FeedbackPanel so there is a single source of truth.
-// react-doctor-disable-next-line react-doctor/prefer-useReducer
+// the app is in beta and links to the App Review tab on the Reviews page, which
+// is the single place users submit and track feedback.
 export function BetaBadge() {
-  const { user } = useAuth();
-  const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [fbOpen, setFbOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  const [type, setType] = useState("improvement");
-  const [priority, setPriority] = useState("medium");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -30,42 +16,6 @@ export function BetaBadge() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-
-  const reset = () => {
-    setTitle("");
-    setBody("");
-    setType("improvement");
-    setPriority("medium");
-  };
-
-  const openFeedback = () => {
-    setOpen(false);
-    setFbOpen(true);
-  };
-
-  const submit = async () => {
-    if (!user) return;
-    if (!title.trim() || !body.trim()) {
-      toast.error(t("fb.required"));
-      return;
-    }
-    setSubmitting(true);
-    const { error } = await supabase.from("app_feedback").insert({
-      user_id: user.id,
-      type,
-      priority,
-      title: title.trim(),
-      body: body.trim(),
-    });
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success(t("fb.sent"));
-    reset();
-    setFbOpen(false);
-  };
 
   return (
     <div className="relative" ref={ref}>
@@ -94,31 +44,16 @@ export function BetaBadge() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openFeedback}
+          <Link
+            to="/reviews"
+            search={{ tab: "appreview" }}
+            onClick={() => setOpen(false)}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-primary text-primary-foreground px-3 py-2 text-sm font-semibold shadow-glow hover:opacity-90 transition-opacity"
           >
             <MessageSquarePlus className="size-4" />
-            {t("fb.button")}
-          </button>
+            Share feedback
+          </Link>
         </div>
-      )}
-
-      {fbOpen && (
-        <FeedbackPanel
-          type={type}
-          priority={priority}
-          title={title}
-          body={body}
-          submitting={submitting}
-          onTypeChange={setType}
-          onPriorityChange={setPriority}
-          onTitleChange={setTitle}
-          onBodyChange={setBody}
-          onSubmit={() => void submit()}
-          onClose={() => setFbOpen(false)}
-        />
       )}
     </div>
   );

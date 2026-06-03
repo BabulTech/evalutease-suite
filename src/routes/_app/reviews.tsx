@@ -8,9 +8,17 @@ import { FeedbackTab } from "./reviews/FeedbackTab";
 import { PerformanceTab } from "./reviews/PerformanceTab";
 import { AppReviewTab } from "./reviews/AppReviewTab";
 
+type ReviewTab = "feedback" | "performance" | "appreview";
+
 // react-doctor-disable-next-line react-doctor/only-export-components
 export const Route = createFileRoute("/_app/reviews")({
   component: ReviewsPage,
+  validateSearch: (search: Record<string, unknown>): { tab?: ReviewTab } => {
+    const tab = search.tab;
+    return tab === "feedback" || tab === "performance" || tab === "appreview"
+      ? { tab }
+      : {};
+  },
 });
 
 // react-doctor-disable-next-line react-doctor/only-export-components
@@ -18,7 +26,8 @@ function ReviewsPage() {
   const { user } = useAuth();
   const { t } = useI18n();
   const { feedbacks, sessionStats, loading } = useReviewsData(user);
-  const [activeTab, setActiveTab] = useState<"feedback" | "performance" | "appreview">("feedback");
+  const { tab } = Route.useSearch();
+  const [activeTab, setActiveTab] = useState<ReviewTab>(tab ?? "feedback");
 
   const totalReviews = feedbacks.length;
   const avgRating =
